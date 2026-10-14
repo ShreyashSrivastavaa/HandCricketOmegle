@@ -45,12 +45,16 @@ import {
   Loader2,
   ShieldAlert,
 } from "lucide-react";
+import { handDetector } from "@/lib/gesture/handDetector";
+import type { HandGesture } from "@/lib/gesture/handClassifier";
+import { GestureDetectionChip } from "@/components/GestureDetectionChip";
 
 const PRESET_EMOTES = ["👏", "🔥", "😅", "🏏"];
 
-export default function PlayMatchPage() {
+function PlayMatchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { startBotMatch } = useGameStore();
 
   // Mode: "video" (default) or "game_only"
   const requestedMode = (searchParams?.get("mode") as "video" | "game_only") || "video";
@@ -87,9 +91,33 @@ export default function PlayMatchPage() {
   const [isOutcomeWicket, setIsOutcomeWicket] = useState<boolean>(false);
   const [screenShake, setScreenShake] = useState<boolean>(false);
 
+  // "Show to Camera" Gesture & Anti-Copying Turn Stage State
+  const [localGestureSetting, setLocalGestureSetting] = useState<boolean>(true);
+  const [opponentGestureSetting, setOpponentGestureSetting] = useState<boolean>(true);
+  const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(true);
+  const [turnStage, setTurnStage] = useState<"pick" | "countdown" | "reveal" | "idle">("idle");
+  const [detectedGesture, setDetectedGesture] = useState<HandGesture | null>(null);
+  const [gestureProgress, setGestureProgress] = useState<number>(0);
+  const [gestureHint, setGestureHint] = useState<string | undefined>(undefined);
+  const [isLowLight, setIsLowLight] = useState<boolean>(false);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  const isLocalCameraOn = webrtcManager.isCameraEnabled;
+  const isGestureModeActive =
+    matchMode === "video" &&
+    isLocalCameraOn &&
+    isOpponentCameraOn &&
+    localGestureSetting &&
+    opponentGestureSetting;
+
   // Turn timer
   const [timerSeconds, setTimerSeconds] = useState<number>(8);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Bridge & Series State
+  const [isConvertedToFriend, setIsConvertedToFriend] = useState<boolean>(false);
+  const [playAgainWaiting, setPlayAgainWaiting] = useState<boolean>(false);
+  const [seriesScore, setSeriesScore] = useState<{ [guestId: string]: number }>({});
 
   // Emotes & Report
   const [receivedEmote, setReceivedEmote] = useState<{ emote: string; id: number } | null>(null);
@@ -194,6 +222,9 @@ export default function PlayMatchPage() {
 
         // Start WebRTC session if in video mode
         if (data.mode === "video") {
+          const pref = localStorage.getItem("hca_show_to_camera") !== "false";
+          setLocalGestureSetting(pref);
+          webrtcManager.toggleGestureMode(pref);
           webrtcManager.startPeerSession(s, data.isInitiator);
         }
 
@@ -206,12 +237,68 @@ export default function PlayMatchPage() {
       }
     );
 
+    // WebRTC toggles from partner
+    webrtcManager.onOpponentCameraToggle = (enabled) => {
+      setIsOpponentCameraOn(enabled);
+    };
+    webrtcManager.onOpponentGestureToggle = (enabled) => {
+      setOpponentGestureSetting(enabled);
+    };
+
     s.on("match:ended", (data: { reason: string; message: string }) => {
       addToast(data.message || "Match ended.", "info");
       webrtcManager.cleanup();
+      handDetector.destroy();
       // Reset match state and auto-requeue
       resetMatchState();
       joinMatchQueue(s);
+    });
+
+    // Bridge Events: Convert random room to friend duel
+    s.on("match:play_again_waiting", () => {
+      setPlayAgainWaiting(true);
+      addToast("Waiting for opponent to accept rematch...", "info");
+    });
+
+    s.on(
+      "match:converted_to_friend",
+      (data: { roomId: string; code?: string; seriesScore: { [guestId: string]: number }; message: string }) => {
+        setIsConvertedToFriend(true);
+        setPlayAgainWaiting(false);
+        setSeriesScore(data.seriesScore);
+        addToast(data.message, "success");
+      }
+    );
+
+    s.on(
+      "game:rematch_start",
+      (data: { roomId: string; isInitiator: boolean; seriesScore: { [guestId: string]: number } }) => {
+        setPlayAgainWaiting(false);
+        setUserPick(null);
+        setIsUserLocked(false);
+        setOpponentPick(null);
+        setIsOpponentLocked(false);
+        setUserTileState("empty");
+        setOpponentTileState("empty");
+        setOutcomeText(null);
+        setTurnStage("idle");
+        setDetectedGesture(null);
+        setGestureProgress(0);
+        setGestureHint(undefined);
+        handDetector.resetForNextBall();
+
+        const format: MatchFormat = { maxWickets: 2, maxOvers: 2 };
+        const p1Name = data.isInitiator ? "You" : opponent?.name || "Player";
+        const p2Name = data.isInitiator ? opponent?.name || "Player" : "You";
+        const initialGame = createInitialGameState(format, p1Name, p2Name, "p1");
+        setGameState(initialGame);
+        setSeriesScore(data.seriesScore);
+        addToast("Match started! Running series in progress.", "success");
+      }
+    );
+
+    s.on("game:series_update", (data: { seriesScore: { [guestId: string]: number } }) => {
+      setSeriesScore(data.seriesScore);
     });
 
     // Game Events
@@ -244,8 +331,28 @@ export default function PlayMatchPage() {
       setOpponentTileState("locked");
     });
 
+    // 4. Server-enforced 5s reveal countdown (5-4-3-2-1)
+    s.on("game:ball_countdown", (payload: { seconds: number }) => {
+      setTurnStage("countdown");
+      setRevealCountdown(payload.seconds);
+    });
+
+    // Server-enforced auto-pick on turn timeout
+    s.on("game:auto_picked", (payload: { pick: number }) => {
+      if (!isUserLocked) {
+        setUserPick(payload.pick);
+        setIsUserLocked(true);
+        setUserTileState("locked");
+        handDetector.stop();
+        addToast(`Turn time expired! Server auto-picked ${payload.pick}.`, "warning");
+      }
+    });
+
+    // 5. REVEAL: server broadcasts both picks together, remote video unblurs
     s.on("game:ball_reveal", (payload: { p1Pick: number; p2Pick: number; ballIndex: number }) => {
       stopTurnCountdown();
+      setTurnStage("reveal");
+      setRevealCountdown(null);
 
       // Determine picks from user's perspective
       const myPick = myPlayerId === "p1" ? payload.p1Pick : payload.p2Pick;
@@ -254,72 +361,74 @@ export default function PlayMatchPage() {
       setUserPick(myPick);
       setOpponentPick(theirPick);
 
-      // 3-2-1 countdown tick
-      setUserTileState("revealing");
-      setOpponentTileState("revealing");
-      setRevealCountdown(3);
+      setGameState((prev) => {
+        if (!prev) return prev;
+        const activeInnings = prev.currentInnings === 1 ? prev.innings1 : prev.innings2!;
+        const isUserBatting = activeInnings.battingPlayer === myPlayerId;
 
-      setTimeout(() => {
-        setRevealCountdown(2);
+        const batterNum = isUserBatting ? myPick : theirPick;
+        const bowlerNum = isUserBatting ? theirPick : myPick;
+
+        const { nextState, outcome } = applyBall(prev, batterNum, bowlerNum);
+
+        let display = "";
+        if (outcome.isWicket) {
+          display = "OUT!";
+        } else if (outcome.runsScored === 6) {
+          display = "SIX! +6";
+        } else if (outcome.runsScored === 4) {
+          display = "FOUR! +4";
+        } else {
+          display = `+${outcome.runsScored}`;
+        }
+
+        setOutcomeText(display);
+        setIsOutcomeWicket(outcome.isWicket);
+        setScreenShake(outcome.isWicket);
+
+        if (outcome.isWicket) {
+          setTimeout(() => setScreenShake(false), 200);
+          setUserTileState(isUserBatting ? "out" : "revealed");
+          setOpponentTileState(isUserBatting ? "revealed" : "out");
+        } else {
+          setUserTileState(isUserBatting ? "scored" : "revealed");
+          setOpponentTileState(isUserBatting ? "revealed" : "scored");
+        }
+
+        if (nextState.phase === "match_ended") {
+          const winnerGuestId =
+            nextState.winner === "tie"
+              ? undefined
+              : nextState.winner === myPlayerId
+              ? guestId
+              : opponent?.guestId;
+          s.emit("game:match_complete", { winnerGuestId });
+        }
+
+        // Advance to next ball after 1.5s
         setTimeout(() => {
-          setRevealCountdown(1);
-          setTimeout(() => {
-            setRevealCountdown(null);
+          setUserPick(null);
+          setIsUserLocked(false);
+          setOpponentPick(null);
+          setIsOpponentLocked(false);
+          setUserTileState("empty");
+          setOpponentTileState("empty");
+          setOutcomeText(null);
+          setDetectedGesture(null);
+          setGestureProgress(0);
+          setGestureHint(undefined);
+          handDetector.resetForNextBall();
 
-            setGameState((prev) => {
-              if (!prev) return prev;
-              const activeInnings = prev.currentInnings === 1 ? prev.innings1 : prev.innings2!;
-              const isUserBatting = activeInnings.battingPlayer === myPlayerId;
+          if (nextState.phase !== "match_ended" && nextState.phase !== "innings_break") {
+            startTurnCountdown();
+            s.emit("game:ball_start", { ballIndex: nextState.innings1.balls });
+          } else {
+            setTurnStage("idle");
+          }
+        }, 1500);
 
-              const batterNum = isUserBatting ? myPick : theirPick;
-              const bowlerNum = isUserBatting ? theirPick : myPick;
-
-              const { nextState, outcome } = applyBall(prev, batterNum, bowlerNum);
-
-              let display = "";
-              if (outcome.isWicket) {
-                display = "OUT!";
-              } else if (outcome.runsScored === 6) {
-                display = "SIX! +6";
-              } else if (outcome.runsScored === 4) {
-                display = "FOUR! +4";
-              } else {
-                display = `+${outcome.runsScored}`;
-              }
-
-              setOutcomeText(display);
-              setIsOutcomeWicket(outcome.isWicket);
-              setScreenShake(outcome.isWicket);
-
-              if (outcome.isWicket) {
-                setTimeout(() => setScreenShake(false), 200);
-                setUserTileState(isUserBatting ? "out" : "revealed");
-                setOpponentTileState(isUserBatting ? "revealed" : "out");
-              } else {
-                setUserTileState(isUserBatting ? "scored" : "revealed");
-                setOpponentTileState(isUserBatting ? "revealed" : "scored");
-              }
-
-              // Advance to next ball
-              setTimeout(() => {
-                setUserPick(null);
-                setIsUserLocked(false);
-                setOpponentPick(null);
-                setIsOpponentLocked(false);
-                setUserTileState("empty");
-                setOpponentTileState("empty");
-                setOutcomeText(null);
-
-                if (nextState.phase !== "match_ended" && nextState.phase !== "innings_break") {
-                  startTurnCountdown();
-                }
-              }, 1200);
-
-              return nextState;
-            });
-          }, 300);
-        }, 300);
-      }, 300);
+        return nextState;
+      });
     });
 
     s.on("game:emote", (payload: { emote: string }) => {
@@ -329,6 +438,7 @@ export default function PlayMatchPage() {
 
     return () => {
       webrtcManager.cleanup();
+      handDetector.destroy();
       stopTurnCountdown();
       s.disconnect();
     };
@@ -363,6 +473,7 @@ export default function PlayMatchPage() {
   };
 
   const resetMatchState = () => {
+    handDetector.stop();
     setRoomId(null);
     setOpponent(null);
     setGameState(null);
@@ -374,10 +485,15 @@ export default function PlayMatchPage() {
     setOpponentTileState("empty");
     setRevealCountdown(null);
     setOutcomeText(null);
+    setTurnStage("idle");
+    setDetectedGesture(null);
+    setGestureProgress(0);
+    setGestureHint(undefined);
   };
 
   const startTurnCountdown = () => {
     stopTurnCountdown();
+    setTurnStage("pick");
     setTimerSeconds(8);
 
     timerIntervalRef.current = setInterval(() => {
@@ -407,9 +523,49 @@ export default function PlayMatchPage() {
     }
   };
 
+  // Active on-device hand gesture detection loop on camera feed
+  useEffect(() => {
+    if (turnStage !== "pick" || isUserLocked || !isGestureModeActive) {
+      handDetector.stop();
+      return;
+    }
+
+    let isMounted = true;
+
+    const startDetectionWhenReady = () => {
+      if (!isMounted) return;
+      const video = localVideoRef.current;
+      if (video && video.videoWidth > 0 && !video.paused) {
+        handDetector.start(video);
+      } else {
+        setTimeout(startDetectionWhenReady, 150);
+      }
+    };
+
+    handDetector.onDetectionChange = (res) => {
+      if (!isMounted) return;
+      setDetectedGesture(res.gesture);
+      setGestureProgress(res.progress);
+      setGestureHint(res.hint);
+      setIsLowLight(!!res.isLowLight);
+
+      if (res.locked && res.lockedNumber) {
+        handleConfirmBallPick(res.lockedNumber);
+      }
+    };
+
+    startDetectionWhenReady();
+
+    return () => {
+      isMounted = false;
+      handDetector.stop();
+    };
+  }, [turnStage, isUserLocked, isGestureModeActive]);
+
   // Next Opponent (works in 1 tap at all times in < 1s)
   const handleNextOpponent = () => {
     webrtcManager.cleanup();
+    handDetector.destroy();
     stopTurnCountdown();
     resetMatchState();
 
@@ -428,15 +584,19 @@ export default function PlayMatchPage() {
     handleNextOpponent();
   };
 
-  // Game Pick Handlers
+  // Game Pick Handlers: NumberPad fallback always functions
   const handleSelectBallNumber = (num: number) => {
     if (isUserLocked || userTileState !== "empty") return;
-    setUserPick(num);
+    // Tapping number on NumberPad immediately locks in and acts as instant override/fallback
+    handleConfirmBallPick(num);
   };
 
   const handleConfirmBallPick = (overrideNum?: number) => {
     const num = overrideNum || userPick;
     if (!num || isUserLocked || userTileState !== "empty") return;
+
+    // Stop detector immediately on lock
+    handDetector.stop();
 
     setUserPick(num);
     setIsUserLocked(true);
@@ -526,6 +686,23 @@ export default function PlayMatchPage() {
             </div>
           )}
 
+          {searchSeconds >= 20 && (
+            <div className="pt-2">
+              <Button
+                variant="primary"
+                fullWidth
+                onClick={() => {
+                  webrtcManager.cleanup();
+                  startBotMatch({ maxWickets: 2, maxOvers: 2 });
+                  router.push("/play/bot");
+                }}
+                className="bg-turf text-ink font-heading font-black text-xs uppercase py-3"
+              >
+                Play vs Bot Instead
+              </Button>
+            </div>
+          )}
+
           <div className="pt-2">
             <Button
               variant="secondary"
@@ -605,7 +782,7 @@ export default function PlayMatchPage() {
       </header>
 
       {/* VIDEO TILES (Game first, video second) */}
-      {matchMode === "video" && (
+      {matchMode === "video" && opponent && (
         <VideoTiles
           layout={layout}
           opponentGuestId={opponent.guestId}
@@ -615,6 +792,15 @@ export default function PlayMatchPage() {
           onBlockOpponent={handleBlockOpponent}
           onOpenReport={() => setIsReportOpen(true)}
           remoteVideoRefOut={remoteVideoRef}
+          localVideoRefOut={localVideoRef}
+          turnStage={turnStage}
+          countdownSeconds={revealCountdown}
+          isGestureModeActive={isGestureModeActive}
+          detectedGesture={detectedGesture}
+          gestureProgress={gestureProgress}
+          isGestureLocked={isUserLocked}
+          gestureHint={gestureHint}
+          isLowLight={isLowLight}
         />
       )}
 
@@ -656,17 +842,27 @@ export default function PlayMatchPage() {
           <ResultBanner
             state={gameState}
             userPlayerId={myPlayerId}
-            onRematch={handleNextOpponent}
+            onRematch={isConvertedToFriend ? () => socket?.emit("friend:rematch") : handleNextOpponent}
             onBackToLobby={() => {
               webrtcManager.cleanup();
               router.push("/");
             }}
+            isFriendRoom={isConvertedToFriend}
+            seriesScoreText={
+              isConvertedToFriend
+                ? `Series: You ${seriesScore[guestId] || 0} - ${
+                    opponent?.guestId ? seriesScore[opponent.guestId] || 0 : 0
+                  } ${opponent?.name || "Opponent"}`
+                : undefined
+            }
+            onPlayAgain={!isConvertedToFriend ? () => socket?.emit("match:play_again") : undefined}
+            playAgainWaiting={playAgainWaiting}
           />
         </div>
       )}
 
       {/* PHASE 4: ACTIVE PLAYING ARENA */}
-      {gameState.phase === "playing" && (
+      {(gameState.phase === "innings_1" || gameState.phase === "innings_2") && (
         <section
           className="w-full my-2 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 relative"
           aria-label="Multiplayer Duel Arena"
@@ -736,6 +932,22 @@ export default function PlayMatchPage() {
 
       {/* BOTTOM CONTROLS & NUMBERPAD */}
       <footer className="w-full pb-2 pt-1 flex flex-col gap-2">
+        {/* Live Gesture Detection Chip (When camera-gesture mode is active) */}
+        {isGestureModeActive &&
+          (gameState.phase === "innings_1" || gameState.phase === "innings_2") &&
+          turnStage === "pick" && (
+            <div className="flex items-center justify-center my-0.5 animate-fadeIn">
+              <GestureDetectionChip
+                detectedGesture={detectedGesture}
+                progress={gestureProgress}
+                isLocked={isUserLocked}
+                lockedNumber={userPick}
+                hint={gestureHint}
+                isLowLight={isLowLight}
+              />
+            </div>
+          )}
+
         {/* Preset Emotes Strip */}
         <div className="flex items-center justify-center gap-2">
           {PRESET_EMOTES.map((emote) => (
@@ -756,7 +968,7 @@ export default function PlayMatchPage() {
           onSelectNumber={handleSelectBallNumber}
           onConfirmLock={() => handleConfirmBallPick()}
           isLocked={isUserLocked}
-          disabled={userTileState !== "empty" || gameState.phase !== "playing"}
+          disabled={userTileState !== "empty" || (gameState.phase !== "innings_1" && gameState.phase !== "innings_2")}
           tapToLock={true}
           onToggleTapToLock={() => {}}
         />
@@ -783,5 +995,19 @@ export default function PlayMatchPage() {
 
       <Toast toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
     </main>
+  );
+}
+
+export default function PlayMatchPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <main className="min-h-screen bg-ink text-chalk flex items-center justify-center p-4">
+          <Loader2 className="w-8 h-8 text-turf animate-spin" />
+        </main>
+      }
+    >
+      <PlayMatchContent />
+    </React.Suspense>
   );
 }

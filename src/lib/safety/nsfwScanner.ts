@@ -62,9 +62,10 @@ export class NSFWScanner {
         console.warn("[NSFWScanner] CDN script load failed, falling back to local module", scriptErr);
       }
 
-      // Fallback: dynamic import if available
+      // Fallback: dynamic non-static import to prevent webpack bundle analysis of model shards
       try {
-        const nsfwjs = await import("nsfwjs");
+        const dynamicImport = new Function("m", "return import(m)");
+        const nsfwjs = await dynamicImport("nsfwjs");
         this.model = await nsfwjs.load();
         this.isModelLoading = false;
         return true;

@@ -26,10 +26,13 @@ export class WebRTCManager {
   public onRemoteStream?: (stream: MediaStream) => void;
   public onOpponentCameraToggle?: (enabled: boolean) => void;
   public onOpponentMicToggle?: (enabled: boolean) => void;
+  public onOpponentGestureToggle?: (enabled: boolean) => void;
 
   public isCameraEnabled: boolean = true;
   public isMicEnabled: boolean = false; // Muted by default per rules
   public isSelfHidden: boolean = false;
+  public isGestureModeEnabled: boolean = true;
+  public isOpponentGestureModeEnabled: boolean = true;
 
   private connectionState: WebRTCConnectionState = "idle";
 
@@ -210,8 +213,9 @@ export class WebRTCManager {
     // Setup socket signal listeners
     this.attachSocketListeners();
 
-    // Signal ready
+    // Signal ready and share gesture toggle setting
     this.socket.emit("rtc:ready");
+    this.socket.emit("rtc:gesture_toggle", { enabled: this.isGestureModeEnabled });
   }
 
   private attachSocketListeners() {
@@ -286,6 +290,21 @@ export class WebRTCManager {
     this.socket.on("rtc:mic_toggle", (payload: { enabled: boolean }) => {
       this.onOpponentMicToggle?.(payload.enabled);
     });
+
+    this.socket.on("rtc:gesture_toggle", (payload: { enabled: boolean }) => {
+      this.isOpponentGestureModeEnabled = payload.enabled;
+      this.onOpponentGestureToggle?.(payload.enabled);
+    });
+  }
+
+  /**
+   * Toggle gesture detection mode on/off
+   */
+  public toggleGestureMode(enabled?: boolean): boolean {
+    const newState = enabled !== undefined ? enabled : !this.isGestureModeEnabled;
+    this.isGestureModeEnabled = newState;
+    this.socket?.emit("rtc:gesture_toggle", { enabled: newState });
+    return newState;
   }
 
   /**

@@ -17,17 +17,31 @@ import {
   AlertTriangle,
   RefreshCw,
   ShieldAlert,
+  Lock,
 } from "lucide-react";
+import type { HandGesture } from "@/lib/gesture/handClassifier";
 
 interface VideoTilesProps {
   layout: "mobile-portrait" | "desktop" | "landscape";
   opponentGuestId: string;
   opponentName: string;
   isFirstMatchForGuest?: boolean;
+  isFriendRoom?: boolean;
   onNextOpponent: () => void;
   onBlockOpponent: (opponentGuestId: string) => void;
   onOpenReport: () => void;
   remoteVideoRefOut?: React.RefObject<HTMLVideoElement | null>;
+  localVideoRefOut?: React.RefObject<HTMLVideoElement | null>;
+  // Turn stage for anti-copying video pause & blur
+  turnStage?: "pick" | "countdown" | "reveal" | "idle";
+  countdownSeconds?: number | null;
+  // Gesture detection feedback for self-preview overlay
+  isGestureModeActive?: boolean;
+  detectedGesture?: HandGesture | null;
+  gestureProgress?: number;
+  isGestureLocked?: boolean;
+  gestureHint?: string;
+  isLowLight?: boolean;
 }
 
 export function VideoTiles({
@@ -35,10 +49,20 @@ export function VideoTiles({
   opponentGuestId,
   opponentName,
   isFirstMatchForGuest = false,
+  isFriendRoom = false,
   onNextOpponent,
   onBlockOpponent,
   onOpenReport,
   remoteVideoRefOut,
+  localVideoRefOut,
+  turnStage = "idle",
+  countdownSeconds = null,
+  isGestureModeActive = false,
+  detectedGesture = null,
+  gestureProgress = 0,
+  isGestureLocked = false,
+  gestureHint,
+  isLowLight = false,
 }: VideoTilesProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const internalRemoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -54,8 +78,10 @@ export function VideoTiles({
   const [isLocalMicOn, setIsLocalMicOn] = useState<boolean>(webrtcManager.isMicEnabled);
   const [isSelfHidden, setIsSelfHidden] = useState<boolean>(webrtcManager.isSelfHidden);
 
-  // Safety Blur States
-  const [isFirstMatchBlurred, setIsFirstMatchBlurred] = useState<boolean>(isFirstMatchForGuest);
+  // Safety Blur States (Friend rooms are never blurred: friends consent to each other)
+  const [isFirstMatchBlurred, setIsFirstMatchBlurred] = useState<boolean>(
+    isFriendRoom ? false : isFirstMatchForGuest
+  );
   const [isNsfwBlurred, setIsNsfwBlurred] = useState<boolean>(false);
 
   useEffect(() => {
@@ -73,8 +99,10 @@ export function VideoTiles({
     webrtcManager.onRemoteStream = (stream) => {
       if (remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = stream;
-        // Start on-device NSFW scanner
-        nsfwScanner.startScanning(remoteVideoRef.current);
+        // Start on-device NSFW scanner for random queue only
+        if (!isFriendRoom) {
+          nsfwScanner.startScanning(remoteVideoRef.current);
+        }
       }
     };
 
@@ -110,7 +138,30 @@ export function VideoTiles({
     setIsSelfHidden(newState);
   };
 
-  const isBlurred = isFirstMatchBlurred || isNsfwBlurred;
+  // Anti-Copying Remote Video Protection:
+  // Note: We pause video playback and hide rendering client-side. A determined cheater can still
+  // modify the client to unpause or remove CSS blur; this is a casual game, so the server
+  // guarantees picks cannot change after lock and picks stay hidden until both are locked.
+  const isPickOrCountdown = turnStage === "pick" || turnStage === "countdown";
+
+  useEffect(() => {
+    const video = remoteVideoRef.current;
+    if (!video) return;
+
+    if (isPickOrCountdown) {
+      video.pause();
+    } else if (turnStage === "reveal") {
+      video.play().catch(() => {});
+    }
+  }, [isPickOrCountdown, turnStage]);
+
+  useEffect(() => {
+    if (localVideoRefOut && localVideoRef.current) {
+      (localVideoRefOut as any).current = localVideoRef.current;
+    }
+  }, [localVideoRefOut]);
+
+  const isBlurred = isFirstMatchBlurred || isNsfwBlurred || isPickOrCountdown;
 
   return (
     <div
@@ -164,7 +215,7 @@ export function VideoTiles({
 
         {connectionState === "live" && !isOpponentCameraOn && (
           <div className="flex flex-col items-center gap-1 p-2 text-center">
-            <PlayerChip name={opponentName} isOpponent size="md" />
+            <PlayerChip name={opponentName} isUser={false} role="bowling" />
             <span className="text-[11px] text-muted font-medium">Opponent camera is off</span>
           </div>
         )}
@@ -211,6 +262,25 @@ export function VideoTiles({
           </div>
         )}
 
+        {/* Anti-Copying Frosted Mask: PICK & COUNTDOWN */}
+        {connectionState === "live" && isOpponentCameraOn && isPickOrCountdown && !isNsfwBlurred && !isFirstMatchBlurred && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-3 text-center bg-ink/75">
+            <div className="w-8 h-8 rounded-full bg-surface-2 border border-line flex items-center justify-center mb-1 text-turf">
+              <Lock className="w-4 h-4" />
+            </div>
+            <p className="text-xs text-chalk font-heading font-black uppercase tracking-wider">
+              {turnStage === "countdown"
+                ? `Revealing in ${countdownSeconds ?? 5}...`
+                : "Opponent is choosing..."}
+            </p>
+            <span className="text-[10px] text-muted mt-0.5">
+              {turnStage === "countdown"
+                ? "Both picks locked! Unblurring camera..."
+                : "Picks hidden until both players lock in"}
+            </span>
+          </div>
+        )}
+
         {/* Opponent Info Bar */}
         <div className="absolute top-1.5 left-1.5 flex items-center gap-1.5 bg-ink/80 border border-line rounded px-2 py-0.5 text-[10px] text-chalk">
           <span className="w-1.5 h-1.5 rounded-full bg-turf animate-pulse" />
@@ -220,15 +290,40 @@ export function VideoTiles({
 
         {/* Self Preview Thumbnail (Corner) */}
         {!isSelfHidden && (
-          <div className="absolute bottom-1.5 right-1.5 w-16 h-12 sm:w-20 sm:h-14 bg-surface border border-line rounded overflow-hidden shadow-lg z-10">
+          <div
+            className={`absolute bottom-1.5 right-1.5 bg-surface border border-line rounded overflow-hidden shadow-lg z-10 transition-all duration-200 ${
+              isGestureModeActive
+                ? "w-24 h-18 sm:w-28 sm:h-20"
+                : "w-16 h-12 sm:w-20 sm:h-14"
+            }`}
+          >
             {isLocalCameraOn ? (
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover transform -scale-x-100"
-              />
+              <div className="relative w-full h-full">
+                <video
+                  ref={localVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover transform -scale-x-100"
+                />
+
+                {/* Hand Guide Overlay (Active in gesture mode) */}
+                {isGestureModeActive && (
+                  <div
+                    className={`absolute inset-1 rounded border-2 border-dashed transition-all pointer-events-none flex flex-col items-center justify-between p-0.5 ${
+                      isGestureLocked
+                        ? "border-turf bg-turf/15 shadow-[0_0_8px_rgba(0,230,118,0.5)]"
+                        : detectedGesture !== null
+                        ? "border-turf shadow-[0_0_6px_rgba(0,230,118,0.4)]"
+                        : "border-turf/60"
+                    }`}
+                  >
+                    <span className="text-[7px] font-mono font-bold uppercase px-1 py-0.2 bg-ink/80 text-turf rounded">
+                      HAND ZONE
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="w-full h-full bg-surface-2 flex items-center justify-center text-[9px] text-muted">
                 Off

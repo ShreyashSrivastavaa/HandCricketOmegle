@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 import { webrtcManager, type MediaDeviceOption } from "@/lib/webrtc/webrtcManager";
+import { GesturePractice } from "./GesturePractice";
 import { Camera, Mic, MicOff, Video, VideoOff, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface CameraCheckModalProps {
@@ -304,6 +305,9 @@ export function CameraCheckModal({
                     </select>
                   </div>
                 </div>
+
+                {/* Gesture Legend & Live Practice Step */}
+                <GesturePractice videoElement={videoRef.current} />
               </div>
             )}
           </div>

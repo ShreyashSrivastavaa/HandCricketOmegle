@@ -1,6 +1,7 @@
 import { safetyStore } from "./safetyStore";
+import { roomStore, type ActiveRoom, type MatchQueueType, type RoomUser } from "./roomStore";
 
-export type MatchQueueType = "video" | "game_only";
+export type { MatchQueueType, ActiveRoom, RoomUser };
 
 export interface QueueUser {
   socketId: string;
@@ -10,27 +11,12 @@ export interface QueueUser {
   ageConfirmed: boolean;
   blockedGuestIds: string[];
   enqueuedAt: number;
-}
-
-export interface ActiveRoom {
-  roomId: string;
-  mode: MatchQueueType;
-  p1: QueueUser;
-  p2: QueueUser;
-  createdAt: number;
-  // Game turn picks
-  currentBall?: {
-    p1Pick?: number;
-    p2Pick?: number;
-    timerTimeout?: NodeJS.Timeout;
-  };
+  name?: string;
 }
 
 class Matchmaker {
   private videoQueue: QueueUser[] = [];
   private gameOnlyQueue: QueueUser[] = [];
-  private rooms: Map<string, ActiveRoom> = new Map();
-  private userToRoom: Map<string, string> = new Map(); // socketId -> roomId
   private leavePenalties: Map<string, number> = new Map(); // guestId -> cooldownExpiresAt
 
   /**
@@ -70,7 +56,7 @@ class Matchmaker {
 
     const queue = user.queueType === "video" ? this.videoQueue : this.gameOnlyQueue;
 
-    // Search for compatible partner (must not be blocked by either party)
+    // Search for compatible partner (FIFO; must not be blocked by either party; no self-match)
     const partnerIdx = queue.findIndex(
       (other) =>
         other.guestId !== user.guestId &&
@@ -80,19 +66,51 @@ class Matchmaker {
 
     if (partnerIdx !== -1) {
       const partner = queue.splice(partnerIdx, 1)[0];
-      const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const roomId = `room_random_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+      const p1User: RoomUser = {
+        socketId: partner.socketId,
+        guestId: partner.guestId,
+        name: partner.name || `Player ${partner.guestId.substring(0, 4)}`,
+        ip: partner.ip,
+        queueType: partner.queueType,
+        ageConfirmed: partner.ageConfirmed,
+        blockedGuestIds: partner.blockedGuestIds,
+      };
+
+      const p2User: RoomUser = {
+        socketId: user.socketId,
+        guestId: user.guestId,
+        name: user.name || `Player ${user.guestId.substring(0, 4)}`,
+        ip: user.ip,
+        queueType: user.queueType,
+        ageConfirmed: user.ageConfirmed,
+        blockedGuestIds: user.blockedGuestIds,
+      };
 
       const room: ActiveRoom = {
         roomId,
+        type: "random",
+        visibility: "public",
         mode: user.queueType,
-        p1: partner, // Partner was waiting first
-        p2: user,
+        format: { maxWickets: 2, maxOvers: 2 },
+        p1: p1User,
+        p2: p2User,
+        p1Ready: true,
+        p2Ready: true,
+        status: "playing",
         createdAt: Date.now(),
+        expiresAt: Date.now() + 10 * 60 * 1000,
+        seriesScore: {
+          [partner.guestId]: 0,
+          [user.guestId]: 0,
+        },
+        rematchVotes: new Set(),
+        playAgainVotes: new Set(),
+        disconnectTimers: new Map(),
       };
 
-      this.rooms.set(roomId, room);
-      this.userToRoom.set(partner.socketId, roomId);
-      this.userToRoom.set(user.socketId, roomId);
+      roomStore.registerRandomRoom(room);
 
       return { room, error: undefined };
     }
@@ -114,47 +132,34 @@ class Matchmaker {
    * Find room by ID
    */
   public getRoom(roomId: string): ActiveRoom | undefined {
-    return this.rooms.get(roomId);
+    return roomStore.getRoom(roomId);
   }
 
   /**
    * Find room by socket ID
    */
   public getRoomBySocket(socketId: string): ActiveRoom | undefined {
-    const roomId = this.userToRoom.get(socketId);
-    if (!roomId) return undefined;
-    return this.rooms.get(roomId);
+    return roomStore.getRoomBySocket(socketId);
   }
 
   /**
-   * Close a room (called on Next Opponent or disconnect). Takes < 1s.
-   * If match is abandoned within 10s of starting, records a short leave penalty.
+   * Close a room. If match is abandoned within 8s of starting, records a short leave penalty.
    */
   public closeRoom(roomId: string, leavingSocketId?: string): { partnerSocketId?: string } {
-    const room = this.rooms.get(roomId);
+    const room = roomStore.getRoom(roomId);
     if (!room) return {};
 
-    let partnerSocketId: string | undefined;
     if (leavingSocketId) {
-      partnerSocketId = room.p1.socketId === leavingSocketId ? room.p2.socketId : room.p1.socketId;
-
       // Leave penalty: rapid leaves (< 8 seconds from pairing)
       if (Date.now() - room.createdAt < 8000) {
-        const leavingGuest = room.p1.socketId === leavingSocketId ? room.p1.guestId : room.p2.guestId;
-        this.leavePenalties.set(leavingGuest, Date.now() + 15000); // 15s cooldown
+        const leavingGuest = room.p1.socketId === leavingSocketId ? room.p1.guestId : room.p2?.guestId;
+        if (leavingGuest) {
+          this.leavePenalties.set(leavingGuest, Date.now() + 15000); // 15s cooldown
+        }
       }
     }
 
-    // Clear timers
-    if (room.currentBall?.timerTimeout) {
-      clearTimeout(room.currentBall.timerTimeout);
-    }
-
-    this.userToRoom.delete(room.p1.socketId);
-    this.userToRoom.delete(room.p2.socketId);
-    this.rooms.delete(roomId);
-
-    return { partnerSocketId };
+    return roomStore.closeRoom(roomId, leavingSocketId);
   }
 
   /**
@@ -163,9 +168,8 @@ class Matchmaker {
   public clear(): void {
     this.videoQueue = [];
     this.gameOnlyQueue = [];
-    this.rooms.clear();
-    this.userToRoom.clear();
     this.leavePenalties.clear();
+    roomStore.clear();
   }
 }
 

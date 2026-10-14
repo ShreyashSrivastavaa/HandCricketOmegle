@@ -222,9 +222,9 @@ describe("WebRTC Signaling, Safety Store, and Matchmaker Tests", () => {
       client3 = ClientIO(`http://localhost:${port}`); // Unpaired spectator
 
       await Promise.all([
-        new Promise((res) => client1.on("connect", res)),
-        new Promise((res) => client2.on("connect", res)),
-        new Promise((res) => client3.on("connect", res)),
+        new Promise<void>((res) => client1.on("connect", () => res())),
+        new Promise<void>((res) => client2.on("connect", () => res())),
+        new Promise<void>((res) => client3.on("connect", () => res())),
       ]);
 
       // Enqueue Client 1 & Client 2 in video queue
