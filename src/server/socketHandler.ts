@@ -1,6 +1,6 @@
 import type { Server, Socket } from "socket.io";
-import { matchmaker } from "./matchmaker";
-import { roomStore, type ActiveRoom } from "./roomStore";
+import { matchmaker } from "./matchmaker.ts";
+import { roomStore, type ActiveRoom } from "./roomStore.ts";
 import {
   joinQueueSchema,
   friendCreateSchema,
@@ -14,7 +14,7 @@ import {
   ballPickSchema,
   emoteSchema,
   rtcSignalSchema,
-} from "../lib/validations/socketSchemas";
+} from "../lib/validations/socketSchemas.ts";
 
 export function registerSocketHandlers(io: Server) {
   io.on("connection", (socket: Socket) => {

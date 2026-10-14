@@ -1,5 +1,5 @@
-import { safetyStore } from "./safetyStore";
-import { roomStore, type ActiveRoom, type MatchQueueType, type RoomUser } from "./roomStore";
+import { safetyStore } from "./safetyStore.ts";
+import { roomStore, type ActiveRoom, type MatchQueueType, type RoomUser } from "./roomStore.ts";
 
 export type { MatchQueueType, ActiveRoom, RoomUser };
 

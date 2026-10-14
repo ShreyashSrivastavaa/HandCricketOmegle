@@ -82,7 +82,7 @@ expressApp.post("/api/admin/reports/action", (req, res) => {
 
 // 4. User safety status check (ban check)
 expressApp.get("/api/user/status", (req, res) => {
-  const guestId = (req.query.guestId as string) || "";
+  const guestId = req.query.guestId || "";
   const clientIp =
     (req.headers["x-forwarded-for"]?.split(",")[0]?.trim()) ||
     req.socket.remoteAddress ||

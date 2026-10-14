@@ -1,5 +1,5 @@
 import type { MatchFormat } from "../lib/game-core/types";
-import { safetyStore } from "./safetyStore";
+import { safetyStore } from "./safetyStore.ts";
 
 export type MatchQueueType = "video" | "game_only";
 export type RoomType = "friend" | "random" | "bot";
