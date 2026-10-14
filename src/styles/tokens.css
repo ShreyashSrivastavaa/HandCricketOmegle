@@ -1,0 +1,80 @@
+/* Hand Cricket Arena Design Tokens */
+:root {
+  /* Dark, turf-inspired palette */
+  --color-ink: #0B1210;         /* Background */
+  --color-surface: #121C18;     /* Surface 1 */
+  --color-surface-2: #1A2722;   /* Surface 2 / elevated */
+  --color-line: #2A3A33;        /* 1px border line */
+  --color-chalk: #F2EFE6;       /* Main text */
+  --color-muted: #8FA39A;       /* Secondary text */
+  --color-turf: #3DDC84;        /* Primary / You / Batting */
+  --color-ball: #FF4D4D;        /* Wicket / Danger / Out */
+  --color-amber: #FFB020;       /* Runs / Highlights / Boundary */
+  --color-sky: #4DA3FF;         /* Opponent / Bowling */
+
+  /* Spacing Scale */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* Border Radii */
+  --radius-card: 12px;
+  --radius-pill: 999px;
+
+  /* 1px Border */
+  --border-width: 1px;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-chalk);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numerals for all scores, overs, timers */
+.font-tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus outline standard */
+:focus-visible {
+  outline: 2px solid var(--color-turf);
+  outline-offset: 2px;
+}
+
+/* Respect prefers-reduced-motion: disable shake and count-up/transitions */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-shake {
+    animation: none !important;
+  }
+}
+
+/* Custom turf scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ink);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}
