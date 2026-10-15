@@ -50,7 +50,7 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
       aria-label="Match Scoreboard"
     >
       {/* Top Meta Line: Innings and Format */}
-      <div className="flex items-center justify-between pb-2 border-b border-line text-[11px] font-semibold tracking-wider text-muted uppercase">
+      <div className="flex flex-wrap items-center justify-between gap-1 pb-2 border-b border-line text-[10px] sm:text-[11px] font-semibold tracking-wider text-muted uppercase">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-turf" />
           <span>
@@ -115,8 +115,8 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
 
       {/* Target Equation Bar (Only in Innings 2 Chase) */}
       {isInnings2 && target !== null && (
-        <div className="mt-2 pt-2 border-t border-line flex items-center justify-between text-xs bg-surface-2/40 px-2.5 py-1.5 rounded-lg">
-          <div className="flex items-center gap-1.5">
+        <div className="mt-2 pt-2 border-t border-line flex flex-wrap items-center justify-between gap-1.5 text-xs bg-surface-2/40 px-2.5 py-1.5 rounded-lg">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-muted uppercase font-semibold">Target:</span>
             <strong className="text-amber font-heading text-sm tabular-nums">{target}</strong>
             <span className="text-muted uppercase text-[10px] font-medium">
@@ -126,7 +126,7 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
           </div>
 
           {rrr !== null && (
-            <div className="flex items-center gap-1 text-[11px] text-muted">
+            <div className="flex items-center gap-1 text-[11px] text-muted ml-auto">
               <span>RRR:</span>
               <strong className="text-amber font-mono font-semibold">{rrr}</strong>
             </div>

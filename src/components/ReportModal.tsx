@@ -43,6 +43,17 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const [submitted, setSubmitted] = useState<boolean>(false);
   const [wasAutoBanned, setWasAutoBanned] = useState<boolean>(false);
 
+  // Escape key listener
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
@@ -111,8 +122,12 @@ export const ReportModal: React.FC<ReportModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-title"
+      onClick={onClose}
     >
-      <div className="w-full max-w-sm bg-surface border border-line rounded-[16px] p-5 shadow-2xl flex flex-col gap-4">
+      <div
+        className="w-full max-w-sm bg-surface border border-line rounded-[16px] p-5 shadow-2xl flex flex-col gap-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between border-b border-line pb-3">
           <div className="flex items-center gap-2 text-ball">
             <ShieldAlert className="w-5 h-5" />

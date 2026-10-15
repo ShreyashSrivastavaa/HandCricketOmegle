@@ -118,7 +118,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         <label className="text-xs font-heading font-bold text-muted uppercase tracking-wider px-1">
           Select Match Mode
         </label>
-        <div className="grid grid-cols-2 gap-3 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full">
           {/* Sudden Death Card */}
           <button
             type="button"
@@ -126,7 +126,8 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               playClickSound();
               setMode("sudden_death");
             }}
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col gap-1.5 transition-all ${
+            aria-pressed={mode === "sudden_death"}
+            className={`p-3.5 rounded-[14px] border text-left flex flex-col gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
               mode === "sudden_death"
                 ? "bg-surface-2 border-turf shadow-[0_0_16px_rgba(61,220,132,0.15)] ring-1 ring-turf"
                 : "bg-surface/50 border-line hover:border-line/80 opacity-70"
@@ -153,7 +154,8 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               playClickSound();
               setMode("classic");
             }}
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col gap-1.5 transition-all ${
+            aria-pressed={mode === "classic"}
+            className={`p-3.5 rounded-[14px] border text-left flex flex-col gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
               mode === "classic"
                 ? "bg-surface-2 border-turf shadow-[0_0_16px_rgba(61,220,132,0.15)] ring-1 ring-turf"
                 : "bg-surface/50 border-line hover:border-line/80 opacity-70"
@@ -173,17 +175,18 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       </div>
 
       {/* Main CTAs */}
-      <div className="w-full flex flex-col gap-3 pt-2">
+      <div className="w-full flex flex-col gap-2.5 sm:gap-3 pt-2">
         <button
           type="button"
           onClick={() => {
             playClickSound();
             onFindMatch();
           }}
-          className="w-full py-4 px-6 rounded-2xl bg-turf text-ink font-heading font-black text-2xl uppercase tracking-wider flex items-center justify-center gap-3 shadow-[0_0_24px_rgba(61,220,132,0.35)] hover:bg-turf-hover active:scale-[0.99] transition-all"
+          aria-label="Find stranger match"
+          className="w-full min-h-[52px] py-3.5 sm:py-4 px-4 sm:px-6 rounded-2xl bg-turf text-ink font-heading font-black text-lg sm:text-2xl uppercase tracking-wider flex items-center justify-center gap-2.5 sm:gap-3 shadow-[0_0_24px_rgba(61,220,132,0.35)] hover:bg-turf-hover active:scale-[0.99] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
         >
-          <Play className="w-6 h-6 fill-current" />
-          <span>FIND STRANGER MATCH</span>
+          <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current shrink-0" />
+          <span className="truncate">FIND STRANGER MATCH</span>
         </button>
 
         <button
@@ -192,9 +195,10 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             playClickSound();
             onPlayVsBot();
           }}
-          className="w-full py-3 px-5 rounded-xl bg-surface border border-line text-chalk font-heading font-bold text-base uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-surface-2 hover:border-muted transition-colors"
+          aria-label="Practice vs Server Bot"
+          className="w-full min-h-[46px] py-3 px-4 sm:px-5 rounded-xl bg-surface border border-line text-chalk font-heading font-bold text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-surface-2 hover:border-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
         >
-          <Bot className="w-4 h-4 text-turf" />
+          <Bot className="w-4 h-4 text-turf shrink-0" />
           <span>Practice vs Server Bot</span>
         </button>
       </div>
@@ -206,25 +210,26 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           playClickSound();
           onOpenRules();
         }}
-        className="flex items-center gap-1.5 text-xs text-muted hover:text-chalk transition-colors py-1"
+        aria-label="How does Hand Cricket work? View rules"
+        className="flex items-center gap-1.5 text-xs text-muted hover:text-chalk transition-colors py-1 focus-visible:outline-none focus-visible:underline"
       >
-        <HelpCircle className="w-4 h-4 text-turf" />
+        <HelpCircle className="w-4 h-4 text-turf shrink-0" />
         <span>How does Hand Cricket work? View rules</span>
       </button>
 
       {/* Feature Footnotes */}
-      <div className="w-full grid grid-cols-3 gap-2 pt-4 border-t border-line text-center text-[10px] text-muted uppercase font-semibold">
+      <div className="w-full grid grid-cols-3 gap-1 sm:gap-2 pt-4 border-t border-line text-center text-[9px] sm:text-[10px] text-muted uppercase font-semibold">
         <div className="flex flex-col items-center gap-1">
-          <Shield className="w-4 h-4 text-turf" />
-          <span>Server Authoritative</span>
+          <Shield className="w-4 h-4 text-turf shrink-0" />
+          <span className="truncate w-full">Server Authoritative</span>
         </div>
         <div className="flex flex-col items-center gap-1">
-          <Flame className="w-4 h-4 text-amber" />
-          <span>10s Turn Clock</span>
+          <Flame className="w-4 h-4 text-amber shrink-0" />
+          <span className="truncate w-full">10s Turn Clock</span>
         </div>
         <div className="flex flex-col items-center gap-1">
-          <Swords className="w-4 h-4 text-sky" />
-          <span>Zero Free-Text Safe</span>
+          <Swords className="w-4 h-4 text-sky shrink-0" />
+          <span className="truncate w-full">Zero-Text Safe</span>
         </div>
       </div>
     </main>

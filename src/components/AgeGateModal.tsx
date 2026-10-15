@@ -1,6 +1,5 @@
-"use client";
-
 import React, { useState } from "react";
+import Link from "next/link";
 import { Button } from "./Button";
 import { ShieldAlert, Check } from "lucide-react";
 
@@ -35,14 +34,19 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/90 backdrop-blur-none">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/90 backdrop-blur-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="agegate-title"
+    >
       <div className="w-full max-w-md bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-5">
         <div className="flex items-center gap-3 border-b border-line pb-4">
           <div className="w-10 h-10 rounded-lg bg-ball/10 border border-ball/30 flex items-center justify-center text-ball">
             <ShieldAlert className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold font-heading uppercase tracking-wide text-chalk">
+            <h2 id="agegate-title" className="text-xl font-bold font-heading uppercase tracking-wide text-chalk">
               18+ Verification &amp; Safety
             </h2>
             <p className="text-xs text-muted">Required for stranger matchmaking</p>
@@ -95,13 +99,13 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
             />
             <span>
               I accept the{" "}
-              <a href="/terms" target="_blank" rel="noreferrer" className="text-turf underline">
+              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-turf underline">
                 Terms of Service
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a href="/guidelines" target="_blank" rel="noreferrer" className="text-turf underline">
+              <Link href="/guidelines" target="_blank" rel="noopener noreferrer" className="text-turf underline">
                 Community Guidelines
-              </a>
+              </Link>
               . I understand violations result in an immediate ban.
             </span>
           </label>

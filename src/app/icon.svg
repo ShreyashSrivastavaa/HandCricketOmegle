@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="turfGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3DDC84"/>
+      <stop offset="100%" stop-color="#289b5c"/>
+    </linearGradient>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141E1B"/>
+      <stop offset="100%" stop-color="#0B1210"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Rounded App Icon Background -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+  <rect width="504" height="504" x="4" y="4" rx="124" fill="none" stroke="#3DDC84" stroke-width="8" stroke-opacity="0.3"/>
+
+  <!-- Glowing Turf Accent Ring -->
+  <circle cx="256" cy="256" r="170" fill="none" stroke="url(#turfGrad)" stroke-width="12" stroke-dasharray="8 8" opacity="0.4"/>
+
+  <!-- Cricket Bat Motif (Angled) -->
+  <g transform="rotate(-35 256 256)">
+    <!-- Handle -->
+    <rect x="244" y="80" width="24" height="110" rx="6" fill="#F0F4F2"/>
+    <line x1="244" y1="110" x2="268" y2="110" stroke="#0B1210" stroke-width="3"/>
+    <line x1="244" y1="130" x2="268" y2="130" stroke="#0B1210" stroke-width="3"/>
+    <line x1="244" y1="150" x2="268" y2="150" stroke="#0B1210" stroke-width="3"/>
+    <line x1="244" y1="170" x2="268" y2="170" stroke="#0B1210" stroke-width="3"/>
+    <!-- Blade -->
+    <path d="M 230 185 L 282 185 L 282 390 C 282 405 270 415 256 415 C 242 415 230 405 230 390 Z" fill="#D9A86C" stroke="#B88648" stroke-width="4"/>
+    <!-- Blade Inner Grain Spine -->
+    <line x1="256" y1="200" x2="256" y2="390" stroke="#9E6E34" stroke-width="3"/>
+  </g>
+
+  <!-- Cricket Red Leather Ball with Turf Glow -->
+  <circle cx="340" cy="330" r="54" fill="#E84855" filter="url(#glow)"/>
+  <!-- Ball Seam -->
+  <path d="M 305 310 C 325 330, 355 330, 375 350" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-dasharray="4 3"/>
+
+  <!-- Live Signal Wave Pulse (Omegle 1v1 Radar) -->
+  <path d="M 120 220 A 160 160 0 0 1 200 140" fill="none" stroke="#3DDC84" stroke-width="8" stroke-linecap="round" opacity="0.8"/>
+  <path d="M 100 240 A 190 190 0 0 1 220 120" fill="none" stroke="#3DDC84" stroke-width="8" stroke-linecap="round" opacity="0.4"/>
+</svg>

@@ -121,6 +121,7 @@ export const TossScreen: React.FC<TossScreenProps> = ({
                 <button
                   key={num}
                   type="button"
+                  aria-label={`Pick ${num} for coin toss`}
                   onClick={() => {
                     playClickSound();
                     onPick(num);

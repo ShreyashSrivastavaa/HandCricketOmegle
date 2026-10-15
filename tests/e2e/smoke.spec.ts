@@ -19,6 +19,9 @@ test.describe("HandCricketOmegle E2E Smoke Tests", () => {
     // 4. Verify main CTA button
     const findMatchBtn = page.getByRole("button", { name: /FIND STRANGER MATCH/i });
     await expect(findMatchBtn).toBeVisible();
+
+    // 5. Verify footer
+    await expect(page.locator("footer")).toContainText(new Date().getFullYear().toString());
   });
 
   test("Opens and closes How to Play modal", async ({ page }) => {
@@ -58,7 +61,38 @@ test.describe("HandCricketOmegle E2E Smoke Tests", () => {
     await expect(page.getByRole("heading", { name: /Authoritative Coin Toss/i })).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText(/ODD/i)).toBeVisible();
-    await expect(page.getByText(/EVEN/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "ODD" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "EVEN" })).toBeVisible();
+  });
+
+  test("Mobile navigation drawer opens and closes", async ({ page }) => {
+    await page.goto("/");
+
+    // Click hamburger button
+    const menuToggle = page.getByRole("button", { name: /Open navigation menu/i });
+    await expect(menuToggle).toBeVisible();
+    await menuToggle.click();
+
+    // Verify navigation drawer is visible
+    const drawer = page.locator("#mobile-nav-drawer");
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole("link", { name: /VS Bot/i })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: /Guidelines/i })).toBeVisible();
+    await expect(drawer.getByRole("link", { name: /Privacy/i })).toBeVisible();
+
+    // Close with Escape key
+    await page.keyboard.press("Escape");
+    await expect(drawer).not.toBeVisible();
+  });
+
+  test("Custom 404 page renders branded content and navigation", async ({ page }) => {
+    const response = await page.goto("/non-existent-pitch-slug-12345");
+    expect(response?.status()).toBe(404);
+
+    await expect(page.getByRole("heading", { name: /PITCH NOT FOUND/i })).toBeVisible();
+    await expect(page.locator("span").filter({ hasText: /CLEAN BOWLED/i })).toBeVisible();
+
+    const returnBtn = page.getByRole("link", { name: /Enter 1v1 Arena/i });
+    await expect(returnBtn).toBeVisible();
   });
 });

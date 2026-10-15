@@ -168,6 +168,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }, 3500);
   };
 
+  useEffect(() => {
+    document.title = `Room ${roomCode} | HandCricketOmegle`;
+  }, [roomCode]);
+
   // Determine layout
   useEffect(() => {
     const updateLayout = () => {
@@ -559,8 +563,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     if (navigator?.share) {
       try {
         await navigator.share({
-          title: "Join Hand Cricket Duel",
-          text: `Join my private Hand Cricket Arena room with code ${roomCode}!`,
+          title: "Join HandCricketOmegle Room Duel",
+          text: `Join my private HandCricketOmegle room with code ${roomCode}!`,
           url,
         });
         return;

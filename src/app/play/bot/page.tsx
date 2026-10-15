@@ -15,9 +15,14 @@ import { Button } from "@/components/Button";
 import { Toast } from "@/components/Toast";
 import { WicketsOption, OversOption } from "@/lib/game-core/types";
 import { ArrowLeft, Play, ArrowRight } from "lucide-react";
+import { Footer } from "@/components/Footer";
 
 export default function PlayBotPage() {
   const router = useRouter();
+
+  useEffect(() => {
+    document.title = "Practice vs Bot | HandCricketOmegle";
+  }, []);
   const {
     gameState,
     format,
@@ -155,6 +160,7 @@ export default function PlayBotPage() {
           </Button>
         </div>
         <Toast toasts={toasts} onDismiss={removeToast} />
+        <Footer className="mt-8" />
       </main>
     );
   }
@@ -191,7 +197,7 @@ export default function PlayBotPage() {
         </div>
 
         <footer className="text-center text-xs text-muted">
-          Hand Cricket Arena • Authoritative Coin Toss
+          HandCricketOmegle • Authoritative Coin Toss
         </footer>
         <Toast toasts={toasts} onDismiss={removeToast} />
       </main>
@@ -225,7 +231,7 @@ export default function PlayBotPage() {
         </div>
 
         <footer className="text-center text-xs text-muted">
-          Hand Cricket Arena • Target Set
+          HandCricketOmegle • Target Set
         </footer>
         <Toast toasts={toasts} onDismiss={removeToast} />
       </main>
@@ -260,7 +266,7 @@ export default function PlayBotPage() {
         </div>
 
         <footer className="text-center text-xs text-muted">
-          Hand Cricket Arena • Match Complete
+          HandCricketOmegle • Match Complete
         </footer>
         <Toast toasts={toasts} onDismiss={removeToast} />
       </main>
@@ -329,7 +335,7 @@ export default function PlayBotPage() {
       {/* CENTER: THE ARENA (Two HandTiles facing each other; stacked on mobile with opponent on top, side-by-side on desktop) */}
       <section
         className="w-full my-3 sm:my-5 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 relative"
-        aria-label="Hand Cricket Arena Duel"
+        aria-label="HandCricketOmegle Duel"
       >
         {/* Opponent Tile (Top on mobile, Right on desktop, mirrored) */}
         <div className="w-full sm:w-1/2 order-1 sm:order-2">

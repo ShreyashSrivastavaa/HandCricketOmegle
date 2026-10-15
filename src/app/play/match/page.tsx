@@ -198,6 +198,7 @@ function PlayMatchContent() {
 
   // Initialize Guest ID and Blocklist
   useEffect(() => {
+    document.title = "1v1 Stranger Match | HandCricketOmegle";
     let gid = localStorage.getItem("hca_guest_id");
     if (!gid) {
       gid = `g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;

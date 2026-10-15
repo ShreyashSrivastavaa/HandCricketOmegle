@@ -31,6 +31,7 @@ export default function AdminReportsPage() {
 
   // Auto-restore admin token from sessionStorage if present
   useEffect(() => {
+    document.title = "Moderation Queue | HandCricketOmegle Admin";
     const saved = sessionStorage.getItem("hc_admin_token");
     if (saved) {
       setToken(saved);

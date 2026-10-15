@@ -31,6 +31,15 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // Keyboard accessibility: Escape key cancels search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-ink/95 backdrop-blur-md"

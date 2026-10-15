@@ -79,7 +79,7 @@ export const GameScreen: React.FC = () => {
         </div>
 
         <footer className="text-center text-xs text-muted">
-          Hand Cricket Arena • Authoritative Coin Toss
+          HandCricketOmegle • Authoritative Coin Toss
         </footer>
       </main>
     );
@@ -112,7 +112,7 @@ export const GameScreen: React.FC = () => {
         </div>
 
         <footer className="text-center text-xs text-muted">
-          Hand Cricket Arena • Target Set
+          HandCricketOmegle • Target Set
         </footer>
       </main>
     );
@@ -146,7 +146,7 @@ export const GameScreen: React.FC = () => {
         </div>
 
         <footer className="text-center text-xs text-muted">
-          Hand Cricket Arena • Match Complete
+          HandCricketOmegle • Match Complete
         </footer>
       </main>
     );

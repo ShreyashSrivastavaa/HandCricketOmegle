@@ -173,7 +173,7 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
 
       {/* Action Buttons: Play Again & Find New Opponent */}
       <div className="w-full flex flex-col gap-2.5 z-10 pt-1">
-        <div className="grid grid-cols-2 gap-2.5 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
           {effectivePlayAgain && (
             <Button
               variant="primary"

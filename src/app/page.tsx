@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import { useLiveMatchStore } from "@/lib/store/liveMatchStore";
 import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 import { LandingScreen } from "@/components/LandingScreen";
 import { SearchingOverlay } from "@/components/SearchingOverlay";
 import { TossScreen } from "@/components/TossScreen";
@@ -101,11 +102,9 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Footer (only on landing) */}
+      {/* Responsive Branded Footer */}
       {screen === "landing" && (
-        <footer className="w-full py-4 text-center text-xs text-muted border-t border-line/60">
-          <p>© {new Date().getFullYear()} HandCricketOmegle • Real-time serverless matchmaking</p>
-        </footer>
+        <Footer onOpenRules={() => setIsRulesOpen(true)} />
       )}
 
       {/* Modals */}
