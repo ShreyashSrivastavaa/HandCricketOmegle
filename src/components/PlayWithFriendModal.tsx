@@ -61,7 +61,7 @@ export function PlayWithFriendModal({
   if (!isOpen) return null;
 
   // Handle Create Room
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     playClickSound();
     setIsCreating(true);
     setCreateError(null);
@@ -75,28 +75,51 @@ export function PlayWithFriendModal({
       (typeof window !== "undefined" ? localStorage.getItem("hca_guest_name") : null) ||
       "Player";
 
-    const socket = io({ transports: ["websocket", "polling"] });
-
-    socket.on("connect", () => {
-      socket.emit("friend:create", {
-        guestId: effectiveId,
-        name: effectiveName,
-        mode: matchMode,
-        format: { maxWickets: wickets, maxOvers: overs },
+    try {
+      const res = await fetch("/api/room/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          guestId: effectiveId,
+          name: effectiveName,
+          mode: matchMode,
+          format: { maxWickets: wickets, maxOvers: overs },
+        }),
       });
-    });
 
-    socket.on("friend:created", (data: { code: string }) => {
-      socket.disconnect();
+      const data = await res.json();
+      if (!res.ok || !data.code) {
+        throw new Error(data.error || "Failed to create room.");
+      }
+
       setIsCreating(false);
       setCreatedRoomCode(data.code);
-    });
+    } catch (err: any) {
+      console.warn("[Friend Room] API create failed, falling back to socket:", err);
+      // Fallback to socket if API had an unexpected issue
+      const socket = io({ transports: ["websocket", "polling"] });
 
-    socket.on("friend:error", (err: { message: string }) => {
-      socket.disconnect();
-      setIsCreating(false);
-      setCreateError(err.message || "Could not create room. Please try again.");
-    });
+      socket.on("connect", () => {
+        socket.emit("friend:create", {
+          guestId: effectiveId,
+          name: effectiveName,
+          mode: matchMode,
+          format: { maxWickets: wickets, maxOvers: overs },
+        });
+      });
+
+      socket.on("friend:created", (data: { code: string }) => {
+        socket.disconnect();
+        setIsCreating(false);
+        setCreatedRoomCode(data.code);
+      });
+
+      socket.on("friend:error", (socketErr: { message: string }) => {
+        socket.disconnect();
+        setIsCreating(false);
+        setCreateError(socketErr.message || err.message || "Could not create room.");
+      });
+    }
   };
 
   // Copy Room Code

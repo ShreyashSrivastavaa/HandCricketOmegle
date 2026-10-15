@@ -10,6 +10,30 @@ const ablyTokenBodySchema = z.object({
   matchId: z.string().optional(),
 });
 
+export async function GET(req: NextRequest) {
+  const { session } = getOrCreateGuestSession(req);
+
+  const rl = await rateLimit(req, session.guestId);
+  if (!rl.success) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  const matchId = req.nextUrl.searchParams.get("matchId") || undefined;
+
+  try {
+    const tokenRequest = await createAblyTokenRequest(session.guestId, matchId);
+    const res = NextResponse.json(tokenRequest);
+    attachSessionCookies(res, session);
+    return res;
+  } catch (err: any) {
+    console.error("[Ably Token API] Error generating token request:", err);
+    return NextResponse.json(
+      { error: "Failed to generate realtime token" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   const { session } = getOrCreateGuestSession(req);
 

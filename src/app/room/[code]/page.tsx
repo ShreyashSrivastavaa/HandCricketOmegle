@@ -56,6 +56,7 @@ import { handDetector } from "@/lib/gesture/handDetector";
 import type { HandGesture } from "@/lib/gesture/handClassifier";
 import { GestureDetectionChip } from "@/components/GestureDetectionChip";
 import { useWakeLock } from "@/lib/client/useWakeLock";
+import { getClientAbly } from "@/lib/client/ablyClient";
 
 interface FriendRoomState {
   roomId: string;
@@ -217,7 +218,129 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       });
   }, []);
 
-  // Socket Connection & Join
+  // REST & Ably Synchronizer for Serverless Deployments (Vercel)
+  useEffect(() => {
+    if (!guestId || !roomCode) return;
+
+    let isSubscribed = true;
+    let roomChannel: any = null;
+
+    // 1. Initial join via REST API
+    const joinServerlessRoom = async () => {
+      try {
+        const isAgeVerified =
+          typeof window !== "undefined"
+            ? localStorage.getItem("hca_age_verified") !== "false"
+            : true;
+
+        const res = await fetch(`/api/room/${roomCode}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "join",
+            guestId,
+            name: guestName,
+            ageConfirmed: isAgeVerified,
+          }),
+        });
+
+        const data = await res.json();
+        if (!isSubscribed) return;
+
+        if (res.ok && data.room) {
+          setIsLoading(false);
+          setRoomState(data.room);
+          const isHost = data.room.host.guestId === guestId;
+          const myReady = isHost ? data.room.host.ready : data.room.guest?.ready || false;
+          setIsReady(myReady);
+        } else if (res.status === 404) {
+          setIsLoading(false);
+          setErrorMessage(data.error || "Room not found or expired.");
+        }
+      } catch (err) {
+        console.warn("[Friend Room] Serverless join check:", err);
+      }
+    };
+
+    joinServerlessRoom();
+
+    // 2. Realtime sync via Ably channel `room:${roomCode}`
+    try {
+      const ably = getClientAbly();
+      if (ably?.channels) {
+        roomChannel = ably.channels.get(`room:${roomCode}`);
+
+        roomChannel.subscribe("friend:state", (msg: any) => {
+          if (!isSubscribed || !msg.data) return;
+          const data: FriendRoomState = msg.data;
+          setIsLoading(false);
+          setRoomState(data);
+
+          const isHost = data.host.guestId === guestId;
+          const myReady = isHost ? data.host.ready : data.guest?.ready || false;
+          setIsReady(myReady);
+        });
+
+        roomChannel.subscribe("friend:kicked", (msg: any) => {
+          if (!isSubscribed || !msg.data) return;
+          if (msg.data.targetGuestId === guestId) {
+            addToast(msg.data.message || "You were removed from the room.", "warning");
+            webrtcManager.cleanup();
+            router.push("/");
+          }
+        });
+
+        roomChannel.subscribe("match:found", (msg: any) => {
+          if (!isSubscribed || !msg.data) return;
+          const data = msg.data;
+          const isInitiator = data.hostId === guestId;
+          setIsInitiator(isInitiator);
+          const opp = isInitiator ? data.p2 : data.p1;
+          setOpponent(opp);
+          const myRole: PlayerId = isInitiator ? "p1" : "p2";
+          setMyPlayerId(myRole);
+
+          addToast(`Match starting against ${opp.name}!`, "success");
+
+          const p1Name = isInitiator ? "You" : opp.name;
+          const p2Name = isInitiator ? opp.name : "You";
+          const initialGame = createInitialGameState(data.format, p1Name, p2Name, "p1");
+          setGameState(initialGame);
+          setRematchWaiting(false);
+        });
+      }
+    } catch (e) {
+      console.warn("[Ably Room Sync] error:", e);
+    }
+
+    // 3. Fallback polling for status when in lobby (every 3s)
+    const pollInterval = setInterval(async () => {
+      if (!isSubscribed) return;
+      try {
+        const res = await fetch(`/api/room/${roomCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.room && isSubscribed) {
+            setRoomState(data.room);
+            const isHost = data.room.host.guestId === guestId;
+            setIsReady(isHost ? data.room.host.ready : data.room.guest?.ready || false);
+          }
+        }
+      } catch {}
+    }, 3000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(pollInterval);
+      if (roomChannel) {
+        try {
+          roomChannel.unsubscribe();
+        } catch {}
+      }
+    };
+  }, [guestId, roomCode, guestName, router]);
+
+  // Socket Connection & Join (Node.js runtime server fallback)
   useEffect(() => {
     if (!guestId || !roomCode) return;
 
@@ -257,9 +380,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     });
 
     s.on("friend:error", (err: { message: string }) => {
-      setIsLoading(false);
-      setErrorMessage(err.message);
-      addToast(err.message, "error");
+      // Only set error if we don't already have valid roomState from REST/Ably
+      if (!roomState) {
+        setIsLoading(false);
+        setErrorMessage(err.message);
+        addToast(err.message, "error");
+      }
     });
 
     s.on("friend:kicked", (data: { message: string }) => {
@@ -599,20 +725,40 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     const next = !isReady;
     setIsReady(next);
     socket?.emit("friend:ready", { ready: next });
+    fetch(`/api/room/${roomCode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ready", ready: next, guestId }),
+    }).catch(() => {});
   };
 
   const handleHostFormatUpdate = (format: MatchFormat) => {
     socket?.emit("friend:format:update", { format });
+    fetch(`/api/room/${roomCode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "format", format, guestId }),
+    }).catch(() => {});
   };
 
   const handleHostKick = (targetGuestId: string) => {
     socket?.emit("friend:kick", { targetGuestId });
+    fetch(`/api/room/${roomCode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "kick", targetGuestId, guestId }),
+    }).catch(() => {});
     addToast("Player kicked.", "info");
   };
 
   const handleRematchVote = () => {
     setRematchWaiting(true);
     socket?.emit("friend:rematch");
+    fetch(`/api/room/${roomCode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "rematch", guestId }),
+    }).catch(() => {});
   };
 
   const handleChangeFormat = () => {
@@ -622,6 +768,11 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   const handleLeaveRoom = () => {
     socket?.emit("friend:leave");
+    fetch(`/api/room/${roomCode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "leave", guestId }),
+    }).catch(() => {});
     webrtcManager.cleanup();
     handDetector.destroy();
     router.push("/");

@@ -28,6 +28,7 @@ export async function createAblyTokenRequest(
   const capability: Record<string, string[]> = {
     [`user:${guestId}`]: ["subscribe", "publish"],
     lobby: ["subscribe", "presence"],
+    "room:*": ["subscribe", "publish", "presence"],
   };
 
   if (matchId) {

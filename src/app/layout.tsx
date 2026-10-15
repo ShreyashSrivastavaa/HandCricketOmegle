@@ -78,6 +78,9 @@ export const metadata: Metadata = {
   },
 };
 
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -93,6 +96,8 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-ink text-chalk antialiased selection:bg-turf selection:text-ink">
         {children}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

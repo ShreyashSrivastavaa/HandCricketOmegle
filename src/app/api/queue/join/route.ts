@@ -11,11 +11,28 @@ const joinQueueSchema = z.object({
   mode: z.enum(["sudden_death", "classic"]).default("sudden_death"),
   playVsBot: z.boolean().default(false),
   guestName: z.string().optional(),
+  guestId: z.string().optional(),
   ageConfirmed: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
   const { session } = getOrCreateGuestSession(req);
+
+  const json = await req.json().catch(() => ({}));
+  const parseResult = joinQueueSchema.safeParse(json);
+  if (!parseResult.success) {
+    return NextResponse.json(
+      { error: "Invalid queue parameters", details: parseResult.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const { mode, playVsBot, guestName, guestId, ageConfirmed } = parseResult.data;
+  if (guestId && guestId.trim().length > 3) {
+    session.guestId = guestId.trim();
+  }
+  const effectiveName = guestName?.trim() || session.guestName;
+  session.guestName = effectiveName;
 
   // 1. Churn & Skip spam rate limiting (6 join/leave requests per 10s)
   const rl = await rateLimitQueue(req, session.guestId);
@@ -45,18 +62,6 @@ export async function POST(req: NextRequest) {
       { status: 403 }
     );
   }
-
-  const json = await req.json().catch(() => ({}));
-  const parseResult = joinQueueSchema.safeParse(json);
-  if (!parseResult.success) {
-    return NextResponse.json(
-      { error: "Invalid queue parameters", details: parseResult.error.flatten() },
-      { status: 400 }
-    );
-  }
-
-  const { mode, playVsBot, guestName, ageConfirmed } = parseResult.data;
-  const effectiveName = guestName?.trim() || session.guestName;
 
   // 4. Update age verification if provided in payload
   if (ageConfirmed === true) {

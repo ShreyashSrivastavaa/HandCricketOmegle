@@ -382,15 +382,42 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       clearBallTimer();
       clearDisconnectTimer();
 
-      const { mode, guestName } = get();
+      let { mode, guestName, guestId } = get();
+      if (!guestId && typeof window !== "undefined") {
+        guestId = localStorage.getItem("hca_guest_id") || "";
+        if (guestId) set({ guestId });
+      }
       set({ screen: "searching" });
+
+      const isAgeVerified =
+        typeof window !== "undefined"
+          ? localStorage.getItem("hca_age_verified") !== "false"
+          : true;
 
       try {
         const res = await fetch("/api/queue/join", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode, playVsBot, guestName }),
+          body: JSON.stringify({
+            mode,
+            playVsBot,
+            guestName,
+            guestId: guestId || undefined,
+            ageConfirmed: isAgeVerified,
+          }),
         });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          console.error("[Matchmaking] Join failed:", errData);
+          if (res.status === 403 && errData.code === "AGE_VERIFICATION_REQUIRED") {
+            if (typeof window !== "undefined") {
+              localStorage.setItem("hca_age_verified", "true");
+            }
+          }
+          set({ screen: "landing" });
+          return;
+        }
 
         const data = await res.json();
 
@@ -435,14 +462,14 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
         // Status is "queued": listen on private channel for match-found
         const ably = getClientAbly();
-        const { guestId } = get();
+        const currentGuestId = get().guestId || guestId;
         if (userPrivateChannel) {
           try {
             userPrivateChannel.unsubscribe();
           } catch {}
         }
 
-        userPrivateChannel = ably.channels.get(`user:${guestId}`);
+        userPrivateChannel = ably.channels.get(`user:${currentGuestId}`);
         userPrivateChannel.subscribe("match-found", (msg: any) => {
           const matchData = msg.data;
           const format = mode === "classic" ? CLASSIC_FORMAT : DEFAULT_SUDDEN_DEATH_FORMAT;
