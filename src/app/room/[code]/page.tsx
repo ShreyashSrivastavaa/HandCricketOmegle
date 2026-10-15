@@ -18,6 +18,8 @@ import { Button } from "@/components/Button";
 import { Toast, ToastMessage } from "@/components/Toast";
 import { AgeGateModal } from "@/components/AgeGateModal";
 import { CameraCheckModal } from "@/components/CameraCheckModal";
+import { FriendWaitingView } from "@/components/room/FriendWaitingView";
+import { FriendLobbyView } from "@/components/room/FriendLobbyView";
 import {
   GameState,
   MatchFormat,
@@ -690,275 +692,42 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // 3. WAITING SCREEN (Host alone in room)
   if (roomState.status === "waiting" && !roomState.guest) {
     return (
-      <main className="min-h-screen bg-ink text-chalk flex flex-col justify-center items-center p-4 select-none">
-        <div className="w-full max-w-md bg-surface border border-line rounded-[12px] p-6 sm:p-8 flex flex-col items-center gap-6 text-center">
-          
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-turf bg-turf/10 px-3 py-0.5 rounded-full border border-turf/30">
-              Private Room Created
-            </span>
-            <h2 className="font-heading font-black text-2xl sm:text-3xl uppercase tracking-tight text-chalk mt-1">
-              Invite Your Friend
-            </h2>
-            <p className="text-xs text-muted">
-              Share the 6-character room code or link below.
-            </p>
-          </div>
-
-          {/* BIG ROOM CODE WITH COPY BUTTON */}
-          <div className="w-full bg-surface-2 border border-line rounded-[12px] p-4 flex flex-col items-center gap-3">
-            <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">
-              Room Code
-            </span>
-            <div className="font-heading font-black text-4xl sm:text-5xl tracking-[0.25em] text-turf select-all pl-3">
-              {roomState.code}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 w-full mt-1">
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleCopyCode}
-                className="flex items-center justify-center gap-1.5 font-heading font-bold text-xs uppercase"
-              >
-                {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedCode ? "COPIED!" : "COPY CODE"}</span>
-              </Button>
-
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={handleShareLink}
-                className="flex items-center justify-center gap-1.5 font-heading font-bold text-xs uppercase"
-              >
-                {copiedLink ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                <span>{copiedLink ? "COPIED!" : "SHARE LINK"}</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* WAITING INDICATOR */}
-          <div className="flex items-center gap-2.5 text-xs text-muted py-1">
-            <Loader2 className="w-4 h-4 text-turf animate-spin" />
-            <span className="font-medium animate-pulse">Waiting for friend to join...</span>
-          </div>
-
-          {/* FORMAT INFO & EXPIRY */}
-          <div className="w-full flex items-center justify-between text-xs text-muted border-t border-line pt-3">
-            <div className="flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              <span>Expires in 10 mins</span>
-            </div>
-            <span>
-              {roomState.format.maxOvers} Overs • {roomState.format.maxWickets} Wkts •{" "}
-              {roomState.mode === "video" ? "Video Duel" : "Game Only"}
-            </span>
-          </div>
-
-          <Button
-            variant="secondary"
-            size="md"
-            fullWidth
-            onClick={handleLeaveRoom}
-            className="flex items-center justify-center gap-2 text-xs uppercase"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Cancel &amp; Leave Room</span>
-          </Button>
-        </div>
-        <Toast toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
-      </main>
+      <FriendWaitingView
+        code={roomState.code}
+        format={roomState.format}
+        mode={roomState.mode}
+        copiedCode={copiedCode}
+        copiedLink={copiedLink}
+        onCopyCode={handleCopyCode}
+        onShareLink={handleShareLink}
+        onLeaveRoom={handleLeaveRoom}
+        toasts={toasts}
+        onDismissToast={(id) => setToasts((t) => t.filter((x) => x.id !== id))}
+      />
     );
   }
 
   // 4. PRE-GAME LOBBY INSIDE THE ROOM (Both players joined, waiting for both to be Ready)
   if (roomState.status === "lobby" || (roomState.status === "waiting" && roomState.guest && !gameState)) {
-    const friendPlayer = isHost ? roomState.guest : roomState.host;
     const canChangeFormat = isHost && (!roomState.host.ready || !roomState.guest?.ready);
 
     return (
-      <main className="min-h-screen bg-ink text-chalk flex flex-col justify-center items-center p-4 select-none">
-        <div className="w-full max-w-lg bg-surface border border-line rounded-[12px] p-6 sm:p-8 flex flex-col gap-6">
-          
-          {/* Header Bar */}
-          <div className="flex items-center justify-between border-b border-line pb-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-turf inline-block" />
-              <h2 className="font-heading font-black text-xl uppercase tracking-wide">
-                Room Lobby
-              </h2>
-            </div>
-            <div className="flex items-center gap-1.5 bg-surface-2 border border-line rounded-full px-3 py-1 text-xs font-mono font-bold text-turf">
-              <span>{roomState.code}</span>
-              <button onClick={handleCopyCode} title="Copy code" className="hover:text-chalk">
-                <Copy className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          {/* PLAYERS STATUS CARDS */}
-          <div className="flex flex-col gap-3">
-            <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-muted">
-              Players
-            </span>
-
-            {/* Host Card */}
-            <div className="flex items-center justify-between bg-surface-2 border border-line rounded-[12px] p-3.5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-[8px] bg-turf/10 border border-turf text-turf flex items-center justify-center font-heading font-black text-xs">
-                  {roomState.host.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-sm font-heading font-bold text-chalk">
-                    {roomState.host.name} {isHost ? "(You)" : ""}
-                  </span>
-                  <span className="text-[10px] text-muted uppercase font-semibold">
-                    Host
-                  </span>
-                </div>
-              </div>
-
-              <span
-                className={`text-xs font-heading font-bold px-3 py-1 rounded-full border ${
-                  roomState.host.ready
-                    ? "bg-turf/15 text-turf border-turf/40"
-                    : "bg-surface text-muted border-line"
-                }`}
-              >
-                {roomState.host.ready ? "READY" : "NOT READY"}
-              </span>
-            </div>
-
-            {/* Guest Card */}
-            {roomState.guest ? (
-              <div className="flex items-center justify-between bg-surface-2 border border-line rounded-[12px] p-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-[8px] bg-sky/10 border border-sky text-sky flex items-center justify-center font-heading font-black text-xs">
-                    {roomState.guest.name.slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-heading font-bold text-chalk">
-                      {roomState.guest.name} {!isHost ? "(You)" : ""}
-                    </span>
-                    <span className="text-[10px] text-muted uppercase font-semibold">
-                      Challenger
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-xs font-heading font-bold px-3 py-1 rounded-full border ${
-                      roomState.guest.ready
-                        ? "bg-turf/15 text-turf border-turf/40"
-                        : "bg-surface text-muted border-line"
-                    }`}
-                  >
-                    {roomState.guest.ready ? "READY" : "NOT READY"}
-                  </span>
-
-                  {isHost && (
-                    <button
-                      type="button"
-                      onClick={() => handleHostKick(roomState.guest!.guestId)}
-                      title="Kick player"
-                      className="p-1.5 text-muted hover:text-ball border border-transparent hover:border-line rounded transition-colors"
-                    >
-                      <UserX className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="p-3 text-center text-xs text-muted border border-dashed border-line rounded-[12px]">
-                Waiting for friend to enter code...
-              </div>
-            )}
-          </div>
-
-          {/* FORMAT SELECTOR (Host editable until both ready) */}
-          <div className="flex flex-col gap-2 bg-surface-2 border border-line rounded-[12px] p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-muted">
-                Match Format Rules
-              </span>
-              {!isHost && (
-                <span className="text-[10px] text-muted italic">
-                  Host sets the rules
-                </span>
-              )}
-            </div>
-
-            {/* Wickets */}
-            <div className="flex items-center justify-between text-xs pt-1">
-              <span className="font-semibold text-muted uppercase">Wickets:</span>
-              <div className="flex gap-1.5">
-                {([1, 2, 3] as WicketsOption[]).map((w) => (
-                  <button
-                    key={w}
-                    type="button"
-                    disabled={!canChangeFormat}
-                    onClick={() => handleHostFormatUpdate({ ...roomState.format, maxWickets: w })}
-                    className={`px-3 py-1 rounded-[8px] text-xs font-heading font-bold tabular-nums border transition-all ${
-                      roomState.format.maxWickets === w
-                        ? "bg-turf text-ink border-turf"
-                        : "bg-surface text-muted border-line hover:text-chalk disabled:hover:text-muted"
-                    }`}
-                  >
-                    {w} {w === 1 ? "Wkt" : "Wkts"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Overs */}
-            <div className="flex items-center justify-between text-xs pt-1">
-              <span className="font-semibold text-muted uppercase">Overs:</span>
-              <div className="flex gap-1.5">
-                {([1, 2, 3] as OversOption[]).map((o) => (
-                  <button
-                    key={o}
-                    type="button"
-                    disabled={!canChangeFormat}
-                    onClick={() => handleHostFormatUpdate({ ...roomState.format, maxOvers: o })}
-                    className={`px-3 py-1 rounded-[8px] text-xs font-heading font-bold tabular-nums border transition-all ${
-                      roomState.format.maxOvers === o
-                        ? "bg-turf text-ink border-turf"
-                        : "bg-surface text-muted border-line hover:text-chalk disabled:hover:text-muted"
-                    }`}
-                  >
-                    {o} {o === 1 ? "Over" : "Overs"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* READY BUTTON (Min 56px height) */}
-          <Button
-            variant={isReady ? "secondary" : "primary"}
-            size="lg"
-            fullWidth
-            onClick={handleToggleReady}
-            className={`font-heading font-black text-xl uppercase tracking-wider min-h-[56px] flex items-center justify-center gap-2 ${
-              isReady ? "border-turf text-turf bg-turf/10" : ""
-            }`}
-          >
-            {isReady ? <Check className="w-6 h-6 stroke-[3]" /> : null}
-            <span>{isReady ? "READY! (TAP TO CANCEL)" : "I'M READY"}</span>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLeaveRoom}
-            className="text-xs text-muted hover:text-chalk uppercase -mt-2"
-          >
-            Leave Room
-          </Button>
-        </div>
-        <Toast toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
-      </main>
+      <FriendLobbyView
+        code={roomState.code}
+        isHost={isHost}
+        isReady={isReady}
+        host={roomState.host}
+        guest={roomState.guest}
+        format={roomState.format}
+        canChangeFormat={canChangeFormat}
+        onCopyCode={handleCopyCode}
+        onToggleReady={handleToggleReady}
+        onLeaveRoom={handleLeaveRoom}
+        onHostKick={handleHostKick}
+        onFormatUpdate={handleHostFormatUpdate}
+        toasts={toasts}
+        onDismissToast={(id) => setToasts((t) => t.filter((x) => x.id !== id))}
+      />
     );
   }
 

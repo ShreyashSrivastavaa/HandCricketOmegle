@@ -4,7 +4,7 @@ export interface Landmark {
   z?: number;
 }
 
-export type HandGesture = 1 | 2 | 3 | 4 | 5 | 6;
+export type HandGesture = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 /**
  * Calculates Euclidean distance between two landmarks in 2D or 3D.
@@ -57,9 +57,10 @@ function isThumbExtended(
 }
 
 /**
- * Classifies MediaPipe 21 hand landmarks into cricket picks 1-6.
+ * Classifies MediaPipe 21 hand landmarks into cricket picks 0-6.
  *
  * Rules:
+ * 0: Closed fist (all fingers and thumb tucked/curled)
  * 1: Index finger only (1 finger)
  * 2: Index + Middle fingers (2 fingers)
  * 3: Index + Middle + Ring fingers (3 fingers)
@@ -67,7 +68,7 @@ function isThumbExtended(
  * 5: Open palm (all 5 fingers extended)
  * 6: Thumb only (Thumbs-Up, 4 fingers curled)
  *
- * Returns 1-6 if valid gesture, or null if unclear/ambiguous.
+ * Returns 0-6 if valid gesture, or null if unclear/ambiguous.
  */
 export function classifyHandLandmarks(landmarks: Landmark[]): HandGesture | null {
   if (!landmarks || landmarks.length < 21) {
@@ -141,23 +142,36 @@ export function classifyHandLandmarks(landmarks: Landmark[]): HandGesture | null
     return 1;
   }
 
+  // 0: Closed fist -> all fingers curled and thumb curled
+  if (!thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) {
+    return 0;
+  }
+
   // Unclear / unsupported gesture (e.g., horns, pinky only, etc.)
   return null;
 }
 
 /**
- * GestureStabilizer enforces holding a gesture steadily for 1.0s before locking.
- * Once locked, subsequent detections are permanently ignored.
+ * GestureStabilizer enforces holding a gesture steadily for ~300ms / 5 consecutive frames before locking.
+ * Once locked, subsequent detections are permanently ignored until reset.
  */
 export class GestureStabilizer {
   private currentCandidate: HandGesture | null = null;
   private candidateStartTime: number | null = null;
+  private consecutiveFrames: number = 0;
   private isLocked: boolean = false;
   private lockedValue: HandGesture | null = null;
-  private requiredHoldMs: number = 1000;
+  private requiredHoldMs: number = 300;
+  private requiredConsecutiveFrames: number = 5;
 
-  constructor(requiredHoldMs: number = 1000) {
+  constructor(requiredHoldMs: number = 300, requiredConsecutiveFrames?: number) {
     this.requiredHoldMs = requiredHoldMs;
+    this.requiredConsecutiveFrames =
+      requiredConsecutiveFrames !== undefined
+        ? requiredConsecutiveFrames
+        : requiredHoldMs === 300
+        ? 5
+        : 1;
   }
 
   /**
@@ -171,6 +185,7 @@ export class GestureStabilizer {
     progress: number;
     lockedNumber?: HandGesture;
     currentCandidate: HandGesture | null;
+    consecutiveFrames?: number;
   } {
     // If already locked, freeze state and ignore further changes
     if (this.isLocked && this.lockedValue !== null) {
@@ -179,16 +194,19 @@ export class GestureStabilizer {
         progress: 1,
         lockedNumber: this.lockedValue,
         currentCandidate: this.lockedValue,
+        consecutiveFrames: this.consecutiveFrames,
       };
     }
 
     if (detected === null) {
       this.currentCandidate = null;
       this.candidateStartTime = null;
+      this.consecutiveFrames = 0;
       return {
         locked: false,
         progress: 0,
         currentCandidate: null,
+        consecutiveFrames: 0,
       };
     }
 
@@ -196,10 +214,12 @@ export class GestureStabilizer {
       // New candidate started
       this.currentCandidate = detected;
       this.candidateStartTime = now;
+      this.consecutiveFrames = 1;
       return {
         locked: false,
         progress: 0,
         currentCandidate: detected,
+        consecutiveFrames: 1,
       };
     }
 
@@ -207,11 +227,20 @@ export class GestureStabilizer {
     if (this.candidateStartTime === null) {
       this.candidateStartTime = now;
     }
+    this.consecutiveFrames += 1;
 
     const elapsed = now - this.candidateStartTime;
-    const progress = Math.min(1, Math.max(0, elapsed / this.requiredHoldMs));
+    const timeProgress = this.requiredHoldMs > 0 ? elapsed / this.requiredHoldMs : 1;
+    const frameProgress =
+      this.requiredConsecutiveFrames > 0
+        ? this.consecutiveFrames / this.requiredConsecutiveFrames
+        : 1;
+    const progress = Math.min(1, Math.max(0, Math.min(timeProgress, frameProgress)));
 
-    if (elapsed >= this.requiredHoldMs) {
+    if (
+      elapsed >= this.requiredHoldMs &&
+      this.consecutiveFrames >= this.requiredConsecutiveFrames
+    ) {
       this.isLocked = true;
       this.lockedValue = detected;
       return {
@@ -219,6 +248,7 @@ export class GestureStabilizer {
         progress: 1,
         lockedNumber: detected,
         currentCandidate: detected,
+        consecutiveFrames: this.consecutiveFrames,
       };
     }
 
@@ -226,12 +256,14 @@ export class GestureStabilizer {
       locked: false,
       progress,
       currentCandidate: detected,
+      consecutiveFrames: this.consecutiveFrames,
     };
   }
 
   public reset(): void {
     this.currentCandidate = null;
     this.candidateStartTime = null;
+    this.consecutiveFrames = 0;
     this.isLocked = false;
     this.lockedValue = null;
   }
@@ -242,5 +274,9 @@ export class GestureStabilizer {
 
   public isAlreadyLocked(): boolean {
     return this.isLocked;
+  }
+
+  public getConsecutiveFrames(): number {
+    return this.consecutiveFrames;
   }
 }
