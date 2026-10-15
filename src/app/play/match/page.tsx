@@ -123,6 +123,7 @@ function PlayMatchContent() {
   const [receivedEmote, setReceivedEmote] = useState<{ emote: string; id: number } | null>(null);
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const lastSkipRef = useRef<number>(0);
 
   // Responsive layout state
   const [layout, setLayout] = useState<"mobile-portrait" | "desktop" | "landscape">("mobile-portrait");
@@ -562,8 +563,15 @@ function PlayMatchContent() {
     };
   }, [turnStage, isUserLocked, isGestureModeActive]);
 
-  // Next Opponent (works in 1 tap at all times in < 1s)
+  // Next Opponent (works in 1 tap at all times, with rapid skip throttling)
   const handleNextOpponent = () => {
+    const now = Date.now();
+    if (now - lastSkipRef.current < 750) {
+      addToast("Please wait a moment before searching again.", "warning");
+      return;
+    }
+    lastSkipRef.current = now;
+
     webrtcManager.cleanup();
     handDetector.destroy();
     stopTurnCountdown();
@@ -580,7 +588,15 @@ function PlayMatchContent() {
     const updated = [...blockedGuests, targetGuestId];
     setBlockedGuests(updated);
     sessionStorage.setItem("hca_blocked_guests", JSON.stringify(updated));
-    addToast("Opponent blocked for this session.", "info");
+
+    // Persist block to server backend
+    fetch("/api/match/block", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blockedGuestId: targetGuestId }),
+    }).catch(() => {});
+
+    addToast("Opponent blocked permanently.", "info");
     handleNextOpponent();
   };
 

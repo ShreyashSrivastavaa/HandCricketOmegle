@@ -16,13 +16,20 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
 
   if (!isOpen) return null;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (agreedToAge && agreedToRules) {
       const record = {
         confirmed: true,
         timestamp: Date.now(),
       };
       localStorage.setItem("hca_age_verified", JSON.stringify(record));
+      try {
+        await fetch("/api/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ageConfirmed: true }),
+        });
+      } catch {}
       onConfirm();
     }
   };
@@ -36,9 +43,9 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
           </div>
           <div>
             <h2 className="text-xl font-bold font-heading uppercase tracking-wide text-chalk">
-              Age Verification & Safety Rules
+              18+ Verification &amp; Safety
             </h2>
-            <p className="text-xs text-muted">Required to enable 1-to-1 live video mode</p>
+            <p className="text-xs text-muted">Required for stranger matchmaking</p>
           </div>
         </div>
 
@@ -49,7 +56,11 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
           <ul className="space-y-2 text-xs text-muted leading-relaxed">
             <li className="flex items-start gap-2">
               <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">No Nudity:</strong> Strictly zero tolerance for explicit or sexual content.</span>
+              <span><strong className="text-chalk">Strictly 18+:</strong> Stranger mode is restricted to adults 18 years and older.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-ball font-bold">•</span>
+              <span><strong className="text-chalk">No Nudity:</strong> Zero tolerance for explicit or sexual content on camera.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-ball font-bold">•</span>
@@ -57,11 +68,7 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
             </li>
             <li className="flex items-start gap-2">
               <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">No Recording:</strong> Recording, screenshotting, or streaming peers is prohibited.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">Reports include snapshots:</strong> Submitted reports transmit 1 still frame for moderation.</span>
+              <span><strong className="text-chalk">Strict Privacy:</strong> Live video is strictly peer-to-peer. Zero video is ever recorded or stored.</span>
             </li>
           </ul>
         </div>
@@ -87,7 +94,15 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
               className="mt-0.5 w-4 h-4 rounded border-line bg-surface-2 text-turf focus:ring-0 focus:outline-none cursor-pointer"
             />
             <span>
-              I accept the Safety Rules and Terms. I understand violations result in an immediate permanent ban.
+              I accept the{" "}
+              <a href="/terms" target="_blank" rel="noreferrer" className="text-turf underline">
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a href="/guidelines" target="_blank" rel="noreferrer" className="text-turf underline">
+                Community Guidelines
+              </a>
+              . I understand violations result in an immediate ban.
             </span>
           </label>
         </div>
@@ -98,7 +113,7 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
             className="flex-1"
             onClick={onDecline}
           >
-            Play Game Only
+            Cancel
           </Button>
           <Button
             variant="primary"
@@ -107,7 +122,7 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
             onClick={handleConfirm}
           >
             <Check className="w-4 h-4 mr-1.5" />
-            Confirm & Enter
+            Confirm &amp; Enter
           </Button>
         </div>
       </div>

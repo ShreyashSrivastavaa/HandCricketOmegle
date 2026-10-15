@@ -1,5 +1,6 @@
 import { getRedis } from "./redis";
 import { publishToAbly } from "./ably";
+import { isGuestBanned, isOpponentBlocked, recordReport } from "./safety";
 import type { GameState, MatchFormat, BallOutcome } from "../game/types";
 import {
   createInitialGameState,
@@ -66,6 +67,12 @@ export async function joinMatchmakingQueue(
   const redis = getRedis();
   const queueKey = getQueueKey(mode);
 
+  // 1. Verify guest is not suspended
+  const banStatus = await isGuestBanned(guestId);
+  if (banStatus.banned) {
+    throw new Error("Access suspended: Your account is temporarily suspended due to community reports.");
+  }
+
   // Check if someone is already waiting in this queue
   const waitingItem = await redis.lpop<WaitingQueueEntry | string>(queueKey);
 
@@ -81,6 +88,16 @@ export async function joinMatchmakingQueue(
     (waitingPlayer.guestId === guestId || Date.now() - waitingPlayer.joinedAt > 25000)
   ) {
     waitingPlayer = null;
+  }
+
+  // Ensure neither player has blocked the other
+  if (waitingPlayer) {
+    const isBlocked = await isOpponentBlocked(guestId, waitingPlayer.guestId);
+    if (isBlocked) {
+      // Return waiting player to queue and do not match
+      await redis.rpush(queueKey, JSON.stringify(waitingPlayer));
+      waitingPlayer = null;
+    }
   }
 
   if (waitingPlayer) {
@@ -495,18 +512,33 @@ export async function handleForfeit(
 
 /**
  * Handles report submission.
+ * Strictly metadata-only (zero video/snapshot storage).
+ * Checks 3-report 24h threshold for auto-ban and supports optional opponent blocking.
  */
 export async function handleReport(
   matchId: string,
   reporterGuestId: string,
-  reason: string
-): Promise<void> {
-  const redis = getRedis();
-  const report = {
-    matchId,
+  reason: string,
+  blockOpponent = false
+): Promise<{ success: boolean; autoBanned: boolean }> {
+  let reportedGuestId = "unknown";
+  try {
+    const match = await getMatch(matchId);
+    if (match) {
+      reportedGuestId =
+        match.player1.guestId === reporterGuestId
+          ? match.player2.guestId
+          : match.player1.guestId;
+    }
+  } catch {}
+
+  const result = await recordReport({
     reporterGuestId,
+    reportedGuestId,
+    roomId: matchId,
     reason,
-    timestamp: Date.now(),
-  };
-  await redis.rpush("reports:hand_cricket", JSON.stringify(report));
+    blockOpponent,
+  });
+
+  return { success: true, autoBanned: result.autoBanned };
 }

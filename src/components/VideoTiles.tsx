@@ -79,10 +79,25 @@ export function VideoTiles({
   const [isSelfHidden, setIsSelfHidden] = useState<boolean>(webrtcManager.isSelfHidden);
 
   // Safety Blur States (Friend rooms are never blurred: friends consent to each other)
+  // In stranger mode, stranger video starts blurred for privacy & safety until revealed
   const [isFirstMatchBlurred, setIsFirstMatchBlurred] = useState<boolean>(
-    isFriendRoom ? false : isFirstMatchForGuest
+    isFriendRoom ? false : true
   );
+  const [isUserBlurred, setIsUserBlurred] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("hc_blur_opponent_video") === "true";
+    }
+    return false;
+  });
   const [isNsfwBlurred, setIsNsfwBlurred] = useState<boolean>(false);
+
+  const handleToggleUserBlur = () => {
+    const nextVal = !isUserBlurred;
+    setIsUserBlurred(nextVal);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hc_blur_opponent_video", String(nextVal));
+    }
+  };
 
   useEffect(() => {
     // 1. Attach local stream to preview element
@@ -161,7 +176,7 @@ export function VideoTiles({
     }
   }, [localVideoRefOut]);
 
-  const isBlurred = isFirstMatchBlurred || isNsfwBlurred || isPickOrCountdown;
+  const isBlurred = isFirstMatchBlurred || isUserBlurred || isNsfwBlurred || isPickOrCountdown;
 
   return (
     <div
@@ -220,13 +235,23 @@ export function VideoTiles({
           </div>
         )}
 
-        {/* Initial First-Match Blur Warning */}
-        {connectionState === "live" && isFirstMatchBlurred && !isNsfwBlurred && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-3 text-center bg-ink/70">
+        {/* Initial Stranger / User Blur Warning */}
+        {connectionState === "live" && (isFirstMatchBlurred || isUserBlurred) && !isNsfwBlurred && !isPickOrCountdown && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-3 text-center bg-ink/75">
             <ShieldAlert className="w-5 h-5 text-turf mb-1" />
-            <p className="text-[11px] text-chalk font-semibold">Video preview blurred for safety</p>
+            <p className="text-[11px] text-chalk font-semibold">
+              {isUserBlurred ? "Opponent video blurred (Privacy Mode)" : "Stranger video preview blurred for safety"}
+            </p>
             <button
-              onClick={() => setIsFirstMatchBlurred(false)}
+              onClick={() => {
+                setIsFirstMatchBlurred(false);
+                if (isUserBlurred) {
+                  setIsUserBlurred(false);
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("hc_blur_opponent_video", "false");
+                  }
+                }
+              }}
               className="mt-1.5 px-3 py-1 bg-turf text-ink font-bold text-xs rounded hover:brightness-110"
             >
               Tap to Reveal
@@ -370,6 +395,19 @@ export function VideoTiles({
             className="p-1.5 rounded border border-line bg-surface-2/90 text-chalk hover:text-turf transition-colors"
           >
             {isSelfHidden ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Persistent Opponent Blur toggle */}
+          <button
+            onClick={handleToggleUserBlur}
+            title={isUserBlurred ? "Unblur opponent video" : "Blur opponent video (Privacy Mode)"}
+            className={`p-1.5 rounded border text-xs transition-colors ${
+              isUserBlurred
+                ? "bg-turf/20 border-turf text-turf"
+                : "bg-surface-2/90 border-line text-muted hover:text-chalk"
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
           </button>
 
           {/* Report */}

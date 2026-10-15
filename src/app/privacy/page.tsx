@@ -52,17 +52,17 @@ export default function PrivacyPage() {
           <section className="bg-surface border border-line rounded-xl p-5 space-y-2">
             <div className="flex items-center gap-2 text-turf font-bold text-sm uppercase tracking-wide">
               <Database className="w-4 h-4" />
-              3. Safety Reports & Moderation Snapshots
+              3. Safety Reports &amp; Abuse Prevention (No Video Stored)
             </div>
             <p className="text-muted">
-              When a user submits an in-game report for policy violations (such as nudity or harassment), a single still frame snapshot of the reported opponent&apos;s camera is transmitted to our secure moderation queue. Reports and snapshots are automatically and permanently deleted after <strong>30 days</strong>.
+              When a user submits an in-game report for policy violations, only structured metadata is logged: the reporter guest ID, the reported guest ID, the match ID, the chosen violation category, and a timestamp. <strong>No video streams, audio recordings, or image snapshots are ever captured or stored.</strong>
             </p>
           </section>
 
           <section className="bg-surface border border-line rounded-xl p-5 space-y-2">
             <div className="flex items-center gap-2 text-turf font-bold text-sm uppercase tracking-wide">
               <Shield className="w-4 h-4" />
-              4. Camera & Microphone Permissions
+              4. Camera &amp; Microphone Permissions
             </div>
             <p className="text-muted">
               Camera and microphone permissions are requested solely when you enter the Match Setup screen, never upon loading the website. When you click &ldquo;Next Opponent&rdquo; or return to the lobby, all media tracks are immediately and completely terminated.
@@ -70,8 +70,18 @@ export default function PrivacyPage() {
           </section>
         </div>
 
-        <footer className="text-center pt-4 text-[11px] text-muted border-t border-line">
-          Hand Cricket Arena • Built with privacy and competitive integrity.
+        <div className="border-t border-line pt-6 flex flex-wrap gap-4 text-xs text-muted">
+          <Link href="/terms" className="text-turf hover:underline">
+            Terms of Service
+          </Link>
+          <span>•</span>
+          <Link href="/guidelines" className="text-turf hover:underline">
+            Community Guidelines
+          </Link>
+        </div>
+
+        <footer className="text-center pt-2 text-[11px] text-muted">
+          HandCricketOmegle • Built with privacy, security, and competitive integrity.
         </footer>
       </div>
     </div>

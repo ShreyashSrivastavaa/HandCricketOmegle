@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const GUEST_COOKIE_NAME = "hc_guest_id";
 export const GUEST_NAME_COOKIE_NAME = "hc_guest_name";
+export const AGE_COOKIE_NAME = "hc_age_verified";
 
 const ADJECTIVES = [
   "Swift", "Blaze", "Silent", "Thunder", "Shadow", "Cosmic", "Brave", "Hyper",
@@ -29,6 +30,7 @@ export function generateGuestId(): string {
 export interface GuestSession {
   guestId: string;
   guestName: string;
+  ageVerified?: boolean;
 }
 
 export function getOrCreateGuestSession(req: NextRequest): {
@@ -37,10 +39,11 @@ export function getOrCreateGuestSession(req: NextRequest): {
 } {
   const guestId = req.cookies.get(GUEST_COOKIE_NAME)?.value;
   const guestName = req.cookies.get(GUEST_NAME_COOKIE_NAME)?.value;
+  const ageVerified = req.cookies.get(AGE_COOKIE_NAME)?.value === "true";
 
   if (guestId && guestName) {
     return {
-      session: { guestId, guestName },
+      session: { guestId, guestName, ageVerified },
       isNew: false,
     };
   }
@@ -49,7 +52,7 @@ export function getOrCreateGuestSession(req: NextRequest): {
   const newName = guestName || generateGuestName();
 
   return {
-    session: { guestId: newId, guestName: newName },
+    session: { guestId: newId, guestName: newName, ageVerified },
     isNew: true,
   };
 }
@@ -75,4 +78,15 @@ export function attachSessionCookies(
     maxAge: 30 * 24 * 60 * 60,
     path: "/",
   });
+
+  // httpOnly cookie for 18+ age verification
+  if (session.ageVerified) {
+    res.cookies.set(AGE_COOKIE_NAME, "true", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 365 * 24 * 60 * 60,
+      path: "/",
+    });
+  }
 }

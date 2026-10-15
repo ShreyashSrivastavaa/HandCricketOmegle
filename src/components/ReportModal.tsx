@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Flag, CheckCircle, X, ShieldAlert } from "lucide-react";
+import { Flag, CheckCircle, X, ShieldAlert, UserX, ShieldCheck } from "lucide-react";
 import { playClickSound } from "@/lib/client/audio";
 
 export interface ReportModalProps {
@@ -8,12 +8,12 @@ export interface ReportModalProps {
   opponentName?: string;
   onClose: () => void;
   onSubmitted?: () => void;
-  // Legacy compatibility props
+  // Legacy / Direct compatibility props
   reporterGuestId?: string;
   reportedGuestId?: string;
   roomId?: string;
   remoteVideoRef?: any;
-  onReportSubmitted?: (autoBanned?: any) => void;
+  onReportSubmitted?: (autoBanned?: boolean) => void;
 }
 
 const REPORT_REASONS = [
@@ -21,7 +21,8 @@ const REPORT_REASONS = [
   "Suspicious bot / automated play",
   "Inappropriate or offensive player name",
   "Griefing or unsportsmanlike conduct",
-  "Other abuse violation",
+  "Camera misconduct or abusive behavior",
+  "Other fair-play violation",
 ];
 
 export const ReportModal: React.FC<ReportModalProps> = ({
@@ -37,8 +38,10 @@ export const ReportModal: React.FC<ReportModalProps> = ({
   const effectiveMatchId = matchId !== "active" ? matchId : (roomId || "active");
   const effectiveOpponentName = opponentName !== "Opponent" ? opponentName : (reportedGuestId || "Opponent");
   const [selectedReason, setSelectedReason] = useState<string>(REPORT_REASONS[0]);
+  const [blockOpponent, setBlockOpponent] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitted, setSubmitted] = useState<boolean>(false);
+  const [wasAutoBanned, setWasAutoBanned] = useState<boolean>(false);
 
   if (!isOpen) return null;
 
@@ -46,25 +49,58 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     playClickSound();
     setIsSubmitting(true);
 
+    let autoBanned = false;
+
     try {
-      await fetch(`/api/match/${effectiveMatchId}/report`, {
+      // 1. Try match-specific report endpoint
+      const res = await fetch(`/api/match/${effectiveMatchId}/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: selectedReason }),
+        body: JSON.stringify({
+          reason: selectedReason,
+          blockOpponent,
+          reportedGuestId,
+        }),
       });
+
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.autoBanned) autoBanned = true;
+      } else {
+        // Fallback to general reports route if match route not found
+        const fallbackRes = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reportedGuestId: reportedGuestId || effectiveOpponentName,
+            roomId: effectiveMatchId,
+            reason: selectedReason,
+            blockOpponent,
+          }),
+        });
+        if (fallbackRes.ok) {
+          const fbData = await fallbackRes.json().catch(() => ({}));
+          if (fbData.autoBanned) autoBanned = true;
+        }
+      }
+    } catch {
+      // Offline / network fallback: still register local block if requested
+      if (blockOpponent && reportedGuestId) {
+        try {
+          const saved = JSON.parse(sessionStorage.getItem("hca_blocked_guests") || "[]");
+          if (!saved.includes(reportedGuestId)) {
+            sessionStorage.setItem("hca_blocked_guests", JSON.stringify([...saved, reportedGuestId]));
+          }
+        } catch {}
+      }
+    } finally {
       setIsSubmitting(false);
+      setWasAutoBanned(autoBanned);
       setSubmitted(true);
       setTimeout(() => {
         onClose();
         if (onSubmitted) onSubmitted();
-        if (onReportSubmitted) onReportSubmitted(false);
-      }, 1400);
-    } catch {
-      setIsSubmitting(false);
-      setSubmitted(true);
-      setTimeout(() => {
-        onClose();
-        if (onReportSubmitted) onReportSubmitted(false);
+        if (onReportSubmitted) onReportSubmitted(autoBanned);
       }, 1400);
     }
   };
@@ -98,19 +134,21 @@ export const ReportModal: React.FC<ReportModalProps> = ({
           <div className="py-6 flex flex-col items-center justify-center gap-2 text-center">
             <CheckCircle className="w-10 h-10 text-turf" />
             <span className="font-heading font-bold text-base text-chalk">
-              Report Logged
+              {wasAutoBanned ? "Action Enforced" : "Report Logged"}
             </span>
             <span className="text-xs text-muted">
-              Thank you for keeping HandCricketOmegle fair and enjoyable.
+              {wasAutoBanned
+                ? "Multiple community reports triggered an automatic suspension for this player."
+                : "Thank you for keeping HandCricketOmegle fair and safe."}
             </span>
           </div>
         ) : (
           <>
             <p className="text-xs text-muted">
-              Reporting opponent <strong className="text-chalk">{opponentName}</strong> for violation of fair-play guidelines:
+              Reporting opponent <strong className="text-chalk">{effectiveOpponentName}</strong>:
             </p>
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
               {REPORT_REASONS.map((reason) => (
                 <label
                   key={reason}
@@ -131,6 +169,30 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                   <span>{reason}</span>
                 </label>
               ))}
+            </div>
+
+            {/* Block Opponent Toggle */}
+            <div className="p-2.5 rounded-xl bg-surface-2/60 border border-line">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none text-xs text-chalk">
+                <input
+                  type="checkbox"
+                  checked={blockOpponent}
+                  onChange={(e) => setBlockOpponent(e.target.checked)}
+                  className="mt-0.5 accent-turf cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5 leading-tight">
+                  <UserX className="w-3.5 h-3.5 text-ball shrink-0" />
+                  <span>
+                    <strong>Block Opponent:</strong> Never match me with this player again.
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            {/* Zero Video Storage Disclosure */}
+            <div className="flex items-center gap-1.5 text-[11px] text-muted">
+              <ShieldCheck className="w-3.5 h-3.5 text-turf shrink-0" />
+              <span>Strict privacy: Zero camera frames or recordings are ever stored.</span>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-line">

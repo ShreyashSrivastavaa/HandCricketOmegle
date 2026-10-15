@@ -2,9 +2,10 @@ import { Redis } from "@upstash/redis";
 import { getEnv } from "../env";
 
 // In-memory fallback cache for development or tests without live Upstash Redis
-class MemoryRedis {
+export class MemoryRedis {
   private store = new Map<string, { value: any; expiresAt?: number }>();
   private lists = new Map<string, any[]>();
+  private sets = new Map<string, Set<any>>();
 
   async get<T>(key: string): Promise<T | null> {
     const entry = this.store.get(key);
@@ -23,13 +24,32 @@ class MemoryRedis {
   }
 
   async del(key: string): Promise<number> {
-    const existed = this.store.delete(key) || this.lists.delete(key);
+    const existed =
+      this.store.delete(key) ||
+      this.lists.delete(key) ||
+      this.sets.delete(key);
     return existed ? 1 : 0;
+  }
+
+  async expire(key: string, seconds: number): Promise<number> {
+    const entry = this.store.get(key);
+    if (entry) {
+      entry.expiresAt = Date.now() + seconds * 1000;
+      return 1;
+    }
+    return 1;
   }
 
   async rpush(key: string, ...elements: any[]): Promise<number> {
     const list = this.lists.get(key) || [];
     list.push(...elements);
+    this.lists.set(key, list);
+    return list.length;
+  }
+
+  async lpush(key: string, ...elements: any[]): Promise<number> {
+    const list = this.lists.get(key) || [];
+    list.unshift(...elements);
     this.lists.set(key, list);
     return list.length;
   }
@@ -47,6 +67,21 @@ class MemoryRedis {
     return list.slice(start, end) as T[];
   }
 
+  async lset(key: string, index: number, value: any): Promise<"OK"> {
+    const list = this.lists.get(key);
+    if (list && index >= 0 && index < list.length) {
+      list[index] = value;
+    }
+    return "OK";
+  }
+
+  async ltrim(key: string, start: number, stop: number): Promise<"OK"> {
+    const list = this.lists.get(key) || [];
+    const end = stop === -1 ? list.length : stop + 1;
+    this.lists.set(key, list.slice(start, end));
+    return "OK";
+  }
+
   async lrem(key: string, _count: number, element: any): Promise<number> {
     const list = this.lists.get(key);
     if (!list) return 0;
@@ -59,6 +94,44 @@ class MemoryRedis {
     });
     this.lists.set(key, filtered);
     return initialLen - filtered.length;
+  }
+
+  async sadd(key: string, ...members: any[]): Promise<number> {
+    let s = this.sets.get(key);
+    if (!s) {
+      s = new Set();
+      this.sets.set(key, s);
+    }
+    let added = 0;
+    for (const m of members) {
+      if (!s.has(m)) {
+        s.add(m);
+        added++;
+      }
+    }
+    return added;
+  }
+
+  async sismember(key: string, member: any): Promise<number> {
+    const s = this.sets.get(key);
+    return s && s.has(member) ? 1 : 0;
+  }
+
+  async scard(key: string): Promise<number> {
+    const s = this.sets.get(key);
+    return s ? s.size : 0;
+  }
+
+  async smembers<T = string>(key: string): Promise<T[]> {
+    const s = this.sets.get(key);
+    return s ? (Array.from(s) as T[]) : [];
+  }
+
+  async flushall(): Promise<"OK"> {
+    this.store.clear();
+    this.lists.clear();
+    this.sets.clear();
+    return "OK";
   }
 }
 

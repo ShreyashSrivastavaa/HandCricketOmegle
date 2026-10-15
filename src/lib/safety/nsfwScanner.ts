@@ -140,22 +140,11 @@ export class NSFWScanner {
   }
 
   /**
-   * Capture a single still frame as Base64 JPEG for user-initiated reports
+   * Deprecated: In accordance with the strict zero-video-storage privacy policy,
+   * camera snapshots are never captured or stored. Reports contain metadata only.
    */
-  public captureSnapshot(videoElement: HTMLVideoElement): string | undefined {
-    if (!videoElement || videoElement.videoWidth === 0) return undefined;
-    try {
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.min(videoElement.videoWidth, 640);
-      canvas.height = Math.min(videoElement.videoHeight, 480);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return undefined;
-      ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", 0.7);
-    } catch (err) {
-      console.warn("[NSFWScanner] Failed to capture report snapshot", err);
-      return undefined;
-    }
+  public captureSnapshot(_videoElement?: HTMLVideoElement): undefined {
+    return undefined;
   }
 
   /**

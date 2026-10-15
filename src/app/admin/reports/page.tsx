@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/Button";
-import { ShieldAlert, Check, X, Ban, AlertTriangle, RefreshCw, KeyRound } from "lucide-react";
+import { ShieldAlert, Check, X, Ban, AlertTriangle, RefreshCw, KeyRound, LogOut, ShieldCheck } from "lucide-react";
 
 interface ReportItem {
   id: string;
@@ -10,42 +10,57 @@ interface ReportItem {
   reportedGuestId: string;
   roomId: string;
   reason: string;
-  snapshotBase64?: string;
-  hashedIp: string;
+  hashedIp?: string;
   createdAt: number;
   status: "pending" | "dismissed" | "actioned";
 }
 
 interface ReportStats {
   totalReports: number;
+  pendingReports?: number;
   activeBans: number;
 }
 
 export default function AdminReportsPage() {
-  const [password, setPassword] = useState<string>("");
+  const [token, setToken] = useState<string>("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [reports, setReports] = useState<ReportItem[]>([]);
-  const [stats, setStats] = useState<ReportStats>({ totalReports: 0, activeBans: 0 });
+  const [stats, setStats] = useState<ReportStats>({ totalReports: 0, pendingReports: 0, activeBans: 0 });
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const fetchReports = async (authPass: string) => {
+  // Auto-restore admin token from sessionStorage if present
+  useEffect(() => {
+    const saved = sessionStorage.getItem("hc_admin_token");
+    if (saved) {
+      setToken(saved);
+      fetchReports(saved);
+    }
+  }, []);
+
+  const fetchReports = async (authToken: string) => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
       const res = await fetch("/api/admin/reports", {
-        headers: { "x-admin-password": authPass },
+        headers: {
+          Authorization: `Bearer ${authToken.trim()}`,
+          "x-admin-key": authToken.trim(),
+        },
       });
       if (!res.ok) {
-        throw new Error("Invalid admin password or access denied");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Invalid admin token or unauthorized access");
       }
       const data = await res.json();
       setReports(data.reports || []);
-      setStats(data.stats || { totalReports: 0, activeBans: 0 });
+      setStats(data.stats || { totalReports: 0, pendingReports: 0, activeBans: 0 });
       setIsAuthenticated(true);
+      sessionStorage.setItem("hc_admin_token", authToken.trim());
     } catch (err: any) {
       setErrorMessage(err.message || "Failed to load reports");
       setIsAuthenticated(false);
+      sessionStorage.removeItem("hc_admin_token");
     } finally {
       setIsLoading(false);
     }
@@ -53,25 +68,33 @@ export default function AdminReportsPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchReports(password);
+    if (!token.trim()) return;
+    fetchReports(token);
   };
 
-  const handleAction = async (reportId: string, action: "dismiss" | "warn" | "ban24h" | "banPermanent") => {
+  const handleLogout = () => {
+    sessionStorage.removeItem("hc_admin_token");
+    setToken("");
+    setIsAuthenticated(false);
+    setReports([]);
+  };
+
+  const handleAction = async (reportId: string, action: "dismiss" | "ban24h" | "banPermanent") => {
     try {
       const res = await fetch("/api/admin/reports/action", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-password": password,
+          Authorization: `Bearer ${token.trim()}`,
+          "x-admin-key": token.trim(),
         },
         body: JSON.stringify({ reportId, action }),
       });
       const data = await res.json();
       if (data.success) {
-        // Refresh list
-        fetchReports(password);
+        fetchReports(token);
       } else {
-        alert("Action failed: " + data.message);
+        alert("Action failed: " + (data.message || data.error));
       }
     } catch (err: any) {
       alert("Error taking action: " + err.message);
@@ -91,7 +114,7 @@ export default function AdminReportsPage() {
             </div>
             <div>
               <h1 className="text-base font-bold font-heading uppercase text-chalk">Admin Reports</h1>
-              <p className="text-[11px] text-muted">Enter password to review moderation queue</p>
+              <p className="text-[11px] text-muted">Supabase JWT or Admin Key Required</p>
             </div>
           </div>
 
@@ -103,13 +126,13 @@ export default function AdminReportsPage() {
 
           <div>
             <label className="block text-xs text-muted mb-1 font-semibold uppercase tracking-wider">
-              Password
+              Admin Token / Secret Key
             </label>
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter ADMIN_PASSWORD..."
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="Enter Supabase Admin JWT or ADMIN_SECRET..."
               className="w-full bg-ink border border-line rounded-lg px-3 py-2 text-sm text-chalk focus:outline-none focus:border-turf"
               autoFocus
             />
@@ -133,24 +156,34 @@ export default function AdminReportsPage() {
               <ShieldAlert className="w-6 h-6 text-ball" />
               Community Safety Queue
             </h1>
-            <p className="text-xs text-muted">Review reports with camera snapshots and take enforcement action.</p>
+            <p className="text-xs text-muted flex items-center gap-1.5 mt-0.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-turf" />
+              <span>Strict Privacy Standard: Zero camera frames stored. Review metadata &amp; enforce suspensions.</span>
+            </p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="bg-surface px-3 py-1.5 rounded-lg border border-line text-xs font-mono">
               <span className="text-muted">Total: </span>
               <strong className="text-chalk">{stats.totalReports}</strong>
             </div>
             <div className="bg-surface px-3 py-1.5 rounded-lg border border-line text-xs font-mono">
-              <span className="text-muted">Active Bans: </span>
-              <strong className="text-ball">{stats.activeBans}</strong>
+              <span className="text-muted">Pending: </span>
+              <strong className="text-ball">{stats.pendingReports ?? 0}</strong>
             </div>
             <button
-              onClick={() => fetchReports(password)}
+              onClick={() => fetchReports(token)}
               className="p-2 bg-surface hover:bg-surface-2 border border-line rounded-lg text-turf transition-colors"
               title="Refresh Queue"
             >
               <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+            </button>
+            <button
+              onClick={handleLogout}
+              className="p-2 bg-surface hover:bg-surface-2 border border-line rounded-lg text-muted hover:text-ball transition-colors"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -159,7 +192,7 @@ export default function AdminReportsPage() {
         {reports.length === 0 ? (
           <div className="text-center py-16 bg-surface border border-line rounded-xl space-y-2">
             <ShieldAlert className="w-10 h-10 text-turf mx-auto opacity-70" />
-            <h3 className="text-sm font-semibold text-chalk uppercase tracking-wide">Queue Empty</h3>
+            <h3 className="text-sm font-semibold text-chalk uppercase tracking-wide">Queue Clear</h3>
             <p className="text-xs text-muted">There are no reports requiring review at this time.</p>
           </div>
         ) : (
@@ -175,94 +208,76 @@ export default function AdminReportsPage() {
                     : "border-ball/50"
                 }`}
               >
-                <div className="flex flex-col md:flex-row gap-4 items-start">
-                  {/* Snapshot Thumbnail */}
-                  <div className="w-full md:w-56 aspect-video bg-ink rounded-lg border border-line overflow-hidden shrink-0 flex items-center justify-center">
-                    {report.snapshotBase64 ? (
-                      <img
-                        src={report.snapshotBase64}
-                        alt="Report snapshot"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-[11px] text-muted">No snapshot frame</span>
-                    )}
-                  </div>
-
-                  {/* Metadata */}
-                  <div className="flex-1 space-y-2 text-xs">
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-muted text-[11px]">{report.id}</span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                            report.status === "pending"
-                              ? "bg-ball/20 text-ball border border-ball/30"
-                              : report.status === "dismissed"
-                              ? "bg-surface-2 text-muted border border-line"
-                              : "bg-turf/20 text-turf border border-turf/30"
-                          }`}
-                        >
-                          {report.status}
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-muted font-mono">
-                        {new Date(report.createdAt).toLocaleString()}
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-muted text-[11px]">{report.id}</span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                          report.status === "pending"
+                            ? "bg-ball/20 text-ball border border-ball/30"
+                            : report.status === "dismissed"
+                            ? "bg-surface-2 text-muted border border-line"
+                            : "bg-turf/20 text-turf border border-turf/30"
+                        }`}
+                      >
+                        {report.status}
                       </span>
                     </div>
+                    <span className="text-[11px] text-muted font-mono">
+                      {new Date(report.createdAt).toLocaleString()}
+                    </span>
+                  </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                      <div>
-                        <span className="text-muted">Reason: </span>
-                        <strong className="text-ball">{report.reason}</strong>
-                      </div>
-                      <div>
-                        <span className="text-muted">Room: </span>
-                        <span className="font-mono text-chalk">{report.roomId}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted">Reported Guest: </span>
-                        <span className="font-mono text-chalk">{report.reportedGuestId}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted">Hashed IP: </span>
-                        <span className="font-mono text-muted truncate max-w-[140px] inline-block align-bottom">
-                          {report.hashedIp.substring(0, 16)}...
-                        </span>
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div className="p-2.5 rounded-lg bg-surface-2/40 border border-line/60">
+                      <span className="block text-[10px] text-muted uppercase tracking-wider mb-0.5">Violation Reason</span>
+                      <strong className="text-ball font-semibold">{report.reason}</strong>
                     </div>
+                    <div className="p-2.5 rounded-lg bg-surface-2/40 border border-line/60">
+                      <span className="block text-[10px] text-muted uppercase tracking-wider mb-0.5">Reported Guest ID</span>
+                      <span className="font-mono text-chalk font-semibold">{report.reportedGuestId}</span>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-surface-2/40 border border-line/60">
+                      <span className="block text-[10px] text-muted uppercase tracking-wider mb-0.5">Reporter Guest ID</span>
+                      <span className="font-mono text-muted">{report.reporterGuestId}</span>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-surface-2/40 border border-line/60">
+                      <span className="block text-[10px] text-muted uppercase tracking-wider mb-0.5">Room / Match ID</span>
+                      <span className="font-mono text-turf">{report.roomId}</span>
+                    </div>
+                  </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <button
-                        onClick={() => handleAction(report.id, "dismiss")}
-                        disabled={report.status !== "pending"}
-                        className="px-2.5 py-1 text-xs bg-surface-2 border border-line rounded text-muted hover:text-chalk disabled:opacity-40"
-                      >
-                        Dismiss
-                      </button>
-                      <button
-                        onClick={() => handleAction(report.id, "warn")}
-                        disabled={report.status !== "pending"}
-                        className="px-2.5 py-1 text-xs bg-surface-2 border border-amber/40 rounded text-amber hover:brightness-110 disabled:opacity-40"
-                      >
-                        Warn
-                      </button>
-                      <button
-                        onClick={() => handleAction(report.id, "ban24h")}
-                        disabled={report.status !== "pending"}
-                        className="px-2.5 py-1 text-xs bg-ball/20 border border-ball text-ball font-semibold rounded hover:brightness-110 disabled:opacity-40"
-                      >
-                        24h Ban
-                      </button>
-                      <button
-                        onClick={() => handleAction(report.id, "banPermanent")}
-                        disabled={report.status !== "pending"}
-                        className="px-2.5 py-1 text-xs bg-ball text-chalk font-bold rounded hover:brightness-110 disabled:opacity-40"
-                      >
-                        Permanent Ban
-                      </button>
+                  {report.hashedIp && (
+                    <div className="text-[11px] text-muted">
+                      <span>Salted Hashed IP: </span>
+                      <span className="font-mono text-chalk/70">{report.hashedIp.substring(0, 24)}...</span>
                     </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap gap-2 pt-1 border-t border-line/40">
+                    <button
+                      onClick={() => handleAction(report.id, "dismiss")}
+                      disabled={report.status !== "pending"}
+                      className="px-3 py-1.5 text-xs bg-surface-2 border border-line rounded-lg text-muted hover:text-chalk disabled:opacity-40"
+                    >
+                      Dismiss Report
+                    </button>
+                    <button
+                      onClick={() => handleAction(report.id, "ban24h")}
+                      disabled={report.status !== "pending"}
+                      className="px-3 py-1.5 text-xs bg-ball/20 border border-ball text-ball font-semibold rounded-lg hover:brightness-110 disabled:opacity-40"
+                    >
+                      Apply 24h Suspension
+                    </button>
+                    <button
+                      onClick={() => handleAction(report.id, "banPermanent")}
+                      disabled={report.status !== "pending"}
+                      className="px-3 py-1.5 text-xs bg-ball text-chalk font-bold rounded-lg hover:brightness-110 disabled:opacity-40"
+                    >
+                      Permanent Lockout
+                    </button>
                   </div>
                 </div>
               </div>
