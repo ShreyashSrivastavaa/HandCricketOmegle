@@ -244,7 +244,9 @@ export class RoomStore {
     socketId: string;
     ageConfirmed?: boolean;
   }): { room?: ActiveRoom; isReconnect?: boolean; error?: string } {
-    const code = params.code.trim().toUpperCase();
+    // Support codes with or without optional "HC-" prefix (e.g. "HC-7K9P2" or "7K9P2")
+    const rawCode = params.code.trim().toUpperCase();
+    const code = rawCode.startsWith("HC-") ? rawCode.slice(3) : rawCode.startsWith("HC") && rawCode.length > 6 ? rawCode.slice(2) : rawCode;
 
     // 1. Rate limit check
     const rateCheck = this.checkJoinRateLimit(params.guestId);
@@ -592,8 +594,10 @@ export class RoomStore {
     return this.rooms.get(roomId);
   }
 
-  public getRoomByCode(code: string): ActiveRoom | undefined {
-    const roomId = this.codeToRoomId.get(code.toUpperCase());
+  public getRoomByCode(rawCode: string): ActiveRoom | undefined {
+    const trimmed = rawCode.trim().toUpperCase();
+    const code = trimmed.startsWith("HC-") ? trimmed.slice(3) : trimmed.startsWith("HC") && trimmed.length > 6 ? trimmed.slice(2) : trimmed;
+    const roomId = this.codeToRoomId.get(code);
     if (!roomId) return undefined;
     return this.rooms.get(roomId);
   }

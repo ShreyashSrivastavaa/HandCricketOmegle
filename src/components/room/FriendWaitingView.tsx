@@ -46,13 +46,16 @@ export function FriendWaitingView({
         </div>
 
         {/* BIG ROOM CODE WITH COPY BUTTON */}
-        <div className="w-full bg-surface-2 border border-line rounded-[12px] p-4 flex flex-col items-center gap-3">
-          <span className="text-[10px] font-heading font-bold uppercase tracking-widest text-muted">
-            Room Code
+        <div className="w-full bg-surface-2 border border-line rounded-[14px] p-4 sm:p-5 flex flex-col items-center gap-3">
+          <span className="text-[11px] font-heading font-bold uppercase tracking-widest text-muted">
+            Your Private Room Code
           </span>
-          <div className="font-heading font-black text-4xl sm:text-5xl tracking-[0.25em] text-turf select-all pl-3">
-            {code}
+          <div className="font-heading font-black text-3xl sm:text-4xl tracking-[0.2em] text-turf select-all py-1 px-4 bg-ink/40 border border-turf/30 rounded-xl">
+            {code.startsWith("HC-") ? code : `HC-${code}`}
           </div>
+          <p className="text-[11px] text-muted">
+            Share this code with your friend to invite them to the match.
+          </p>
 
           <div className="grid grid-cols-2 gap-2 w-full mt-1">
             <Button
@@ -62,7 +65,7 @@ export function FriendWaitingView({
               className="flex items-center justify-center gap-1.5 font-heading font-bold text-xs uppercase"
             >
               {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedCode ? "COPIED!" : "COPY CODE"}</span>
+              <span>{copiedCode ? "COPIED!" : "COPY ROOM CODE"}</span>
             </Button>
 
             <Button
@@ -72,7 +75,7 @@ export function FriendWaitingView({
               className="flex items-center justify-center gap-1.5 font-heading font-bold text-xs uppercase"
             >
               {copiedLink ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-              <span>{copiedLink ? "COPIED!" : "SHARE LINK"}</span>
+              <span>{copiedLink ? "COPIED!" : "SHARE INVITE"}</span>
             </Button>
           </div>
         </div>

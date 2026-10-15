@@ -72,8 +72,8 @@ interface FriendRoomState {
 export default function RoomPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
   const resolvedParams = use(params);
-  const rawCode = resolvedParams.code;
-  const roomCode = rawCode?.toUpperCase() || "";
+  const rawCode = resolvedParams.code?.trim().toUpperCase() || "";
+  const roomCode = rawCode.startsWith("HC-") ? rawCode.slice(3) : rawCode.startsWith("HC") && rawCode.length > 6 ? rawCode.slice(2) : rawCode;
 
   // Guest Identity
   const [guestId, setGuestId] = useState<string>("");
@@ -186,21 +186,35 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     return () => window.removeEventListener("resize", updateLayout);
   }, []);
 
-  // Initialize Guest Info
+  // Initialize Guest Info with server session sync & localStorage fallback
   useEffect(() => {
-    let gid = localStorage.getItem("hca_guest_id");
-    if (!gid) {
-      gid = `g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      localStorage.setItem("hca_guest_id", gid);
-    }
-    setGuestId(gid);
+    let gid: string | null = localStorage.getItem("hca_guest_id");
+    let gName: string | null = localStorage.getItem("hca_guest_name");
 
-    let gName = localStorage.getItem("hca_guest_name");
-    if (!gName) {
-      gName = `Guest ${gid.slice(-4).toUpperCase()}`;
-      localStorage.setItem("hca_guest_name", gName);
-    }
-    setGuestName(gName);
+    fetch("/api/session")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.guestId && typeof data.guestId === "string") {
+          gid = data.guestId;
+          localStorage.setItem("hca_guest_id", data.guestId);
+          setGuestId(data.guestId);
+        }
+        if (data?.guestName && typeof data.guestName === "string") {
+          gName = data.guestName;
+          localStorage.setItem("hca_guest_name", data.guestName);
+          setGuestName(data.guestName);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        const finalId = gid || `g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        localStorage.setItem("hca_guest_id", finalId);
+        setGuestId(finalId);
+
+        const finalName = gName || `Guest ${finalId.slice(-4).toUpperCase()}`;
+        localStorage.setItem("hca_guest_name", finalName);
+        setGuestName(finalName);
+      });
   }, []);
 
   // Socket Connection & Join
@@ -549,12 +563,14 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     };
   }, [turnStage, isUserLocked, isGestureModeActive]);
 
+  const displayCode = roomCode.startsWith("HC-") ? roomCode : `HC-${roomCode}`;
+
   const handleCopyCode = () => {
     if (navigator?.clipboard) {
-      navigator.clipboard.writeText(roomCode);
+      navigator.clipboard.writeText(displayCode);
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
-      addToast(`Room code ${roomCode} copied to clipboard!`, "success");
+      addToast(`Room code ${displayCode} copied to clipboard!`, "success");
     }
   };
 
@@ -564,7 +580,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       try {
         await navigator.share({
           title: "Join HandCricketOmegle Room Duel",
-          text: `Join my private HandCricketOmegle room with code ${roomCode}!`,
+          text: `Join my private HandCricketOmegle room with code ${displayCode}!`,
           url,
         });
         return;

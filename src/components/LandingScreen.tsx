@@ -1,18 +1,20 @@
 import React, { useState } from "react";
 import { useLiveMatchStore } from "@/lib/store/liveMatchStore";
-import { Play, Bot, Shuffle, HelpCircle, Flame, Shield, Swords, Sparkles, Trophy } from "lucide-react";
+import { Play, Bot, Shuffle, HelpCircle, Flame, Shield, Swords, Sparkles, Trophy, Users } from "lucide-react";
 import { generateGuestName } from "@/lib/server/session";
 import { playClickSound } from "@/lib/client/audio";
 
 interface LandingScreenProps {
   onFindMatch: () => void;
   onPlayVsBot: () => void;
+  onPlayWithFriend: () => void;
   onOpenRules: () => void;
 }
 
 export const LandingScreen: React.FC<LandingScreenProps> = ({
   onFindMatch,
   onPlayVsBot,
+  onPlayWithFriend,
   onOpenRules,
 }) => {
   const { guestName, setGuestName, mode, setMode } = useLiveMatchStore();
@@ -176,6 +178,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
       {/* Main CTAs */}
       <div className="w-full flex flex-col gap-2.5 sm:gap-3 pt-2">
+        {/* 1. Find Stranger Match */}
         <button
           type="button"
           onClick={() => {
@@ -189,6 +192,21 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           <span className="truncate">FIND STRANGER MATCH</span>
         </button>
 
+        {/* 2. Play with Friend */}
+        <button
+          type="button"
+          onClick={() => {
+            playClickSound();
+            onPlayWithFriend();
+          }}
+          aria-label="Play with friend in a private room"
+          className="w-full min-h-[48px] py-3 px-4 sm:px-5 rounded-xl bg-surface border border-turf/40 text-turf font-heading font-bold text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-turf/10 hover:border-turf transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf shadow-[0_0_12px_rgba(61,220,132,0.1)]"
+        >
+          <Users className="w-4 h-4 text-turf shrink-0" />
+          <span>Play with Friend (Private Room)</span>
+        </button>
+
+        {/* 3. Practice vs Server Bot */}
         <button
           type="button"
           onClick={() => {

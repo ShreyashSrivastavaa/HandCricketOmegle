@@ -95,4 +95,41 @@ test.describe("HandCricketOmegle E2E Smoke Tests", () => {
     const returnBtn = page.getByRole("link", { name: /Enter 1v1 Arena/i });
     await expect(returnBtn).toBeVisible();
   });
+
+  test("Play with Friend modal opens, switches tabs, and validates code input", async ({ page }) => {
+    await page.goto("/");
+
+    // Click Play with Friend button on homepage
+    const friendBtn = page.getByRole("button", { name: /Play with Friend/i });
+    await expect(friendBtn).toBeVisible();
+    await friendBtn.click();
+
+    // Verify modal is visible
+    const modalHeading = page.getByRole("heading", { name: /Play with Friend/i });
+    await expect(modalHeading).toBeVisible();
+
+    // Switch to Join Room tab
+    await page.getByRole("button", { name: "Join Room", exact: true }).click();
+    await expect(page.getByText(/Enter Friend's Room Code/i)).toBeVisible();
+
+    // Validation: Click Join with empty input
+    const joinSubmitBtn = page.locator("form button[type='submit']");
+    await expect(joinSubmitBtn).toBeDisabled();
+
+    // Type invalid code (too short)
+    const codeInput = page.locator("#friend-room-code-input");
+    await codeInput.fill("12");
+    await joinSubmitBtn.click();
+    await expect(page.getByText(/Room codes are 6 characters long/i)).toBeVisible();
+
+    // Switch back to Create Room tab
+    await page.getByRole("button", { name: "Create Room", exact: true }).click();
+    await expect(page.getByText(/Format Preset/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /GENERATE PRIVATE ROOM/i })).toBeVisible();
+
+    // Close modal
+    await page.getByLabel("Close modal").click();
+    await expect(modalHeading).not.toBeVisible();
+  });
 });
+

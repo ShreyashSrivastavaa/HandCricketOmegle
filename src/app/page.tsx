@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useLiveMatchStore } from "@/lib/store/liveMatchStore";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -12,11 +12,15 @@ import { InningsBreakScreen } from "@/components/InningsBreakScreen";
 import { ResultBanner } from "@/components/ResultBanner";
 import { HowToPlayModal } from "@/components/HowToPlayModal";
 import { ReportModal } from "@/components/ReportModal";
+import { PlayWithFriendModal } from "@/components/PlayWithFriendModal";
 
 export default function HomePage() {
   const {
     screen,
     matchId,
+    guestId,
+    guestName,
+    mode,
     opponentName,
     userRole,
     gameState,
@@ -33,6 +37,8 @@ export default function HomePage() {
     startSecondInnings,
     resetToLanding,
   } = useLiveMatchStore();
+
+  const [isFriendModalOpen, setIsFriendModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     initGuestSession();
@@ -53,6 +59,7 @@ export default function HomePage() {
           <LandingScreen
             onFindMatch={() => startMatchmaking(false)}
             onPlayVsBot={() => startMatchmaking(true)}
+            onPlayWithFriend={() => setIsFriendModalOpen(true)}
             onOpenRules={() => setIsRulesOpen(true)}
           />
         )}
@@ -121,6 +128,14 @@ export default function HomePage() {
           onClose={() => setIsReportOpen(false)}
         />
       )}
+
+      <PlayWithFriendModal
+        isOpen={isFriendModalOpen}
+        onClose={() => setIsFriendModalOpen(false)}
+        guestId={guestId}
+        guestName={guestName}
+        defaultMode={mode}
+      />
     </div>
   );
 }
