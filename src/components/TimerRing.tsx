@@ -44,9 +44,10 @@ export const TimerRing: React.FC<TimerRingProps> = ({
   return (
     <div
       className={`relative inline-flex items-center justify-center select-none ${className}`}
-      role="timer"
+      role="progressbar"
       aria-label={`${Math.ceil(remainingSeconds)} seconds remaining for turn`}
       aria-valuenow={Math.ceil(remainingSeconds)}
+      aria-valuemin={0}
       aria-valuemax={totalSeconds}
     >
       <svg

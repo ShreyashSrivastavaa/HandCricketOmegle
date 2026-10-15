@@ -1,19 +1,20 @@
 import React from "react";
-import type { GameState } from "@/lib/game-core/types";
-import { formatOvers } from "@/lib/game-core/engine";
-import { Button } from "./Button.tsx";
+import type { GameState, PlayerId } from "@/lib/game/types";
+import { formatOvers } from "@/lib/game/engine";
+import { Button } from "./Button";
 import { Flag, ArrowRight } from "lucide-react";
+import { playClickSound } from "@/lib/client/audio";
 
 interface InningsBreakScreenProps {
   gameState: GameState;
-  userPlayerId: "p1" | "p2";
+  userPlayerId?: PlayerId;
   onStartInnings2: () => void;
   className?: string;
 }
 
 export const InningsBreakScreen: React.FC<InningsBreakScreenProps> = ({
   gameState,
-  userPlayerId,
+  userPlayerId = "p1",
   onStartInnings2,
   className = "",
 }) => {
@@ -31,7 +32,7 @@ export const InningsBreakScreen: React.FC<InningsBreakScreenProps> = ({
 
   return (
     <div
-      className={`w-full max-w-xl mx-auto bg-surface border border-line rounded-[12px] p-6 sm:p-8 flex flex-col items-center gap-6 text-chalk select-none ${className}`}
+      className={`w-full max-w-xl mx-auto bg-surface border border-line rounded-[16px] p-6 sm:p-8 flex flex-col items-center gap-6 text-chalk select-none shadow-xl ${className}`}
       role="dialog"
       aria-label="Innings Break Dialog"
     >
@@ -47,7 +48,7 @@ export const InningsBreakScreen: React.FC<InningsBreakScreenProps> = ({
       </div>
 
       {/* 1st Innings Total Card */}
-      <div className="w-full bg-surface-2 border border-line rounded-[12px] p-5 flex flex-col gap-3">
+      <div className="w-full bg-surface-2/60 border border-line rounded-[14px] p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between text-xs font-semibold text-muted uppercase">
           <span>{inn1BattingName}&apos;s Innings</span>
           <span>{formatOvers(inn1.balls)} / {gameState.format.maxOvers}.0 Overs</span>
@@ -75,7 +76,7 @@ export const InningsBreakScreen: React.FC<InningsBreakScreenProps> = ({
       </div>
 
       {/* Equation Brief */}
-      <div className="w-full p-4 rounded-[12px] border border-line bg-surface/50 text-center text-sm">
+      <div className="w-full p-4 rounded-[14px] border border-line bg-surface/50 text-center text-sm">
         <p className="text-muted">
           <strong className="text-chalk">{inn2BattingName}</strong> needs{" "}
           <strong className="text-turf font-heading text-lg tabular-nums">{target} runs</strong> from{" "}
@@ -91,7 +92,10 @@ export const InningsBreakScreen: React.FC<InningsBreakScreenProps> = ({
         variant="primary"
         size="lg"
         fullWidth
-        onClick={onStartInnings2}
+        onClick={() => {
+          playClickSound();
+          onStartInnings2();
+        }}
         className="flex items-center justify-center gap-2 font-heading font-black text-lg"
       >
         <span>BEGIN 2ND INNINGS (CHASE)</span>

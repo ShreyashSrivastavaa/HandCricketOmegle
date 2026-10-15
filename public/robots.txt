@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://handcricketomegle.vercel.app/sitemap.xml

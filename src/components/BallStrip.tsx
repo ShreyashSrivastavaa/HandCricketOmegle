@@ -1,5 +1,5 @@
 import React from "react";
-import type { BallOutcome } from "@/lib/game-core/types";
+import type { BallOutcome } from "@/lib/game/types";
 
 interface BallStripProps {
   currentOver: BallOutcome[];
@@ -14,7 +14,7 @@ export const BallStrip: React.FC<BallStripProps> = ({
   maxOvers,
   className = "",
 }) => {
-  // Cricket over has 6 legal balls
+  // Cricket over has 6 legal deliveries
   const totalSlots = 6;
 
   return (

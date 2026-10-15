@@ -1,16 +1,22 @@
 import React from "react";
-import { formatOvers, getRequiredRuns, getRemainingBalls, getRequiredRunRate, getCurrentRunRate } from "@/lib/game-core/engine";
-import type { GameState } from "@/lib/game-core/types";
+import {
+  formatOvers,
+  getRequiredRuns,
+  getRemainingBalls,
+  getRequiredRunRate,
+  getCurrentRunRate,
+} from "@/lib/game/engine";
+import type { GameState, PlayerId } from "@/lib/game/types";
 
 interface ScoreBarProps {
   state: GameState;
-  userPlayerId: "p1" | "p2";
+  userPlayerId?: PlayerId;
   className?: string;
 }
 
 export const ScoreBar: React.FC<ScoreBarProps> = ({
   state,
-  userPlayerId,
+  userPlayerId = "p1",
   className = "",
 }) => {
   const isInnings2 = state.currentInnings === 2;
@@ -22,11 +28,6 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
     : battingPlayerId === "p1"
     ? state.player1Name
     : state.player2Name;
-  const bowlingPlayerName = !isUserBatting
-    ? "You"
-    : battingPlayerId === "p1"
-    ? state.player2Name
-    : state.player1Name;
 
   const runs = activeInnings.score;
   const wickets = activeInnings.wickets;
@@ -44,7 +45,7 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
 
   return (
     <div
-      className={`bg-surface border border-line rounded-[12px] p-3 sm:p-4 text-chalk shadow-none select-none ${className}`}
+      className={`bg-surface border border-line rounded-[14px] p-3 sm:p-4 text-chalk shadow-sm select-none ${className}`}
       role="region"
       aria-label="Match Scoreboard"
     >
@@ -57,6 +58,10 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-chalk font-bold">
+            {state.format.mode === "classic" ? "CLASSIC" : "SUDDEN DEATH"}
+          </span>
+          <span>•</span>
           <span>{maxOvers} Overs</span>
           <span>•</span>
           <span>{maxWickets} {maxWickets === 1 ? "Wkt" : "Wkts"}</span>
@@ -98,46 +103,34 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
             <span className="font-heading font-black text-3xl sm:text-4xl tabular-nums text-chalk">
               {oversFormatted}
             </span>
-            <span className="text-sm font-heading font-bold text-muted tabular-nums">
+            <span className="text-xs text-muted font-sans font-medium">
               /{maxOvers}.0
             </span>
           </div>
-          <span className="text-[11px] font-heading text-muted tabular-nums mt-0.5">
-            CRR: {crr}
+          <span className="text-[10px] text-muted tracking-wider uppercase mt-0.5">
+            CRR: <strong className="text-chalk font-mono">{crr}</strong>
           </span>
         </div>
       </div>
 
-      {/* Chase Target / Equation Banner (Innings 2 only) */}
-      {isInnings2 && target !== null && runsNeeded !== null && ballsLeft !== null && (
-        <div className="mt-2 pt-2 border-t border-line flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-muted">TARGET:</span>
-            <span className="font-heading font-bold text-base tabular-nums text-amber">
-              {target}
+      {/* Target Equation Bar (Only in Innings 2 Chase) */}
+      {isInnings2 && target !== null && (
+        <div className="mt-2 pt-2 border-t border-line flex items-center justify-between text-xs bg-surface-2/40 px-2.5 py-1.5 rounded-lg">
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted uppercase font-semibold">Target:</span>
+            <strong className="text-amber font-heading text-sm tabular-nums">{target}</strong>
+            <span className="text-muted uppercase text-[10px] font-medium">
+              (Need <strong className="text-chalk font-semibold">{runsNeeded}</strong> from{" "}
+              <strong className="text-chalk font-semibold">{ballsLeft}b</strong>)
             </span>
           </div>
 
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-surface-2 border border-line">
-            <span className="font-heading font-bold text-xs tracking-wide text-turf tabular-nums">
-              Need {runsNeeded} off {ballsLeft} ball{ballsLeft === 1 ? "" : "s"}
-            </span>
-            {rrr !== null && (
-              <span className="text-[10px] text-muted border-l border-line pl-2 tabular-nums">
-                RRR: {rrr}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Innings 1 Bowling info */}
-      {!isInnings2 && (
-        <div className="mt-1 pt-1.5 border-t border-line flex items-center justify-between text-xs text-muted">
-          <span>Bowling: {bowlingPlayerName} {!isUserBatting ? "(You)" : ""}</span>
-          <span className="text-[11px] font-heading uppercase text-muted">
-            Balls: {activeInnings.balls}/{maxOvers * 6}
-          </span>
+          {rrr !== null && (
+            <div className="flex items-center gap-1 text-[11px] text-muted">
+              <span>RRR:</span>
+              <strong className="text-amber font-mono font-semibold">{rrr}</strong>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,17 +1,24 @@
 {
-  "name": "hand-cricket-arena",
-  "version": "0.1.0",
+  "name": "hand-cricket-omegle",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "node --experimental-strip-types server.mjs",
+    "dev": "next dev",
     "build": "next build",
-    "start": "NODE_ENV=production node --experimental-strip-types server.mjs",
-    "test": "vitest run"
+    "start": "next start",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "lint": "next lint",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.1.0",
     "@tensorflow/tfjs": "^4.22.0",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
+    "ably": "^2.29.0",
+    "canvas-confetti": "^1.9.4",
     "express": "^4.21.2",
     "framer-motion": "^12.4.7",
     "lucide-react": "^1.16.0",
@@ -25,12 +32,17 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.28",
     "postcss": "^8.5.2",
+    "prettier": "^3.9.10",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"

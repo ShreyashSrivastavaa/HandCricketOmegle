@@ -1,6 +1,6 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Hand } from "./Hand.tsx";
+import { Hand } from "./Hand";
 import { Lock } from "lucide-react";
 
 export type HandTileState =

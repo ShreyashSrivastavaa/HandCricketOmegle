@@ -271,7 +271,7 @@ export const Lobby: React.FC = () => {
                 PLAY WITH A FRIEND
               </h2>
               <p className="text-xs text-muted leading-relaxed">
-                Create a private room with a 6-character code or join your friend's arena with custom format rules.
+                Create a private room with a 6-character code or join your friend&apos;s arena with custom format rules.
               </p>
             </div>
 

@@ -6,15 +6,36 @@ import type {
   TossDecision,
   BallOutcome,
   InningsState,
-} from "./types.ts";
+  GameAction,
+} from "./types";
+
+export const DEFAULT_SUDDEN_DEATH_FORMAT: MatchFormat = {
+  mode: "sudden_death",
+  maxWickets: 1,
+  maxOvers: 2,
+};
+
+export const CLASSIC_FORMAT: MatchFormat = {
+  mode: "classic",
+  maxWickets: 2,
+  maxOvers: 2,
+};
+
+/**
+ * Returns a cryptographically random or pseudo-random integer between 1 and 6.
+ */
+export function getRandomPick(): number {
+  return Math.floor(Math.random() * 6) + 1;
+}
 
 /**
  * Creates the initial game state with the given format and player names.
+ * Default format is Sudden Death (1 wicket, 2 overs).
  */
 export function createInitialGameState(
-  format: MatchFormat = { maxWickets: 2, maxOvers: 2 },
-  player1Name: string = "You",
-  player2Name: string = "Bot",
+  format: MatchFormat = DEFAULT_SUDDEN_DEATH_FORMAT,
+  player1Name: string = "Player 1",
+  player2Name: string = "Player 2",
   tossCaller: PlayerId = "p1"
 ): GameState {
   return {
@@ -29,7 +50,7 @@ export function createInitialGameState(
     tossDecision: null,
     currentInnings: 1,
     innings1: {
-      battingPlayer: "p1", // Will be set after toss
+      battingPlayer: "p1", // Will be authoritatively set after toss decision
       bowlingPlayer: "p2",
       score: 0,
       wickets: 0,
@@ -41,6 +62,26 @@ export function createInitialGameState(
     lastOutcome: null,
     winner: null,
     resultSummary: null,
+  };
+}
+
+/**
+ * Pure function: Resolves a toss given the caller, call ('odd'|'even'), and both picks (1-6).
+ */
+export function resolveToss(
+  caller: PlayerId,
+  call: TossCall,
+  pick1: number,
+  pick2: number
+): { winner: PlayerId; sum: number; isOdd: boolean } {
+  const sum = pick1 + pick2;
+  const isOdd = sum % 2 !== 0;
+  const callerWon = (call === "odd" && isOdd) || (call === "even" && !isOdd);
+  const otherPlayer: PlayerId = caller === "p1" ? "p2" : "p1";
+  return {
+    winner: callerWon ? caller : otherPlayer,
+    sum,
+    isOdd,
   };
 }
 
@@ -79,27 +120,15 @@ export function submitTossPick(
     [playerId]: pick,
   };
 
-  // If both players have picked, calculate toss winner
   const p1Pick = updatedPicks.p1;
   const p2Pick = updatedPicks.p2;
 
-  if (p1Pick !== undefined && p2Pick !== undefined) {
-    const sum = p1Pick + p2Pick;
-    const isSumOdd = sum % 2 !== 0;
-    const callerWon =
-      (state.tossCall === "odd" && isSumOdd) ||
-      (state.tossCall === "even" && !isSumOdd);
-
-    const tossWinner: PlayerId = callerWon
-      ? state.tossCaller
-      : state.tossCaller === "p1"
-      ? "p2"
-      : "p1";
-
+  if (p1Pick !== undefined && p2Pick !== undefined && state.tossCall) {
+    const { winner } = resolveToss(state.tossCaller, state.tossCall, p1Pick, p2Pick);
     return {
       ...state,
       tossPicks: updatedPicks,
-      tossWinner,
+      tossWinner: winner,
       phase: "toss_decision",
     };
   }
@@ -160,8 +189,8 @@ export function startSecondInnings(state: GameState): GameState {
 }
 
 /**
- * Pure function: Executes a single ball delivery.
- * Authoritatively calculates runs, wickets, over completions, innings transitions and match result.
+ * Pure function: Authoritative delivery resolution.
+ * Calculates runs, wickets, over completions, innings transitions and match results.
  */
 export function applyBall(
   state: GameState,
@@ -207,7 +236,7 @@ export function applyBall(
   } else if (runsScored === 6) {
     commentary = `SIX! ${battingPlayerName} smashes a maximum!`;
   } else if (runsScored === 4) {
-    commentary = `FOUR! Clean boundary picked!`;
+    commentary = `FOUR! Clean boundary!`;
   } else {
     commentary = `${runsScored} run${runsScored === 1 ? "" : "s"} scored.`;
   }
@@ -297,7 +326,6 @@ export function applyBall(
     commentary,
   };
 
-  // Build the new currentOver & overHistory
   const updatedCurrentOver = [...activeInnings.currentOver, outcome];
   let newCurrentOver = updatedCurrentOver;
   let newOverHistory = activeInnings.overHistory;
@@ -330,17 +358,75 @@ export function applyBall(
 }
 
 /**
- * Format total balls into cricket overs display format (e.g. 7 balls -> "1.1").
+ * Handles forfeit: awards match to the non-forfeiting player.
  */
+export function forfeitMatch(
+  state: GameState,
+  forfeitingPlayerId: PlayerId,
+  reason: string = "Opponent left the match"
+): GameState {
+  const winner: PlayerId = forfeitingPlayerId === "p1" ? "p2" : "p1";
+  const winnerName = winner === "p1" ? state.player1Name : state.player2Name;
+
+  return {
+    ...state,
+    phase: "match_ended",
+    winner,
+    resultSummary: `${winnerName} won by forfeit (${reason})`,
+    isForfeit: true,
+  };
+}
+
+/**
+ * Pure Reducer API for all game transitions.
+ */
+export function gameReducer(state: GameState, action: GameAction): GameState {
+  switch (action.type) {
+    case "SUBMIT_TOSS_CALL":
+      return submitTossCall(state, action.call);
+
+    case "SUBMIT_TOSS_PICK":
+      return submitTossPick(state, action.playerId, action.pick);
+
+    case "SUBMIT_TOSS_DECISION":
+      return submitTossDecision(state, action.decision);
+
+    case "START_SECOND_INNINGS":
+      return startSecondInnings(state);
+
+    case "APPLY_BALL":
+      return applyBall(state, action.batterPick, action.bowlerPick).nextState;
+
+    case "TIMEOUT_AUTO_PICK": {
+      const randomPick = getRandomPick();
+      if (state.phase === "toss_pick") {
+        return submitTossPick(state, action.playerId, randomPick);
+      }
+      return state;
+    }
+
+    case "FORFEIT":
+      return forfeitMatch(state, action.forfeitingPlayerId, action.reason);
+
+    case "RESET":
+      return createInitialGameState(
+        action.format ?? state.format,
+        action.player1Name ?? state.player1Name,
+        action.player2Name ?? state.player2Name,
+        state.tossCaller === "p1" ? "p2" : "p1"
+      );
+
+    default:
+      return state;
+  }
+}
+
 export function formatOvers(balls: number): string {
   const overs = Math.floor(balls / 6);
   const remainingBalls = balls % 6;
   return `${overs}.${remainingBalls}`;
 }
 
-/**
- * Runs needed by chasing team in Innings 2.
- */
 export function getRequiredRuns(state: GameState): number {
   if (state.currentInnings !== 2 || !state.innings2 || !state.innings2.target) {
     return 0;
@@ -348,9 +434,6 @@ export function getRequiredRuns(state: GameState): number {
   return Math.max(0, state.innings2.target - state.innings2.score);
 }
 
-/**
- * Legal deliveries remaining in the active innings.
- */
 export function getRemainingBalls(state: GameState): number {
   const activeInnings = state.currentInnings === 1 ? state.innings1 : state.innings2;
   if (!activeInnings) return 0;
@@ -358,9 +441,6 @@ export function getRemainingBalls(state: GameState): number {
   return Math.max(0, maxBalls - activeInnings.balls);
 }
 
-/**
- * Required Run Rate per over in Innings 2.
- */
 export function getRequiredRunRate(state: GameState): number | null {
   if (state.currentInnings !== 2 || !state.innings2) return null;
   const ballsLeft = getRemainingBalls(state);
@@ -369,9 +449,6 @@ export function getRequiredRunRate(state: GameState): number | null {
   return Number(((runsLeft / ballsLeft) * 6).toFixed(2));
 }
 
-/**
- * Current Run Rate per over.
- */
 export function getCurrentRunRate(state: GameState): number {
   const activeInnings = state.currentInnings === 1 ? state.innings1 : state.innings2;
   if (!activeInnings || activeInnings.balls === 0) return 0;

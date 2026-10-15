@@ -1,7 +1,9 @@
 export type WicketsOption = 1 | 2 | 3;
 export type OversOption = 1 | 2 | 3;
+export type MatchMode = "sudden_death" | "classic";
 
 export interface MatchFormat {
+  mode?: MatchMode;
   maxWickets: WicketsOption;
   maxOvers: OversOption;
 }
@@ -38,6 +40,7 @@ export interface InningsState {
 }
 
 export type MatchPhase =
+  | "setup"
   | "format_select"
   | "toss_call"
   | "toss_pick"
@@ -52,7 +55,7 @@ export interface GameState {
   phase: MatchPhase;
   player1Name: string;
   player2Name: string;
-  
+
   // Toss state
   tossCaller: PlayerId;
   tossCall: TossCall | null;
@@ -71,4 +74,15 @@ export interface GameState {
   // Match Result
   winner: PlayerId | "tie" | null;
   resultSummary: string | null;
+  isForfeit?: boolean;
 }
+
+export type GameAction =
+  | { type: "SUBMIT_TOSS_CALL"; call: TossCall }
+  | { type: "SUBMIT_TOSS_PICK"; playerId: PlayerId; pick: number }
+  | { type: "SUBMIT_TOSS_DECISION"; decision: TossDecision }
+  | { type: "START_SECOND_INNINGS" }
+  | { type: "APPLY_BALL"; batterPick: number; bowlerPick: number }
+  | { type: "TIMEOUT_AUTO_PICK"; playerId: PlayerId; isToss?: boolean }
+  | { type: "FORFEIT"; forfeitingPlayerId: PlayerId; reason?: string }
+  | { type: "RESET"; format?: MatchFormat; player1Name?: string; player2Name?: string };
