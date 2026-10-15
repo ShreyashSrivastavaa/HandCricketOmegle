@@ -8,18 +8,17 @@ Deployable directly to **Vercel** with **Ably Pub/Sub** and **Upstash Redis**.
 
 ## 🌟 Features
 
-- **Omegle-Style Matchmaking**: Instant 1v1 pairing via Upstash Redis atomic queue with guest IDs stored in `httpOnly` secure cookies.
+- **Omegle-Style Matchmaking**: Instant 1v1 pairing via Upstash Redis atomic Lua queue pairing with guest IDs stored in `httpOnly` secure cookies.
+- **Mutual 5-Second Ready Check**: High-visibility countdown modal verifying both players are active and focused before launching WebRTC video or match deliveries (REL-02).
+- **Unlimited Search & Bot Warmup**: Indefinite matchmaking search with interactive "Warm Up vs Bot" practice directly in the waiting screen without losing queue position.
+- **Endless Multi-Round Series**: Running series scoreboard with automatic toss role alternation (Game 1 $\rightarrow$ P1, Game 2 $\rightarrow$ P2) for continuous duels.
+- **Stranger-to-Friend Bridge**: Convert any random stranger match into a persistent private friend duel with a shareable 6-character room code without stream interruption.
 - **Server-Authoritative State Engine**: Pure, framework-agnostic reducer engine (`/lib/game/engine.ts`). Clients never receive an opponent's pick until both are locked in.
-- **Real-Time Synchronous Reveal**: Token-scoped Ably Pub/Sub channel broadcasts moves, presence, and timed reveals with 3-2-1 suspense countdowns.
-- **Configurable Match Modes**:
-  - **Sudden Death** (Default): 1 wicket per innings, pure blitz.
-  - **Classic Mode**: 2 wickets, 2 overs (12 deliveries) per innings.
-- **10-Second Turn Timers**: Automatic random auto-pick if a player fails to submit within 10 seconds.
-- **Presence & Disconnect Recovery**: 15-second grace period on disconnect with automatic forfeit if a disconnected player fails to reconnect.
-- **12-Second Bot Fallback**: Server-side AI opponent with randomized picks when no human opponent is immediately available.
-- **Rich Audio & Haptics**: Synthesized Web Audio API cricket bat strikes, wicket crashes, boundary roar soundscapes, and mobile vibration feedback.
-- **Safe Emoji Reactions**: Fixed 6-emoji in-match reaction system (`🏏`, `🔥`, `😮`, `😂`, `👏`, `💔`) with floating animations and zero free-text risk.
-- **Abuse Prevention**: Built-in IP + guest ID rate limiting (`@upstash/ratelimit`) and opponent incident reporting.
+- **Screen Wake Lock & Visibility Recovery**: Screen Wake Lock API (`navigator.wakeLock`) prevents screen sleep during live matches, with auto-pause/resume on tab backgrounding (REL-04).
+- **Ephemeral ICE / TURN Security**: Short-lived credentials generated server-side via `POST /api/ice`, completely eliminating client-side credential extraction (SEC-01).
+- **Comprehensive Privacy & Safety**: 18+ age verification, zero video storage disclosure, mutual blocklist isolation, and automated 3-report 24-hour suspension.
+- **Accessibility & A11y**: Full keyboard hotkeys (`1`–`6` picks, `Enter`/`Space` lock-in), minimum 64px tap targets, and full `@media (prefers-reduced-motion: reduce)` support.
+- **Deployment Ready**: Fully deployable to Vercel with zero extra servers. See [DEPLOYMENT.md](file:///d:/HandCricketOmegle/DEPLOYMENT.md) for full setup instructions.
 
 ---
 
