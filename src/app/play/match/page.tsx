@@ -44,10 +44,17 @@ import {
   Smile,
   Loader2,
   ShieldAlert,
+  Bot,
+  Users,
+  Copy,
+  Check as CheckIcon,
 } from "lucide-react";
 import { handDetector } from "@/lib/gesture/handDetector";
 import type { HandGesture } from "@/lib/gesture/handClassifier";
 import { GestureDetectionChip } from "@/components/GestureDetectionChip";
+import { useWakeLock } from "@/lib/client/useWakeLock";
+import { ReadyCheckModal } from "@/components/ReadyCheckModal";
+import { getBotBallPick, getBotTossPick, getBotTossDecision } from "@/lib/game/bot";
 
 const PRESET_EMOTES = ["👏", "🔥", "😅", "🏏"];
 
@@ -118,6 +125,42 @@ function PlayMatchContent() {
   const [isConvertedToFriend, setIsConvertedToFriend] = useState<boolean>(false);
   const [playAgainWaiting, setPlayAgainWaiting] = useState<boolean>(false);
   const [seriesScore, setSeriesScore] = useState<{ [guestId: string]: number }>({});
+  const [gameNumber, setGameNumber] = useState<number>(1);
+  const [convertedRoomCode, setConvertedRoomCode] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
+
+  // Phase 4: Mutual 5s Ready Check (REL-02)
+  const [isReadyCheckOpen, setIsReadyCheckOpen] = useState<boolean>(false);
+  const [readyCheckSeconds, setReadyCheckSeconds] = useState<number>(5);
+  const [hasConfirmedReady, setHasConfirmedReady] = useState<boolean>(false);
+  const [pendingMatchData, setPendingMatchData] = useState<any>(null);
+  const readyIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Phase 4: Bot Warmup Practice in Queue
+  const [isBotWarmup, setIsBotWarmup] = useState<boolean>(false);
+  const [botGameState, setBotGameState] = useState<GameState | null>(null);
+  const [botUserPick, setBotUserPick] = useState<number | null>(null);
+  const [botOpponentPick, setBotOpponentPick] = useState<number | null>(null);
+  const [botOutcomeText, setBotOutcomeText] = useState<string | null>(null);
+
+  // Screen Wake Lock during active match
+  const isMatchActive = !isSearching && !!gameState && gameState.phase !== "match_ended";
+  useWakeLock(isMatchActive);
+
+  // Tab Backgrounding & Visibility Recovery (REL-04)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handDetector.stop();
+      } else {
+        if (isGestureModeActive && turnStage === "pick" && !isUserLocked && localVideoRef.current) {
+          handDetector.start(localVideoRef.current);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isGestureModeActive, turnStage, isUserLocked]);
 
   // Emotes & Report
   const [receivedEmote, setReceivedEmote] = useState<{ emote: string; id: number } | null>(null);
@@ -197,6 +240,36 @@ function PlayMatchContent() {
       addToast(data.message, "error");
     });
 
+    const activateMatchData = (data: any) => {
+      setIsSearching(false);
+      setIsReadyCheckOpen(false);
+      setRoomId(data.roomId);
+      setMatchMode(data.mode);
+      setIsInitiator(data.isInitiator);
+      setOpponent(data.opponent);
+
+      const myRole: PlayerId = data.isInitiator ? "p1" : "p2";
+      setMyPlayerId(myRole);
+
+      const count = parseInt(localStorage.getItem("hca_match_count") || "0", 10);
+      localStorage.setItem("hca_match_count", (count + 1).toString());
+
+      addToast(`Matched with ${data.opponent.name}!`, "success");
+
+      if (data.mode === "video") {
+        const pref = localStorage.getItem("hca_show_to_camera") !== "false";
+        setLocalGestureSetting(pref);
+        webrtcManager.toggleGestureMode(pref);
+        webrtcManager.startPeerSession(s, data.isInitiator);
+      }
+
+      const format: MatchFormat = { maxWickets: 2, maxOvers: 2 };
+      const p1Name = data.isInitiator ? "You" : data.opponent.name;
+      const p2Name = data.isInitiator ? data.opponent.name : "You";
+      const initialGame = createInitialGameState(format, p1Name, p2Name, "p1");
+      setGameState(initialGame);
+    };
+
     s.on(
       "match:found",
       (data: {
@@ -205,38 +278,62 @@ function PlayMatchContent() {
         isInitiator: boolean;
         opponent: { guestId: string; name: string };
       }) => {
-        setIsSearching(false);
-        setRoomId(data.roomId);
-        setMatchMode(data.mode);
-        setIsInitiator(data.isInitiator);
+        // Exit bot warmup immediately if active
+        setIsBotWarmup(false);
+        setBotGameState(null);
+
+        // Store pending match data and initiate 5s Mutual Ready Check (REL-02)
+        setPendingMatchData(data);
         setOpponent(data.opponent);
+        setMatchMode(data.mode);
+        setIsReadyCheckOpen(true);
+        setReadyCheckSeconds(5);
+        setHasConfirmedReady(false);
 
-        // p1 is initiator, p2 is non-initiator
-        const myRole: PlayerId = data.isInitiator ? "p1" : "p2";
-        setMyPlayerId(myRole);
-
-        // Update match count in storage
-        const count = parseInt(localStorage.getItem("hca_match_count") || "0", 10);
-        localStorage.setItem("hca_match_count", (count + 1).toString());
-
-        addToast(`Matched with ${data.opponent.name}!`, "success");
-
-        // Start WebRTC session if in video mode
-        if (data.mode === "video") {
-          const pref = localStorage.getItem("hca_show_to_camera") !== "false";
-          setLocalGestureSetting(pref);
-          webrtcManager.toggleGestureMode(pref);
-          webrtcManager.startPeerSession(s, data.isInitiator);
-        }
-
-        // Initialize authoritative game state (format 2 overs, 2 wickets)
-        const format: MatchFormat = { maxWickets: 2, maxOvers: 2 };
-        const p1Name = data.isInitiator ? "You" : data.opponent.name;
-        const p2Name = data.isInitiator ? data.opponent.name : "You";
-        const initialGame = createInitialGameState(format, p1Name, p2Name, "p1");
-        setGameState(initialGame);
+        if (readyIntervalRef.current) clearInterval(readyIntervalRef.current);
+        readyIntervalRef.current = setInterval(() => {
+          setReadyCheckSeconds((prev) => {
+            if (prev <= 1) {
+              if (readyIntervalRef.current) clearInterval(readyIntervalRef.current);
+              setHasConfirmedReady((confirmed) => {
+                if (confirmed) {
+                  activateMatchData(data);
+                } else {
+                  setIsReadyCheckOpen(false);
+                  s.emit("match:ready_decline");
+                  addToast("Ready check expired. Returning to queue...", "warning");
+                  joinMatchQueue(s);
+                }
+                return confirmed;
+              });
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
       }
     );
+
+    s.on("match:ready_success", () => {
+      if (readyIntervalRef.current) clearInterval(readyIntervalRef.current);
+      setPendingMatchData((current: any) => {
+        if (current) activateMatchData(current);
+        return null;
+      });
+    });
+
+    s.on("match:partner_ready", () => {
+      addToast("Opponent confirmed ready!", "info");
+    });
+
+    s.on("match:ready_cancelled", (data: { message?: string }) => {
+      if (readyIntervalRef.current) clearInterval(readyIntervalRef.current);
+      setIsReadyCheckOpen(false);
+      setPendingMatchData(null);
+      addToast(data.message || "Opponent was not ready. Re-queuing...", "warning");
+      resetMatchState();
+      joinMatchQueue(s);
+    });
 
     // WebRTC toggles from partner
     webrtcManager.onOpponentCameraToggle = (enabled) => {
@@ -266,6 +363,7 @@ function PlayMatchContent() {
       (data: { roomId: string; code?: string; seriesScore: { [guestId: string]: number }; message: string }) => {
         setIsConvertedToFriend(true);
         setPlayAgainWaiting(false);
+        if (data.code) setConvertedRoomCode(data.code);
         setSeriesScore(data.seriesScore);
         addToast(data.message, "success");
       }
@@ -273,7 +371,7 @@ function PlayMatchContent() {
 
     s.on(
       "game:rematch_start",
-      (data: { roomId: string; isInitiator: boolean; seriesScore: { [guestId: string]: number } }) => {
+      (data: { roomId: string; isInitiator: boolean; seriesScore: { [guestId: string]: number }; gameNumber?: number }) => {
         setPlayAgainWaiting(false);
         setUserPick(null);
         setIsUserLocked(false);
@@ -288,13 +386,17 @@ function PlayMatchContent() {
         setGestureHint(undefined);
         handDetector.resetForNextBall();
 
+        if (data.gameNumber) setGameNumber(data.gameNumber);
+        setIsInitiator(data.isInitiator);
+        setMyPlayerId(data.isInitiator ? "p1" : "p2");
+
         const format: MatchFormat = { maxWickets: 2, maxOvers: 2 };
         const p1Name = data.isInitiator ? "You" : opponent?.name || "Player";
         const p2Name = data.isInitiator ? opponent?.name || "Player" : "You";
         const initialGame = createInitialGameState(format, p1Name, p2Name, "p1");
         setGameState(initialGame);
         setSeriesScore(data.seriesScore);
-        addToast("Match started! Running series in progress.", "success");
+        addToast(`Game ${data.gameNumber || 2} started! Roles alternated.`, "success");
       }
     );
 
@@ -667,71 +769,206 @@ function PlayMatchContent() {
     setTimeout(() => setReceivedEmote(null), 2500);
   };
 
-  // 1. MATCH SEARCHING / QUEUE STATE
+  const handleStartBotWarmup = () => {
+    setIsBotWarmup(true);
+    const botFormat: MatchFormat = { maxWickets: 2, maxOvers: 2 };
+    let initial = createInitialGameState(botFormat, "You", "WarmupBot", "p1");
+    initial = submitTossCall(initial, "odd");
+    initial = submitTossPick(initial, "p1", 3);
+    initial = submitTossPick(initial, "p2", 2);
+    initial = submitTossDecision(initial, "bat");
+    setBotGameState(initial);
+    setBotUserPick(null);
+    setBotOpponentPick(null);
+    setBotOutcomeText(null);
+    addToast("Warm-up active! Matchmaking continues in background.", "info");
+  };
+
+  const handleBotWarmupBall = (num: number) => {
+    if (!botGameState) return;
+    setBotUserPick(num);
+    const botPick = getBotBallPick(botGameState);
+    setBotOpponentPick(botPick);
+
+    const activeInnings = botGameState.currentInnings === 1 ? botGameState.innings1 : botGameState.innings2!;
+    const isUserBatting = activeInnings.battingPlayer === "p1";
+    const batterNum = isUserBatting ? num : botPick;
+    const bowlerNum = isUserBatting ? botPick : num;
+
+    const { nextState, outcome } = applyBall(botGameState, batterNum, bowlerNum);
+    setBotOutcomeText(outcome.isWicket ? "OUT!" : `+${outcome.runsScored}`);
+    setBotGameState(nextState);
+
+    setTimeout(() => {
+      setBotUserPick(null);
+      setBotOpponentPick(null);
+      setBotOutcomeText(null);
+      if (nextState.phase === "innings_break" && nextState.innings2) {
+        setBotGameState(startSecondInnings(nextState));
+      } else if (nextState.phase === "match_ended") {
+        handleStartBotWarmup();
+      }
+    }, 1200);
+  };
+
+  const handleConfirmReadyCheck = () => {
+    setHasConfirmedReady(true);
+    socket?.emit("match:ready_confirm");
+    addToast("Ready confirmed! Waiting for opponent...", "info");
+  };
+
+  const handleDeclineReadyCheck = () => {
+    if (readyIntervalRef.current) clearInterval(readyIntervalRef.current);
+    setIsReadyCheckOpen(false);
+    setPendingMatchData(null);
+    socket?.emit("match:ready_decline");
+    addToast("Match declined. Returning to queue...", "info");
+    if (socket) joinMatchQueue(socket);
+  };
+
+  // 1. MATCH SEARCHING / QUEUE STATE (Unlimited Search & Bot Warmup)
   if (isSearching || !opponent || !gameState) {
     return (
       <main className="min-h-screen bg-ink text-chalk flex flex-col justify-center items-center p-4 select-none">
-        <div className="w-full max-w-sm bg-surface border border-line rounded-[12px] p-6 text-center space-y-5">
-          <div className="w-14 h-14 rounded-full border border-turf/40 bg-turf/10 flex items-center justify-center text-turf mx-auto">
-            <Loader2 className="w-7 h-7 animate-spin" />
-          </div>
-
-          <div className="space-y-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-turf font-heading">
-              {matchMode === "video" ? "Live Video Matchmaking" : "Game Only Matchmaking"}
-            </span>
-            <h2 className="font-heading font-black text-2xl uppercase tracking-tight text-chalk">
-              Finding Opponent...
-            </h2>
-            <div className="font-heading font-black text-3xl tabular-nums text-chalk mt-1">
-              {Math.floor(searchSeconds / 60).toString().padStart(2, "0")}:
-              {(searchSeconds % 60).toString().padStart(2, "0")}
-            </div>
-            <p className="text-xs text-muted">
-              Matching with players in the {matchMode === "video" ? "video" : "game-only"} queue.
-            </p>
-          </div>
-
-          {errorMessage && (
-            <div className="p-2.5 bg-ball/10 border border-ball/30 rounded text-xs text-ball text-left space-y-1">
-              <div className="flex items-center gap-1.5 font-bold">
-                <ShieldAlert className="w-4 h-4" />
-                <span>Notice</span>
+        {/* BOT WARM-UP ARENA (Queue stays alive in background) */}
+        {isBotWarmup && botGameState ? (
+          <div className="w-full max-w-sm bg-surface border-2 border-turf/50 rounded-[16px] p-5 flex flex-col items-center gap-4 shadow-2xl animate-scaleUp">
+            {/* Live Queue Status Banner */}
+            <div className="w-full flex items-center justify-between bg-turf/15 border border-turf/30 px-3 py-1.5 rounded-lg text-xs">
+              <div className="flex items-center gap-2 text-turf font-bold">
+                <span className="w-2 h-2 rounded-full bg-turf animate-ping" />
+                <span>Searching: {Math.floor(searchSeconds / 60)}:{(searchSeconds % 60).toString().padStart(2, "0")}</span>
               </div>
-              <p>{errorMessage}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsBotWarmup(false);
+                  setBotGameState(null);
+                }}
+                className="text-muted hover:text-chalk underline text-[11px]"
+              >
+                Exit Warmup
+              </button>
             </div>
-          )}
 
-          {searchSeconds >= 20 && (
-            <div className="pt-2">
+            <div className="w-full flex items-center justify-between px-1">
+              <div className="flex items-center gap-1.5 text-xs text-muted uppercase font-bold">
+                <Bot className="w-4 h-4 text-turf" />
+                <span>Training Bot</span>
+              </div>
+              <div className="font-heading font-black text-lg text-turf tabular-nums">
+                {botGameState.currentInnings === 1
+                  ? `${botGameState.innings1.score}/${botGameState.innings1.wickets}`
+                  : `${botGameState.innings2?.score}/${botGameState.innings2?.wickets}`}
+              </div>
+            </div>
+
+            {/* Picks Display */}
+            <div className="w-full grid grid-cols-2 gap-3 text-center">
+              <div className="bg-surface-2 p-3.5 rounded-xl border border-line">
+                <div className="text-[10px] text-muted uppercase font-heading">You</div>
+                <div className="font-heading font-black text-4xl text-chalk mt-1 tabular-nums">
+                  {botUserPick ?? "-"}
+                </div>
+              </div>
+              <div className="bg-surface-2 p-3.5 rounded-xl border border-line">
+                <div className="text-[10px] text-muted uppercase font-heading">Bot</div>
+                <div className="font-heading font-black text-4xl text-chalk mt-1 tabular-nums">
+                  {botOpponentPick ?? "-"}
+                </div>
+              </div>
+            </div>
+
+            {botOutcomeText ? (
+              <div className="font-heading font-black text-2xl text-amber animate-bounce">
+                {botOutcomeText}
+              </div>
+            ) : (
+              <div className="text-xs text-muted">Tap a number to play ball</div>
+            )}
+
+            {/* Quick Practice NumberPad */}
+            <div className="w-full">
+              <NumberPad
+                selectedNumber={botUserPick}
+                onSelectNumber={handleBotWarmupBall}
+                onConfirmLock={() => {}}
+                isLocked={botUserPick !== null}
+                disabled={botUserPick !== null}
+                tapToLock={true}
+                onToggleTapToLock={() => {}}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="w-full max-w-sm bg-surface border border-line rounded-[16px] p-6 text-center space-y-5 shadow-2xl">
+            <div className="w-14 h-14 rounded-full border border-turf/40 bg-turf/10 flex items-center justify-center text-turf mx-auto">
+              <Loader2 className="w-7 h-7 animate-spin" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-turf font-heading">
+                {matchMode === "video" ? "Live Video Matchmaking" : "Game Only Matchmaking"}
+              </span>
+              <h2 className="font-heading font-black text-2xl uppercase tracking-tight text-chalk">
+                Finding Opponent...
+              </h2>
+              <div className="font-heading font-black text-3xl tabular-nums text-chalk mt-1">
+                {Math.floor(searchSeconds / 60).toString().padStart(2, "0")}:
+                {(searchSeconds % 60).toString().padStart(2, "0")}
+              </div>
+              <p className="text-xs text-muted">
+                Indefinite queue search. We will alert you immediately when a stranger arrives.
+              </p>
+            </div>
+
+            {errorMessage && (
+              <div className="p-2.5 bg-ball/10 border border-ball/30 rounded text-xs text-ball text-left space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <ShieldAlert className="w-4 h-4" />
+                  <span>Notice</span>
+                </div>
+                <p>{errorMessage}</p>
+              </div>
+            )}
+
+            {/* Warmup vs Bot while searching */}
+            <div className="pt-2 flex flex-col gap-2">
               <Button
                 variant="primary"
                 fullWidth
+                onClick={handleStartBotWarmup}
+                className="bg-turf hover:bg-turf/90 text-ink font-heading font-black text-xs uppercase py-3 flex items-center justify-center gap-2"
+              >
+                <Bot className="w-4 h-4" />
+                <span>Warm Up vs Bot While Waiting</span>
+              </Button>
+
+              <Button
+                variant="secondary"
+                fullWidth
                 onClick={() => {
                   webrtcManager.cleanup();
-                  startBotMatch({ maxWickets: 2, maxOvers: 2 });
-                  router.push("/play/bot");
+                  router.push("/");
                 }}
-                className="bg-turf text-ink font-heading font-black text-xs uppercase py-3"
               >
-                Play vs Bot Instead
+                Cancel &amp; Return to Lobby
               </Button>
             </div>
-          )}
-
-          <div className="pt-2">
-            <Button
-              variant="secondary"
-              fullWidth
-              onClick={() => {
-                webrtcManager.cleanup();
-                router.push("/");
-              }}
-            >
-              Cancel &amp; Return to Lobby
-            </Button>
           </div>
-        </div>
+        )}
+
+        {/* 5-Second Mutual Ready-Check Modal */}
+        <ReadyCheckModal
+          isOpen={isReadyCheckOpen}
+          opponentName={opponent?.name || "Stranger"}
+          countdownSeconds={readyCheckSeconds}
+          hasConfirmed={hasConfirmedReady}
+          onConfirm={handleConfirmReadyCheck}
+          onDecline={handleDeclineReadyCheck}
+          matchMode={matchMode}
+        />
+
         <Toast toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
       </main>
     );
@@ -752,6 +989,37 @@ function PlayMatchContent() {
     >
       {/* TOP HEADER: Navigation, Mode, Next Opponent Button */}
       <header className="w-full flex flex-col gap-2">
+        {/* Private Duel Room Code Banner (Bridge) */}
+        {isConvertedToFriend && (
+          <div className="w-full bg-turf/15 border border-turf/40 rounded-[10px] px-3 py-1.5 flex items-center justify-between text-xs animate-fadeIn">
+            <div className="flex items-center gap-1.5 font-bold text-turf">
+              <Users className="w-4 h-4" />
+              <span>
+                Private Duel Active — Code:{" "}
+                <span className="underline tracking-wider font-mono">
+                  {convertedRoomCode || roomId?.slice(-6).toUpperCase()}
+                </span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const code = convertedRoomCode || roomId?.slice(-6).toUpperCase() || "";
+                if (typeof window !== "undefined") {
+                  navigator.clipboard.writeText(`${window.location.origin}/room/${code}`);
+                }
+                setCopiedCode(true);
+                setTimeout(() => setCopiedCode(false), 2000);
+                addToast("Friend room link copied to clipboard!", "success");
+              }}
+              className="px-2 py-0.5 bg-turf/20 hover:bg-turf/30 text-turf border border-turf/40 rounded text-[11px] font-bold uppercase transition-colors flex items-center gap-1"
+            >
+              {copiedCode ? <CheckIcon className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              <span>{copiedCode ? "Copied" : "Copy Link"}</span>
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between text-xs pb-1">
           <button
             type="button"
@@ -865,10 +1133,10 @@ function PlayMatchContent() {
             }}
             isFriendRoom={isConvertedToFriend}
             seriesScoreText={
-              isConvertedToFriend
+              isConvertedToFriend || Object.keys(seriesScore).length > 0
                 ? `Series: You ${seriesScore[guestId] || 0} - ${
                     opponent?.guestId ? seriesScore[opponent.guestId] || 0 : 0
-                  } ${opponent?.name || "Opponent"}`
+                  } ${opponent?.name || "Opponent"} (Game ${gameNumber})`
                 : undefined
             }
             onPlayAgain={!isConvertedToFriend ? () => socket?.emit("match:play_again") : undefined}

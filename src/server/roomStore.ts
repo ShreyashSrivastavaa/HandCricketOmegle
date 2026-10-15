@@ -35,6 +35,7 @@ export interface ActiveRoom {
   seriesScore: {
     [guestId: string]: number;
   };
+  gameNumber?: number;
   rematchVotes: Set<string>;
   playAgainVotes: Set<string>;
   disconnectTimers: Map<string, NodeJS.Timeout>;
@@ -490,6 +491,7 @@ export class RoomStore {
       room.p2Ready = true;
       room.status = "playing";
       room.currentBall = undefined;
+      room.gameNumber = (room.gameNumber || 1) + 1;
       return { room, startRematch: true };
     }
 
@@ -517,6 +519,7 @@ export class RoomStore {
     if (bothVoted) {
       room.playAgainVotes.clear();
       this.convertRandomToFriend(roomId);
+      room.gameNumber = (room.gameNumber || 1) + 1;
       return { room, convertedToFriend: true };
     }
 

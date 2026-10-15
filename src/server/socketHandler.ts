@@ -323,17 +323,22 @@ export function registerSocketHandlers(io: Server) {
         const p1Socket = io.sockets.sockets.get(result.room.p1.socketId);
         const p2Socket = io.sockets.sockets.get(result.room.p2.socketId);
 
-        // Reset game state and trigger new match start
+        // Reset game state and trigger new match start with role alternation
+        const gameNum = result.room.gameNumber || 1;
+        const isP1Initiator = gameNum % 2 !== 0;
+
         p1Socket?.emit("game:rematch_start", {
           roomId: result.room.roomId,
           seriesScore: result.room.seriesScore,
-          isInitiator: true,
+          isInitiator: isP1Initiator,
+          gameNumber: gameNum,
         });
 
         p2Socket?.emit("game:rematch_start", {
           roomId: result.room.roomId,
           seriesScore: result.room.seriesScore,
-          isInitiator: false,
+          isInitiator: !isP1Initiator,
+          gameNumber: gameNum,
         });
       } else {
         const { partnerId } = getPartnerInfo();
@@ -387,19 +392,61 @@ export function registerSocketHandlers(io: Server) {
         const p1Socket = io.sockets.sockets.get(result.room.p1.socketId);
         const p2Socket = io.sockets.sockets.get(result.room.p2.socketId);
 
+        const gameNum = result.room.gameNumber || 1;
+        const isP1Initiator = gameNum % 2 !== 0;
+
         p1Socket?.emit("game:rematch_start", {
           roomId: result.room.roomId,
           seriesScore: result.room.seriesScore,
-          isInitiator: true,
+          isInitiator: isP1Initiator,
+          gameNumber: gameNum,
         });
         p2Socket?.emit("game:rematch_start", {
           roomId: result.room.roomId,
           seriesScore: result.room.seriesScore,
-          isInitiator: false,
+          isInitiator: !isP1Initiator,
+          gameNumber: gameNum,
         });
       } else {
         // One-sided: shows waiting without pressuring opponent
         socket.emit("match:play_again_waiting", { waiting: true });
+      }
+    });
+
+    // =========================================================================
+    // 3.5 MUTUAL READY CHECK (REL-02)
+    // =========================================================================
+    socket.on("match:ready_confirm", () => {
+      const { room, isP1, partnerId } = getPartnerInfo();
+      if (!room) return;
+
+      if (isP1) {
+        room.p1Ready = true;
+      } else {
+        room.p2Ready = true;
+      }
+
+      if (partnerId) {
+        io.to(partnerId).emit("match:partner_ready");
+      }
+
+      if (room.p1Ready && room.p2Ready) {
+        io.to(room.roomId).emit("match:ready_success", {
+          roomId: room.roomId,
+          message: "Both players confirmed ready! Starting match...",
+        });
+      }
+    });
+
+    socket.on("match:ready_decline", () => {
+      const { room, partnerId } = getPartnerInfo();
+      if (!room) return;
+
+      roomStore.closeRoom(room.roomId, socket.id);
+      if (partnerId) {
+        io.to(partnerId).emit("match:ready_cancelled", {
+          message: "Opponent was not ready or declined. Re-queuing you...",
+        });
       }
     });
 

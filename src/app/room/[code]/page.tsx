@@ -55,6 +55,7 @@ import {
 import { handDetector } from "@/lib/gesture/handDetector";
 import type { HandGesture } from "@/lib/gesture/handClassifier";
 import { GestureDetectionChip } from "@/components/GestureDetectionChip";
+import { useWakeLock } from "@/lib/client/useWakeLock";
 
 interface FriendRoomState {
   roomId: string;
@@ -139,6 +140,25 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const [layout, setLayout] = useState<"mobile-portrait" | "desktop" | "landscape">("mobile-portrait");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [rematchWaiting, setRematchWaiting] = useState<boolean>(false);
+
+  // Screen Wake Lock during active friend match
+  const isMatchActive = roomState?.status === "playing" && !!gameState && gameState.phase !== "match_ended";
+  useWakeLock(isMatchActive);
+
+  // Tab Backgrounding & Visibility Recovery (REL-04)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handDetector.stop();
+      } else {
+        if (isGestureModeActive && turnStage === "pick" && !isUserLocked && localVideoRef.current) {
+          handDetector.start(localVideoRef.current);
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [isGestureModeActive, turnStage, isUserLocked]);
 
   const addToast = (message: string, type: ToastMessage["type"] = "info") => {
     const id = `${Date.now()}-${Math.random()}`;

@@ -33,6 +33,10 @@ export interface RedisMatch {
   currentBallIndex: number;
   lastSequenceNumbers?: { [guestId: string]: number };
   tossPicks: { [guestId: string]: number };
+  seriesScore?: { [guestId: string]: number };
+  gameNumber?: number;
+  readyPlayers?: { [guestId: string]: boolean };
+  playAgainVotes?: string[];
   createdAt: number;
   updatedAt: number;
 }
@@ -615,4 +619,122 @@ export async function handleReport(
   });
 
   return { success: true, autoBanned: result.autoBanned };
+}
+
+/**
+ * Mutual 5-second Ready-Check confirmation.
+ */
+export async function handleReadyConfirm(
+  matchId: string,
+  guestId: string
+): Promise<{ success: boolean; bothReady: boolean }> {
+  const match = await getMatch(matchId);
+  if (!match) throw new Error("Match not found");
+
+  if (!match.readyPlayers) match.readyPlayers = {};
+  match.readyPlayers[guestId] = true;
+
+  const p1Ready = match.readyPlayers[match.player1.guestId] || match.isBot;
+  const p2Ready = match.readyPlayers[match.player2.guestId] || match.isBot;
+  const bothReady = !!(p1Ready && p2Ready);
+
+  await saveMatch(match);
+
+  if (bothReady) {
+    await publishToAbly(`match:${matchId}`, "match-ready-success", {
+      matchId,
+      message: "Both players confirmed ready! Starting match...",
+    });
+  }
+
+  return { success: true, bothReady };
+}
+
+/**
+ * Endless Series Rematch handler with alternating roles.
+ */
+export async function handleRematch(
+  matchId: string,
+  guestId: string
+): Promise<{
+  success: boolean;
+  rematchStarted: boolean;
+  seriesScore: { [guestId: string]: number };
+  gameNumber: number;
+  gameState?: GameState;
+}> {
+  const match = await getMatch(matchId);
+  if (!match) throw new Error("Match not found");
+
+  if (!match.seriesScore) {
+    match.seriesScore = {
+      [match.player1.guestId]: 0,
+      [match.player2.guestId]: 0,
+    };
+  }
+
+  if (!match.playAgainVotes) match.playAgainVotes = [];
+  if (!match.playAgainVotes.includes(guestId)) {
+    match.playAgainVotes.push(guestId);
+  }
+
+  const bothVoted =
+    match.isBot ||
+    (match.playAgainVotes.includes(match.player1.guestId) &&
+      match.playAgainVotes.includes(match.player2.guestId));
+
+  if (bothVoted) {
+    match.playAgainVotes = [];
+    match.gameNumber = (match.gameNumber || 1) + 1;
+
+    // Update series score from ended game once when starting rematch
+    if (match.gameState.phase === "match_ended" && match.gameState.winner) {
+      if (match.gameState.winner === "p1") {
+        match.seriesScore[match.player1.guestId] = (match.seriesScore[match.player1.guestId] || 0) + 1;
+      } else if (match.gameState.winner === "p2") {
+        match.seriesScore[match.player2.guestId] = (match.seriesScore[match.player2.guestId] || 0) + 1;
+      }
+    }
+
+    // Role alternation: in even games, p2 is toss caller; in odd games, p1 is toss caller
+    const tossCallerRole = match.gameNumber % 2 !== 0 ? "p1" : "p2";
+    const nextGame = createInitialGameState(
+      match.format,
+      match.player1.name,
+      match.player2.name,
+      tossCallerRole
+    );
+
+    match.gameState = nextGame;
+    match.currentBallMoves = {};
+    match.currentBallIndex = 0;
+    match.tossPicks = {};
+
+    await saveMatch(match);
+
+    await publishToAbly(`match:${matchId}`, "match-rematch-start", {
+      matchId,
+      seriesScore: match.seriesScore,
+      gameNumber: match.gameNumber,
+      gameState: nextGame,
+      tossCaller: tossCallerRole,
+    });
+
+    return {
+      success: true,
+      rematchStarted: true,
+      seriesScore: match.seriesScore,
+      gameNumber: match.gameNumber,
+      gameState: nextGame,
+    };
+  }
+
+  await saveMatch(match);
+
+  return {
+    success: true,
+    rematchStarted: false,
+    seriesScore: match.seriesScore,
+    gameNumber: match.gameNumber || 1,
+  };
 }

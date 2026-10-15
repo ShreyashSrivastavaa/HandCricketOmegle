@@ -119,6 +119,19 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
         </h2>
       </div>
 
+      {/* Endless Series Scoreboard */}
+      {seriesScoreText && (
+        <div className="w-full bg-turf/10 border-2 border-turf/40 rounded-[14px] p-3.5 flex flex-col items-center gap-1 text-center z-10 animate-fadeIn">
+          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-turf font-heading">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Endless Series Scoreboard</span>
+          </div>
+          <div className="font-heading font-black text-lg sm:text-xl text-chalk tracking-wide">
+            {seriesScoreText}
+          </div>
+        </div>
+      )}
+
       {/* Match Scorecard Breakdown */}
       {inn1 && (
         <div className="w-full bg-surface-2/60 border border-line rounded-[14px] p-4 flex flex-col gap-2.5 z-10">
