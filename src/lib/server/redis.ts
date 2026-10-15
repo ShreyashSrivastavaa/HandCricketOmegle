@@ -127,6 +127,34 @@ export class MemoryRedis {
     return s ? (Array.from(s) as T[]) : [];
   }
 
+  async eval<T = any>(
+    _script: string,
+    keys: string[],
+    args: any[]
+  ): Promise<T | null> {
+    const queueKey = keys[0];
+    const currentGuestId = args[0];
+    const maxAgeMs = Number(args[1]) || 25000;
+    const now = Number(args[2]) || Date.now();
+
+    const list = this.lists.get(queueKey);
+    if (!list) return null;
+
+    while (list.length > 0) {
+      const item = list.shift();
+      if (!item) continue;
+      const parsed = typeof item === "string" ? JSON.parse(item) : item;
+      if (
+        parsed &&
+        parsed.guestId !== currentGuestId &&
+        now - parsed.joinedAt <= maxAgeMs
+      ) {
+        return (typeof item === "string" ? item : JSON.stringify(item)) as T;
+      }
+    }
+    return null;
+  }
+
   async flushall(): Promise<"OK"> {
     this.store.clear();
     this.lists.clear();

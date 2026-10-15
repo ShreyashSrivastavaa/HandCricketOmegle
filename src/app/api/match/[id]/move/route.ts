@@ -16,6 +16,7 @@ const moveSchema = z.discriminatedUnion("kind", [
     kind: z.literal("ball"),
     ballIndex: z.number().int().nonnegative(),
     pick: z.number().int().min(1).max(6),
+    seq: z.number().int().nonnegative().optional(),
   }),
   z.object({
     kind: z.literal("toss"),
@@ -33,9 +34,11 @@ const moveSchema = z.discriminatedUnion("kind", [
         value: z.enum(["bat", "bowl"]),
       }),
     ]),
+    seq: z.number().int().nonnegative().optional(),
   }),
   z.object({
     kind: z.literal("start_innings_2"),
+    seq: z.number().int().nonnegative().optional(),
   }),
 ]);
 
@@ -43,6 +46,7 @@ const moveSchema = z.discriminatedUnion("kind", [
 const simpleBallSchema = z.object({
   ballIndex: z.number().int().nonnegative(),
   pick: z.number().int().min(1).max(6),
+  seq: z.number().int().nonnegative().optional(),
 });
 
 export async function POST(
@@ -70,6 +74,7 @@ export async function POST(
           kind: "ball",
           ballIndex: simple.data.ballIndex,
           pick: simple.data.pick,
+          seq: simple.data.seq,
         },
       } as any;
     }
@@ -90,7 +95,8 @@ export async function POST(
         matchId,
         session.guestId,
         data.ballIndex,
-        data.pick
+        data.pick,
+        data.seq
       );
       return NextResponse.json(result);
     }
@@ -99,7 +105,8 @@ export async function POST(
       const result = await handleTossAction(
         matchId,
         session.guestId,
-        data.action
+        data.action,
+        data.seq
       );
       return NextResponse.json(result);
     }

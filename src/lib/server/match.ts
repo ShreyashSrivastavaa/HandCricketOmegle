@@ -31,6 +31,7 @@ export interface RedisMatch {
   isBot: boolean;
   currentBallMoves: { [guestId: string]: number };
   currentBallIndex: number;
+  lastSequenceNumbers?: { [guestId: string]: number };
   tossPicks: { [guestId: string]: number };
   createdAt: number;
   updatedAt: number;
@@ -48,6 +49,68 @@ export interface WaitingQueueEntry {
  */
 function getQueueKey(mode: "sudden_death" | "classic"): string {
   return `queue:hand_cricket:${mode}`;
+}
+
+/**
+ * Atomically pops a waiting candidate from the Redis queue using Lua.
+ * Guarantees no two concurrent join requests can pop the same candidate (prevents double-pairing).
+ */
+export async function popCandidateAtomically(
+  redis: any,
+  queueKey: string,
+  currentGuestId: string,
+  maxAgeMs = 25000
+): Promise<WaitingQueueEntry | null> {
+  const now = Date.now();
+  const script = `
+local queueKey = KEYS[1]
+local currentGuestId = ARGV[1]
+local maxAgeMs = tonumber(ARGV[2])
+local now = tonumber(ARGV[3])
+
+while true do
+  local item = redis.call('LPOP', queueKey)
+  if not item then
+    return nil
+  end
+  local ok, decoded = pcall(cjson.decode, item)
+  if ok and decoded and decoded.guestId then
+    if decoded.guestId ~= currentGuestId and (now - decoded.joinedAt) <= maxAgeMs then
+      return item
+    end
+  end
+end
+`;
+
+  try {
+    if (typeof redis.eval === "function") {
+      const result = await redis.eval(
+        script,
+        [queueKey],
+        [currentGuestId, String(maxAgeMs), String(now)]
+      );
+      if (result) {
+        return typeof result === "string" ? JSON.parse(result) : result;
+      }
+      return null;
+    }
+  } catch (err) {
+    console.warn("[Matchmaking] Lua atomic pop error, falling back to atomic loop:", err);
+  }
+
+  // Safe LPOP loop fallback
+  while (true) {
+    const item = await redis.lpop(queueKey);
+    if (!item) return null;
+    const parsed = typeof item === "string" ? JSON.parse(item) : item;
+    if (
+      parsed &&
+      parsed.guestId !== currentGuestId &&
+      now - parsed.joinedAt <= maxAgeMs
+    ) {
+      return parsed;
+    }
+  }
 }
 
 /**
@@ -73,30 +136,19 @@ export async function joinMatchmakingQueue(
     throw new Error("Access suspended: Your account is temporarily suspended due to community reports.");
   }
 
-  // Check if someone is already waiting in this queue
-  const waitingItem = await redis.lpop<WaitingQueueEntry | string>(queueKey);
+  // 2. Atomically pop a candidate from queue
+  let waitingPlayer = await popCandidateAtomically(redis, queueKey, guestId, 25000);
 
-  let waitingPlayer: WaitingQueueEntry | null = null;
-  if (waitingItem) {
-    waitingPlayer =
-      typeof waitingItem === "string" ? JSON.parse(waitingItem) : waitingItem;
-  }
-
-  // If waiting player is expired (> 25 seconds) or is the exact same guest, skip and requeue current guest
-  if (
-    waitingPlayer &&
-    (waitingPlayer.guestId === guestId || Date.now() - waitingPlayer.joinedAt > 25000)
-  ) {
-    waitingPlayer = null;
-  }
-
-  // Ensure neither player has blocked the other
+  // 3. Ensure candidate is not blocked or banned
   if (waitingPlayer) {
-    const isBlocked = await isOpponentBlocked(guestId, waitingPlayer.guestId);
-    if (isBlocked) {
-      // Return waiting player to queue and do not match
-      await redis.rpush(queueKey, JSON.stringify(waitingPlayer));
-      waitingPlayer = null;
+    const [isBlocked, candidateBan] = await Promise.all([
+      isOpponentBlocked(guestId, waitingPlayer.guestId),
+      isGuestBanned(waitingPlayer.guestId),
+    ]);
+
+    if (isBlocked || candidateBan.banned) {
+      // Discard invalid candidate and attempt next
+      waitingPlayer = await popCandidateAtomically(redis, queueKey, guestId, 25000);
     }
   }
 
@@ -274,7 +326,8 @@ export async function handleTossAction(
   action:
     | { type: "call"; value: "odd" | "even" }
     | { type: "pick"; value: number }
-    | { type: "decision"; value: "bat" | "bowl" }
+    | { type: "decision"; value: "bat" | "bowl" },
+  seq?: number
 ): Promise<{ success: boolean; gameState: GameState }> {
   const match = await getMatch(matchId);
   if (!match) throw new Error("Match not found");
@@ -282,6 +335,16 @@ export async function handleTossAction(
   const isP1 = match.player1.guestId === guestId;
   const isP2 = match.player2.guestId === guestId;
   if (!isP1 && !isP2) throw new Error("Unauthorized guest for match");
+
+  // Monotonic sequence verification (reject duplicate or out-of-order moves)
+  if (seq !== undefined) {
+    if (!match.lastSequenceNumbers) match.lastSequenceNumbers = {};
+    const prevSeq = match.lastSequenceNumbers[guestId] ?? -1;
+    if (seq <= prevSeq) {
+      throw new Error(`Duplicate or out-of-order sequence number: ${seq} <= ${prevSeq}`);
+    }
+    match.lastSequenceNumbers[guestId] = seq;
+  }
 
   const playerId = isP1 ? "p1" : "p2";
   let state = match.gameState;
@@ -392,7 +455,8 @@ export async function handleBallMove(
   matchId: string,
   guestId: string,
   ballIndex: number,
-  pick: number
+  pick: number,
+  seq?: number
 ): Promise<{
   status: "waiting_opponent" | "resolved";
   outcome?: BallOutcome;
@@ -409,6 +473,16 @@ export async function handleBallMove(
   const isP1 = match.player1.guestId === guestId;
   const isP2 = match.player2.guestId === guestId;
   if (!isP1 && !isP2) throw new Error("Unauthorized guest for match");
+
+  // Monotonic sequence verification (reject duplicate or out-of-order moves)
+  if (seq !== undefined) {
+    if (!match.lastSequenceNumbers) match.lastSequenceNumbers = {};
+    const prevSeq = match.lastSequenceNumbers[guestId] ?? -1;
+    if (seq <= prevSeq) {
+      throw new Error(`Duplicate or out-of-order sequence number: ${seq} <= ${prevSeq}`);
+    }
+    match.lastSequenceNumbers[guestId] = seq;
+  }
 
   // Idempotency check: ignore duplicate submission for the same ball
   if (match.currentBallIndex === ballIndex && match.currentBallMoves[guestId] !== undefined) {

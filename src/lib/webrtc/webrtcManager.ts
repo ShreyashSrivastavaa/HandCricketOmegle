@@ -55,24 +55,46 @@ export class WebRTCManager {
     this.onConnectionStateChange?.(state);
   }
 
+  private cachedIceServers: RTCIceServer[] | null = null;
+  private iceServersExpiresAt = 0;
+
   /**
-   * Parse ICE Servers from environment or default to Google STUN
+   * Fetch ephemeral short-lived ICE / TURN credentials from serverless route POST /api/ice.
+   * Eliminates client-side credential exposure (SEC-01).
    */
-  private getIceServers(): RTCIceServer[] {
+  public async getOrFetchIceServers(): Promise<RTCIceServer[]> {
+    const now = Date.now();
+    if (this.cachedIceServers && now < this.iceServersExpiresAt) {
+      return this.cachedIceServers;
+    }
+
     if (typeof window !== "undefined") {
-      const customIce = (window as any).__ICE_SERVERS__ || process.env.NEXT_PUBLIC_ICE_SERVERS;
-      if (customIce) {
-        try {
-          return typeof customIce === "string" ? JSON.parse(customIce) : customIce;
-        } catch (e) {
-          console.warn("[WebRTC] Failed to parse custom ICE_SERVERS", e);
+      try {
+        const res = await fetch("/api/ice", { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.iceServers) && data.iceServers.length > 0) {
+            const servers = data.iceServers as RTCIceServer[];
+            this.cachedIceServers = servers;
+            this.iceServersExpiresAt = data.expiresAt
+              ? data.expiresAt - 5 * 60 * 1000
+              : now + 15 * 60 * 1000;
+            return servers;
+          }
         }
+      } catch (err) {
+        console.warn("[WebRTC] Failed to fetch ephemeral ICE servers from /api/ice, using fallback STUN:", err);
       }
     }
-    return [
+
+    const fallback: RTCIceServer[] = [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun2.l.google.com:19302" },
     ];
+    this.cachedIceServers = fallback;
+    this.iceServersExpiresAt = now + 5 * 60 * 1000;
+    return fallback;
   }
 
   /**
@@ -135,21 +157,26 @@ export class WebRTCManager {
       videoTrack.enabled = this.isCameraEnabled; // true
     }
 
+    // Prefetch ephemeral ICE credentials asynchronously
+    this.getOrFetchIceServers().catch(() => {});
+
     return stream;
   }
 
   /**
    * Start 1-to-1 peer connection session
    */
-  public startPeerSession(socket: Socket, isInitiator: boolean) {
+  public async startPeerSession(socket: Socket, isInitiator: boolean): Promise<void> {
     this.socket = socket;
     this.isInitiator = isInitiator;
     this.pendingCandidates = [];
 
     this.setConnectionState("connecting");
 
+    const iceServers = await this.getOrFetchIceServers();
+
     const configuration: RTCConfiguration = {
-      iceServers: this.getIceServers(),
+      iceServers,
       iceCandidatePoolSize: 2,
     };
 
