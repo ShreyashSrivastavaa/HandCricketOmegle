@@ -7,6 +7,7 @@ import crypto from "crypto";
 export const runtime = "nodejs";
 
 const ADMIN_SECRET =
+  process.env.ADMIN_SECRET_TOKEN ||
   process.env.ADMIN_SECRET ||
   process.env.ADMIN_KEY ||
   process.env.ADMIN_PASSWORD ||
