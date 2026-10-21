@@ -1,6 +1,19 @@
 import React, { useState } from "react";
 import { useLiveMatchStore } from "@/lib/store/liveMatchStore";
-import { Play, Bot, Shuffle, HelpCircle, Flame, Shield, Swords, Sparkles, Trophy, Users } from "lucide-react";
+import {
+  Play,
+  Bot,
+  Shuffle,
+  HelpCircle,
+  Flame,
+  Shield,
+  Swords,
+  Sparkles,
+  Trophy,
+  Users,
+  Infinity as InfinityIcon,
+  Camera,
+} from "lucide-react";
 import { generateGuestName } from "@/lib/server/session";
 import { playClickSound } from "@/lib/client/audio";
 
@@ -17,7 +30,15 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onPlayWithFriend,
   onOpenRules,
 }) => {
-  const { guestName, setGuestName, mode, setMode } = useLiveMatchStore();
+  const {
+    guestName,
+    setGuestName,
+    mode,
+    setMode,
+    endlessVariant,
+    setEndlessVariant,
+    personalBest,
+  } = useLiveMatchStore();
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [nameInput, setNameInput] = useState<string>(guestName);
 
@@ -120,7 +141,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
         <label className="text-xs font-heading font-bold text-muted uppercase tracking-wider px-1">
           Select Match Mode
         </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 w-full">
           {/* Sudden Death Card */}
           <button
             type="button"
@@ -129,24 +150,26 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               setMode("sudden_death");
             }}
             aria-pressed={mode === "sudden_death"}
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
+            className={`p-3.5 rounded-[14px] border text-left flex flex-col justify-between gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
               mode === "sudden_death"
                 ? "bg-surface-2 border-turf shadow-[0_0_16px_rgba(61,220,132,0.15)] ring-1 ring-turf"
                 : "bg-surface/50 border-line hover:border-line/80 opacity-70"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-heading font-black uppercase tracking-wider text-turf flex items-center gap-1">
-                <Flame className="w-3.5 h-3.5 fill-current" /> Sudden Death
-              </span>
-              <span className="text-[10px] font-bold text-muted bg-surface px-1.5 py-0.5 rounded border border-line">
-                DEFAULT
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-heading font-black uppercase tracking-wider text-turf flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 fill-current" /> Sudden Death
+                </span>
+                <span className="text-[10px] font-bold text-muted bg-surface px-1.5 py-0.5 rounded border border-line">
+                  DEFAULT
+                </span>
+              </div>
+              <span className="text-sm font-black font-heading text-chalk">1 WICKET</span>
+              <span className="text-[11px] text-muted leading-tight">
+                Instant knockout. Innings ends on the very first wicket!
               </span>
             </div>
-            <span className="text-sm font-black font-heading text-chalk">1 WICKET</span>
-            <span className="text-[11px] text-muted leading-tight">
-              Instant knockout. Innings ends on the very first wicket!
-            </span>
           </button>
 
           {/* Classic Mode Card */}
@@ -157,22 +180,105 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               setMode("classic");
             }}
             aria-pressed={mode === "classic"}
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
+            className={`p-3.5 rounded-[14px] border text-left flex flex-col justify-between gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
               mode === "classic"
                 ? "bg-surface-2 border-turf shadow-[0_0_16px_rgba(61,220,132,0.15)] ring-1 ring-turf"
                 : "bg-surface/50 border-line hover:border-line/80 opacity-70"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-heading font-black uppercase tracking-wider text-sky flex items-center gap-1">
-                <Trophy className="w-3.5 h-3.5" /> Classic Match
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-heading font-black uppercase tracking-wider text-sky flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5" /> Classic Match
+                </span>
+              </div>
+              <span className="text-sm font-black font-heading text-chalk">2 WKTS • 2 OVERS</span>
+              <span className="text-[11px] text-muted leading-tight">
+                12 balls total with 2 wickets. Strategic chase pacing.
               </span>
             </div>
-            <span className="text-sm font-black font-heading text-chalk">2 WKTS • 2 OVERS</span>
-            <span className="text-[11px] text-muted leading-tight">
-              12 balls total with 2 wickets. Strategic chase pacing.
-            </span>
           </button>
+
+          {/* Endless Mode Card */}
+          <div
+            className={`p-3.5 rounded-[14px] border text-left flex flex-col justify-between gap-1.5 transition-all ${
+              mode === "endless"
+                ? "bg-surface-2 border-amber shadow-[0_0_16px_rgba(245,158,11,0.18)] ring-1 ring-amber"
+                : "bg-surface/50 border-line hover:border-line/80 opacity-70"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                playClickSound();
+                setMode("endless");
+              }}
+              aria-pressed={mode === "endless"}
+              className="w-full text-left flex flex-col gap-1 focus:outline-none"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-heading font-black uppercase tracking-wider text-amber flex items-center gap-1">
+                  <InfinityIcon className="w-3.5 h-3.5" /> Endless
+                </span>
+                <span className="text-[10px] font-bold text-amber bg-amber/10 border border-amber/30 px-1.5 py-0.5 rounded">
+                  NEW
+                </span>
+              </div>
+              <span className="text-sm font-black font-heading text-chalk">
+                {endlessVariant === "pro" ? "3 WKTS • NO LIMIT" : "1 WKT • NO LIMIT"}
+              </span>
+              <span className="text-[11px] text-muted leading-tight">
+                Bat until out! Higher total wins; tie triggers Super-Over.
+              </span>
+            </button>
+
+            {/* Config: 1 Wicket vs 3 Wickets (Endless Pro) */}
+            <div className="pt-2 border-t border-line/60 flex items-center justify-between gap-1 mt-1">
+              <span className="text-[10px] font-bold text-muted uppercase">Wickets:</span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playClickSound();
+                    setMode("endless");
+                    setEndlessVariant("standard");
+                  }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                    endlessVariant === "standard"
+                      ? "bg-amber text-ink"
+                      : "bg-surface border border-line text-muted hover:text-chalk"
+                  }`}
+                >
+                  1 (Def)
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playClickSound();
+                    setMode("endless");
+                    setEndlessVariant("pro");
+                  }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                    endlessVariant === "pro"
+                      ? "bg-amber text-ink"
+                      : "bg-surface border border-line text-muted hover:text-chalk"
+                  }`}
+                >
+                  3 (Pro)
+                </button>
+              </div>
+            </div>
+
+            {/* Personal Best Pill */}
+            {personalBest > 0 && (
+              <div className="mt-1 flex items-center justify-between text-[10px] bg-ink/70 px-2 py-0.5 rounded border border-line text-muted">
+                <span>Personal Best:</span>
+                <span className="text-amber font-mono font-bold">{personalBest} runs</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

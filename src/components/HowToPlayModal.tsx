@@ -79,18 +79,42 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
           </div>
 
           {/* Gesture reference */}
-          <div className="p-3 rounded-xl bg-surface-2/30 border border-line flex flex-col gap-2">
-            <span className="text-xs font-heading font-bold text-muted uppercase tracking-wider">
-              Authentic Hand Gestures (1 - 6)
+          <div className="p-3.5 rounded-xl bg-surface-2/60 border border-line flex flex-col gap-2.5">
+            <span className="text-xs font-heading font-bold text-turf uppercase tracking-wider flex items-center gap-1.5">
+              <Zap className="w-4 h-4" /> How to Show Numbers (Camera Gestures)
             </span>
-            <div className="grid grid-cols-6 gap-1.5 text-center">
-              {[1, 2, 3, 4, 5, 6].map((num) => (
-                <div key={num} className="p-1.5 rounded-lg bg-surface border border-line flex flex-col items-center">
-                  <Hand value={num} size={28} className="text-turf" />
-                  <span className="font-heading font-black text-sm text-chalk mt-1">{num}</span>
-                </div>
-              ))}
+            <p className="text-xs text-muted">
+              Hold your hand clearly in the camera view. MediaPipe analyzes extended fingers on your device:
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <div className="p-2 rounded-lg bg-ink/70 border border-line/60 flex items-center gap-2">
+                <span className="font-heading font-black text-turf text-base w-5 text-center">1</span>
+                <span className="text-[11px] text-muted">Index finger only</span>
+              </div>
+              <div className="p-2 rounded-lg bg-ink/70 border border-line/60 flex items-center gap-2">
+                <span className="font-heading font-black text-turf text-base w-5 text-center">2</span>
+                <span className="text-[11px] text-muted">Index + Middle</span>
+              </div>
+              <div className="p-2 rounded-lg bg-ink/70 border border-line/60 flex items-center gap-2">
+                <span className="font-heading font-black text-turf text-base w-5 text-center">3</span>
+                <span className="text-[11px] text-muted">Index + Middle + Ring</span>
+              </div>
+              <div className="p-2 rounded-lg bg-ink/70 border border-line/60 flex items-center gap-2">
+                <span className="font-heading font-black text-turf text-base w-5 text-center">4</span>
+                <span className="text-[11px] text-muted">4 fingers (thumb curled)</span>
+              </div>
+              <div className="p-2 rounded-lg bg-ink/70 border border-line/60 flex items-center gap-2">
+                <span className="font-heading font-black text-turf text-base w-5 text-center">5</span>
+                <span className="text-[11px] text-muted">Open palm (all 5 fingers)</span>
+              </div>
+              <div className="p-2 rounded-lg bg-ink/70 border border-line/60 flex items-center gap-2">
+                <span className="font-heading font-black text-amber text-base w-5 text-center">6</span>
+                <span className="text-[11px] text-muted"><strong>Thumbs-Up</strong> (thumb only)</span>
+              </div>
             </div>
+            <p className="text-[10px] text-muted italic">
+              💡 Stability: Hold gesture steady for ~300ms to lock. Low light? Tap buttons 1–6 anytime.
+            </p>
           </div>
 
           {/* Step 2: Coin Toss */}
@@ -108,12 +132,21 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
             <span className="text-xs font-heading font-bold text-amber uppercase tracking-wider flex items-center gap-1.5">
               <Trophy className="w-4 h-4" /> 3. Match Modes
             </span>
-            <ul className="text-xs text-muted space-y-1 list-disc pl-4">
+            <ul className="text-xs text-muted space-y-1.5 list-disc pl-4">
               <li>
                 <strong className="text-chalk">Sudden Death (Default):</strong> 1 wicket per innings. Maximum adrenaline — one mistake and you&apos;re out!
               </li>
               <li>
                 <strong className="text-chalk">Classic Mode:</strong> 2 wickets, 2 overs (12 balls). Tactical pacing and chase strategy.
+              </li>
+              <li>
+                <strong className="text-amber">Endless Mode:</strong> No over limit! Keep batting until you are out.
+                <br />
+                • <strong>1v1 Endless:</strong> Player A bats until out, then Player B chases with live Target &amp; Runs needed. Higher score wins; a tie triggers a 1-ball Super-Over sudden death decider!
+                <br />
+                • <strong>Solo Endless:</strong> Bat against the Practice Bot, track your scoring streak, and save your personal best to the global leaderboard!
+                <br />
+                • <strong>Endless Pro:</strong> Choose the 3-wicket variant for longer, deeper innings.
               </li>
             </ul>
           </div>
@@ -121,7 +154,7 @@ export const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ isOpen, onClose 
           {/* 10s Timer Warning */}
           <div className="flex items-center gap-2 p-3 rounded-xl bg-amber/10 border border-amber/30 text-amber text-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>You have 10 seconds per turn. If time expires, a number is chosen randomly.</span>
+            <span>Turn clock: 10s per ball with a 3-2-1 &quot;Get Ready&quot; countdown. If no hand is detected, the last stable reading or random pick is used.</span>
           </div>
         </div>
 

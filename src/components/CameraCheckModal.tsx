@@ -328,6 +328,34 @@ export function CameraCheckModal({
           </div>
         )}
 
+        {/* Privacy & Safety Policies */}
+        <div className="bg-surface-2/60 border border-line rounded-lg p-3 text-[11px] text-muted space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 cursor-pointer text-chalk font-medium">
+              <input
+                type="checkbox"
+                defaultChecked={
+                  typeof window !== "undefined"
+                    ? localStorage.getItem("hc_blur_video_start") === "true"
+                    : false
+                }
+                onChange={(e) => {
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("hc_blur_video_start", String(e.target.checked));
+                  }
+                }}
+                className="rounded border-line text-turf focus:ring-turf"
+              />
+              <span>Blur my video until the match starts</span>
+            </label>
+            <span className="text-[10px] text-turf font-mono">OPTIONAL</span>
+          </div>
+          <div className="pt-1 border-t border-line/60 flex items-start gap-1.5 text-[10px]">
+            <span className="text-turf font-bold">🔒 Zero Video Storage:</span>
+            <span>Video & audio are strictly peer-to-peer (WebRTC). Video is never recorded or stored on any server. Finger detection runs 100% locally on your browser. 18+ only.</span>
+          </div>
+        </div>
+
         {/* Action Buttons */}
         <div className="flex gap-3 pt-2">
           <Button variant="secondary" className="flex-1" onClick={handleClose}>
