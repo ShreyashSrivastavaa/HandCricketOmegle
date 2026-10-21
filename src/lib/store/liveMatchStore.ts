@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import type { GameState, MatchFormat, PlayerId, BallOutcome, MatchMode } from "../game/types";
-import { DEFAULT_SUDDEN_DEATH_FORMAT, CLASSIC_FORMAT, getRandomPick } from "../game/engine";
+import {
+  DEFAULT_SUDDEN_DEATH_FORMAT,
+  CLASSIC_FORMAT,
+  DEFAULT_ENDLESS_FORMAT,
+  ENDLESS_PRO_FORMAT,
+  getRandomPick,
+} from "../game/engine";
 import { getClientAbly } from "../client/ablyClient";
 import {
   playBatHitSound,
@@ -27,6 +33,18 @@ interface LiveMatchStore {
   // Match Config
   mode: MatchMode;
   setMode: (mode: MatchMode) => void;
+  endlessVariant: "standard" | "pro";
+  setEndlessVariant: (variant: "standard" | "pro") => void;
+  personalBest: number;
+  setPersonalBest: (pb: number) => void;
+
+  // Video & Gesture Controls
+  isVideoCallActive: boolean;
+  setIsVideoCallActive: (active: boolean) => void;
+  isGestureMode: boolean;
+  setIsGestureMode: (enabled: boolean) => void;
+  isPaused: boolean;
+  togglePause: () => void;
 
   // Active Match Info
   matchId: string | null;
@@ -229,10 +247,46 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
             const latestState = get().gameState;
             if (!latestState) return;
 
+            // Track Personal Best and leaderboard in Endless mode
+            if (latestState.format.isEndless) {
+              const activeInnings =
+                latestState.currentInnings === 1 ? latestState.innings1 : latestState.innings2;
+              const isUserBatting = activeInnings?.battingPlayer === get().userRole;
+              if (isUserBatting && activeInnings) {
+                const userScore = activeInnings.score;
+                const pb = get().personalBest;
+                if (userScore > pb) {
+                  get().setPersonalBest(userScore);
+                  fetch("/api/leaderboard", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      guestId: get().guestId,
+                      guestName: get().guestName,
+                      score: userScore,
+                      balls: activeInnings.balls,
+                      strikeStreak: activeInnings.strikeStreak,
+                    }),
+                  }).catch(() => {});
+                }
+              }
+            }
+
             if (latestState.phase === "match_ended") {
               set({ screen: "result", outcomeText: null });
             } else if (latestState.phase === "innings_break") {
               set({ screen: "innings_break", outcomeText: null });
+            } else if (latestState.phase === "super_over") {
+              set({
+                userPick: null,
+                isUserLocked: false,
+                opponentPick: null,
+                opponentTileState: "empty",
+                userTileState: "empty",
+                outcomeText: "SUPER OVER!",
+                isOutcomeWicket: false,
+              });
+              startBallTimer();
             } else {
               // Next ball
               set({
@@ -336,6 +390,29 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     mode: "sudden_death",
     setMode: (mode) => set({ mode }),
 
+    endlessVariant: "standard",
+    setEndlessVariant: (endlessVariant) => set({ endlessVariant }),
+
+    personalBest:
+      typeof window !== "undefined"
+        ? Number(localStorage.getItem("hand_cricket_endless_pb") || "0")
+        : 0,
+    setPersonalBest: (personalBest) => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("hand_cricket_endless_pb", String(personalBest));
+      }
+      set({ personalBest });
+    },
+
+    isVideoCallActive: true,
+    setIsVideoCallActive: (isVideoCallActive) => set({ isVideoCallActive }),
+
+    isGestureMode: true,
+    setIsGestureMode: (isGestureMode) => set({ isGestureMode }),
+
+    isPaused: false,
+    togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
+
     matchId: null,
     userRole: "p1",
     opponentName: "Opponent",
@@ -423,7 +500,14 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
         if (data.status === "matched") {
           // Instant match (bot or paired with waiting player)
-          const format = mode === "classic" ? CLASSIC_FORMAT : DEFAULT_SUDDEN_DEATH_FORMAT;
+          const format =
+            mode === "endless"
+              ? get().endlessVariant === "pro"
+                ? ENDLESS_PRO_FORMAT
+                : DEFAULT_ENDLESS_FORMAT
+              : mode === "classic"
+              ? CLASSIC_FORMAT
+              : DEFAULT_SUDDEN_DEATH_FORMAT;
           set({
             matchId: data.matchId,
             userRole: data.role || "p1",
@@ -472,7 +556,14 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         userPrivateChannel = ably.channels.get(`user:${currentGuestId}`);
         userPrivateChannel.subscribe("match-found", (msg: any) => {
           const matchData = msg.data;
-          const format = mode === "classic" ? CLASSIC_FORMAT : DEFAULT_SUDDEN_DEATH_FORMAT;
+          const format =
+            mode === "endless"
+              ? get().endlessVariant === "pro"
+                ? ENDLESS_PRO_FORMAT
+                : DEFAULT_ENDLESS_FORMAT
+              : mode === "classic"
+              ? CLASSIC_FORMAT
+              : DEFAULT_SUDDEN_DEATH_FORMAT;
 
           set({
             matchId: matchData.matchId,

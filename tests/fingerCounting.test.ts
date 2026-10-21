@@ -151,6 +151,68 @@ describe("Finger Counting & Landmark Classification", () => {
     });
   });
 
+  describe("Left Hand & Mirrored Selfie View Fixtures", () => {
+    function mirrorFixture(landmarks: Landmark[]): Landmark[] {
+      return landmarks.map((lm) => ({
+        x: 1 - lm.x,
+        y: lm.y,
+        z: lm.z,
+      }));
+    }
+
+    it("classifies Gesture 6 (Thumbs-Up) on a mirrored selfie camera view", () => {
+      const rightSix = createHandFixture({
+        thumb: true,
+        index: false,
+        middle: false,
+        ring: false,
+        pinky: false,
+      });
+      const mirroredSix = mirrorFixture(rightSix);
+      expect(classifyHandLandmarks(mirroredSix)).toBe(6);
+      expect(classifyHandLandmarks(mirroredSix, "Left", true)).toBe(6);
+    });
+
+    it("classifies Gesture 1-5 accurately on mirrored selfie camera view", () => {
+      for (let n = 1; n <= 5; n++) {
+        const fixture = createHandFixture({
+          thumb: n === 5,
+          index: n >= 1,
+          middle: n >= 2,
+          ring: n >= 3,
+          pinky: n >= 4,
+        });
+        const mirrored = mirrorFixture(fixture);
+        expect(classifyHandLandmarks(mirrored)).toBe(n);
+        expect(classifyHandLandmarks(mirrored, "Left", true)).toBe(n);
+      }
+    });
+
+    it("classifies Left hand correctly with explicit Left handedness", () => {
+      const leftFive = mirrorFixture(
+        createHandFixture({
+          thumb: true,
+          index: true,
+          middle: true,
+          ring: true,
+          pinky: true,
+        })
+      );
+      expect(classifyHandLandmarks(leftFive, "Left", false)).toBe(5);
+
+      const leftSix = mirrorFixture(
+        createHandFixture({
+          thumb: true,
+          index: false,
+          middle: false,
+          ring: false,
+          pinky: false,
+        })
+      );
+      expect(classifyHandLandmarks(leftSix, "Left", false)).toBe(6);
+    });
+  });
+
   describe("Rotated and Tilted Hand Fixtures", () => {
     it("classifies Gesture 2 correctly when hand is rotated 15 degrees", () => {
       const baseTwo = createHandFixture({

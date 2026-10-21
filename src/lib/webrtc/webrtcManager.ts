@@ -13,9 +13,15 @@ export interface MediaDeviceOption {
   label: string;
 }
 
+export interface SignalingChannel {
+  emit: (event: string, data?: any) => void | Promise<void>;
+  on: (event: string, callback: (data: any) => void) => void;
+  off?: (event: string, callback?: (data: any) => void) => void;
+}
+
 export class WebRTCManager {
   private pc: RTCPeerConnection | null = null;
-  private socket: Socket | null = null;
+  private socket: (Socket | SignalingChannel) | null = null;
   private localStream: MediaStream | null = null;
   private remoteStream: MediaStream | null = null;
   private isInitiator: boolean = false;
@@ -27,12 +33,14 @@ export class WebRTCManager {
   public onOpponentCameraToggle?: (enabled: boolean) => void;
   public onOpponentMicToggle?: (enabled: boolean) => void;
   public onOpponentGestureToggle?: (enabled: boolean) => void;
+  public onMediaError?: (err: Error) => void;
 
   public isCameraEnabled: boolean = true;
   public isMicEnabled: boolean = false; // Muted by default per rules
   public isSelfHidden: boolean = false;
   public isGestureModeEnabled: boolean = true;
   public isOpponentGestureModeEnabled: boolean = true;
+  public facingMode: "user" | "environment" = "user";
 
   private connectionState: WebRTCConnectionState = "idle";
 
@@ -102,8 +110,10 @@ export class WebRTCManager {
    */
   public async initLocalMedia(
     videoDeviceId?: string,
-    audioDeviceId?: string
+    audioDeviceId?: string,
+    facingMode: "user" | "environment" = this.facingMode
   ): Promise<MediaStream> {
+    this.facingMode = facingMode;
     if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       throw new Error("MediaDevices API not supported in this environment");
     }
@@ -120,13 +130,14 @@ export class WebRTCManager {
           height: { ideal: 480, max: 480 },
           frameRate: { ideal: 15, max: 15 },
           deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
-          facingMode: "user",
+          facingMode: videoDeviceId ? undefined : facingMode,
         }
       : {
           width: { ideal: 640 },
           height: { ideal: 480 },
           frameRate: { ideal: 24, max: 30 },
           deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
+          facingMode: videoDeviceId ? undefined : facingMode,
         };
 
     const audioConstraints: MediaTrackConstraints = {
@@ -139,34 +150,40 @@ export class WebRTCManager {
     // Stop existing stream if any
     this.stopLocalStream();
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: videoConstraints,
-      audio: audioConstraints,
-    });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: audioConstraints,
+      });
 
-    this.localStream = stream;
+      this.localStream = stream;
 
-    // Enforce default state: Camera on, Mic MUTED
-    const audioTrack = stream.getAudioTracks()[0];
-    if (audioTrack) {
-      audioTrack.enabled = this.isMicEnabled; // false by default
+      // Enforce default state: Camera on, Mic MUTED
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = this.isMicEnabled; // false by default
+      }
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = this.isCameraEnabled; // true
+      }
+
+      // Prefetch ephemeral ICE credentials asynchronously
+      this.getOrFetchIceServers().catch(() => {});
+
+      return stream;
+    } catch (err: any) {
+      this.onMediaError?.(err);
+      throw err;
     }
-
-    const videoTrack = stream.getVideoTracks()[0];
-    if (videoTrack) {
-      videoTrack.enabled = this.isCameraEnabled; // true
-    }
-
-    // Prefetch ephemeral ICE credentials asynchronously
-    this.getOrFetchIceServers().catch(() => {});
-
-    return stream;
   }
+
 
   /**
    * Start 1-to-1 peer connection session
    */
-  public async startPeerSession(socket: Socket, isInitiator: boolean): Promise<void> {
+  public async startPeerSession(socket: Socket | SignalingChannel | any, isInitiator: boolean): Promise<void> {
     this.socket = socket;
     this.isInitiator = isInitiator;
     this.pendingCandidates = [];
@@ -241,8 +258,8 @@ export class WebRTCManager {
     this.attachSocketListeners();
 
     // Signal ready and share gesture toggle setting
-    this.socket.emit("rtc:ready");
-    this.socket.emit("rtc:gesture_toggle", { enabled: this.isGestureModeEnabled });
+    this.socket?.emit("rtc:ready");
+    this.socket?.emit("rtc:gesture_toggle", { enabled: this.isGestureModeEnabled });
   }
 
   private attachSocketListeners() {
@@ -352,6 +369,44 @@ export class WebRTCManager {
   }
 
   /**
+   * Flip between front ('user') and back ('environment') camera on mobile devices
+   */
+  public async flipCamera(): Promise<"user" | "environment"> {
+    this.facingMode = this.facingMode === "user" ? "environment" : "user";
+    if (this.localStream && typeof navigator !== "undefined" && navigator.mediaDevices) {
+      try {
+        const oldVideoTrack = this.localStream.getVideoTracks()[0];
+        if (oldVideoTrack) {
+          oldVideoTrack.stop();
+          this.localStream.removeTrack(oldVideoTrack);
+        }
+
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: this.facingMode },
+          audio: false,
+        });
+
+        const newVideoTrack = newStream.getVideoTracks()[0];
+        if (newVideoTrack) {
+          this.localStream.addTrack(newVideoTrack);
+
+          // Replace track in active RTCPeerConnection sender
+          if (this.pc) {
+            const senders = this.pc.getSenders();
+            const videoSender = senders.find((s) => s.track?.kind === "video" || s.track === null);
+            if (videoSender) {
+              await videoSender.replaceTrack(newVideoTrack);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[WebRTC] flipCamera failed, falling back to previous facingMode", err);
+      }
+    }
+    return this.facingMode;
+  }
+
+  /**
    * Toggle mic on/off (starts muted)
    */
   public toggleMic(enabled?: boolean): boolean {
@@ -374,6 +429,47 @@ export class WebRTCManager {
   public toggleHideSelf(hidden?: boolean): boolean {
     this.isSelfHidden = hidden !== undefined ? hidden : !this.isSelfHidden;
     return this.isSelfHidden;
+  }
+
+  /**
+   * Adapts an Ably realtime match channel into a SignalingChannel and starts peer session
+   */
+  public async startAblyPeerSession(
+    ablyChannel: any,
+    myGuestId: string,
+    isInitiator: boolean
+  ): Promise<void> {
+    const listeners: Map<string, Function[]> = new Map();
+
+    const handleAblyMessage = (msg: any) => {
+      const data = msg.data;
+      if (!data || data.senderId === myGuestId) return; // ignore self-messages
+
+      const event = msg.name;
+      const callbacks = listeners.get(event);
+      if (callbacks) {
+        callbacks.forEach((cb) => cb(data));
+      }
+    };
+
+    ablyChannel.subscribe(handleAblyMessage);
+
+    const channelAdapter: SignalingChannel = {
+      emit: (event: string, data?: any) => {
+        ablyChannel.publish(event, { ...data, senderId: myGuestId });
+      },
+      on: (event: string, callback: (data: any) => void) => {
+        if (!listeners.has(event)) {
+          listeners.set(event, []);
+        }
+        listeners.get(event)!.push(callback);
+      },
+      off: (event: string) => {
+        listeners.delete(event);
+      },
+    };
+
+    await this.startPeerSession(channelAdapter, isInitiator);
   }
 
   /**
@@ -416,12 +512,12 @@ export class WebRTCManager {
 
     // 4. Detach socket signal listeners
     if (this.socket) {
-      this.socket.off("rtc:ready");
-      this.socket.off("rtc:offer");
-      this.socket.off("rtc:answer");
-      this.socket.off("rtc:ice");
-      this.socket.off("rtc:camera_toggle");
-      this.socket.off("rtc:mic_toggle");
+      this.socket.off?.("rtc:ready");
+      this.socket.off?.("rtc:offer");
+      this.socket.off?.("rtc:answer");
+      this.socket.off?.("rtc:ice");
+      this.socket.off?.("rtc:camera_toggle");
+      this.socket.off?.("rtc:mic_toggle");
       this.socket = null;
     }
 
