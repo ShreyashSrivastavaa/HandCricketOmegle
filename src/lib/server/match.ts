@@ -12,6 +12,8 @@ import {
   forfeitMatch as engineForfeitMatch,
   DEFAULT_SUDDEN_DEATH_FORMAT,
   CLASSIC_FORMAT,
+  DEFAULT_ENDLESS_FORMAT,
+  applySuperOverBall,
 } from "../game/engine";
 import {
   getBotBallPick,
@@ -44,14 +46,14 @@ export interface RedisMatch {
 export interface WaitingQueueEntry {
   guestId: string;
   guestName: string;
-  mode: "sudden_death" | "classic";
+  mode: "sudden_death" | "classic" | "endless";
   joinedAt: number;
 }
 
 /**
  * Returns the queue key for a match mode.
  */
-function getQueueKey(mode: "sudden_death" | "classic"): string {
+function getQueueKey(mode: "sudden_death" | "classic" | "endless"): string {
   return `queue:hand_cricket:${mode}`;
 }
 
@@ -123,7 +125,7 @@ end
 export async function joinMatchmakingQueue(
   guestId: string,
   guestName: string,
-  mode: "sudden_death" | "classic" = "sudden_death"
+  mode: "sudden_death" | "classic" | "endless" = "sudden_death"
 ): Promise<{
   status: "matched" | "queued";
   matchId?: string;
@@ -159,7 +161,12 @@ export async function joinMatchmakingQueue(
   if (waitingPlayer) {
     // Found a match! Pair guest with waitingPlayer
     const matchId = `match_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-    const format = mode === "classic" ? CLASSIC_FORMAT : DEFAULT_SUDDEN_DEATH_FORMAT;
+    const format =
+      mode === "endless"
+        ? DEFAULT_ENDLESS_FORMAT
+        : mode === "classic"
+        ? CLASSIC_FORMAT
+        : DEFAULT_SUDDEN_DEATH_FORMAT;
 
     // p1 is waiting player, p2 is newly joined player
     const p1 = { guestId: waitingPlayer.guestId, name: waitingPlayer.guestName };
@@ -233,7 +240,7 @@ export async function joinMatchmakingQueue(
  */
 export async function leaveMatchmakingQueue(
   guestId: string,
-  mode: "sudden_death" | "classic" = "sudden_death"
+  mode: "sudden_death" | "classic" | "endless" = "sudden_death"
 ): Promise<void> {
   const redis = getRedis();
   const queueKey = getQueueKey(mode);
@@ -255,7 +262,7 @@ export async function leaveMatchmakingQueue(
 export async function createBotMatch(
   guestId: string,
   guestName: string,
-  mode: "sudden_death" | "classic" = "sudden_death"
+  mode: "sudden_death" | "classic" | "endless" = "sudden_death"
 ): Promise<{
   matchId: string;
   role: "p1";
@@ -264,7 +271,13 @@ export async function createBotMatch(
 }> {
   const redis = getRedis();
   const matchId = `match_bot_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
-  const format = mode === "classic" ? CLASSIC_FORMAT : DEFAULT_SUDDEN_DEATH_FORMAT;
+  const format =
+    mode === "endless"
+      ? DEFAULT_ENDLESS_FORMAT
+      : mode === "classic"
+      ? CLASSIC_FORMAT
+      : DEFAULT_SUDDEN_DEATH_FORMAT;
+
 
   const botNames = ["BotStriker", "RoboSpinner", "CricketAI", "CyberBowler", "BotBlitz"];
   const botName = botNames[Math.floor(Math.random() * botNames.length)];
@@ -470,7 +483,7 @@ export async function handleBallMove(
   if (!match) throw new Error("Match not found");
 
   const state = match.gameState;
-  if (state.phase !== "innings_1" && state.phase !== "innings_2") {
+  if (state.phase !== "innings_1" && state.phase !== "innings_2" && state.phase !== "super_over") {
     throw new Error(`Cannot submit ball move in phase ${state.phase}`);
   }
 
@@ -510,13 +523,24 @@ export async function handleBallMove(
 
   // If both players have picked, resolve authoritative ball delivery!
   if (p1Pick !== undefined && p2Pick !== undefined) {
-    const activeInnings = state.currentInnings === 1 ? state.innings1 : state.innings2!;
-    const isP1Batting = activeInnings.battingPlayer === "p1";
+    let nextState: GameState;
+    let outcome: BallOutcome;
 
-    const batterPick = isP1Batting ? p1Pick : p2Pick;
-    const bowlerPick = isP1Batting ? p2Pick : p1Pick;
+    if (state.phase === "super_over") {
+      const res = applySuperOverBall(state, p1Pick, p2Pick);
+      nextState = res.nextState;
+      outcome = res.outcome;
+    } else {
+      const activeInnings = state.currentInnings === 1 ? state.innings1 : state.innings2!;
+      const isP1Batting = activeInnings.battingPlayer === "p1";
 
-    const { nextState, outcome } = applyBall(state, batterPick, bowlerPick);
+      const batterPick = isP1Batting ? p1Pick : p2Pick;
+      const bowlerPick = isP1Batting ? p2Pick : p1Pick;
+
+      const res = applyBall(state, batterPick, bowlerPick);
+      nextState = res.nextState;
+      outcome = res.outcome;
+    }
 
     // Reset ball moves and increment index
     match.currentBallMoves = {};
@@ -525,13 +549,16 @@ export async function handleBallMove(
 
     await saveMatch(match);
 
+    const activeInnings = state.currentInnings === 1 ? state.innings1 : (state.innings2 || state.innings1);
+    const isP1Batting = activeInnings.battingPlayer === "p1";
+
     // Broadcast authoritative outcome & revealed picks to both players
     await publishToAbly(`match:${matchId}`, "ball-resolved", {
       ballIndex,
       p1Pick,
       p2Pick,
-      batterPick,
-      bowlerPick,
+      batterPick: state.phase === "super_over" ? p1Pick : isP1Batting ? p1Pick : p2Pick,
+      bowlerPick: state.phase === "super_over" ? p2Pick : isP1Batting ? p2Pick : p1Pick,
       outcome,
       gameState: nextState,
     });

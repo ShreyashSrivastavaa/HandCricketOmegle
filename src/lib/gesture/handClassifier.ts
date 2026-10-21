@@ -45,15 +45,30 @@ function isThumbExtended(
   thumbIp: Landmark,
   thumbTip: Landmark,
   indexMcp: Landmark,
-  pinkyMcp: Landmark
+  pinkyMcp: Landmark,
+  handedness?: "Left" | "Right" | string,
+  isMirrored?: boolean
 ): boolean {
   const tipDistToPinky = getDistance(thumbTip, pinkyMcp);
   const ipDistToPinky = getDistance(thumbIp, pinkyMcp);
   const tipDistToWrist = getDistance(thumbTip, wrist);
   const mcpDistToWrist = getDistance(thumbMcp, wrist);
 
-  // When thumb is extended (thumbs-up or open palm), thumb tip is far from pinky base and wrist
-  return tipDistToPinky > ipDistToPinky && tipDistToWrist > mcpDistToWrist * 1.05;
+  // Geometric distance check: thumb tip is further from pinky base and wrist than IP/MCP
+  const distBasedExtended = tipDistToPinky > ipDistToPinky && tipDistToWrist > mcpDistToWrist * 1.05;
+
+  // X-distance relative to handedness & palm orientation:
+  // If pinky MCP is to the right of index MCP, thumb extends outward to the left
+  // If pinky MCP is to the left of index MCP, thumb extends outward to the right
+  const isPinkyRight = pinkyMcp.x > indexMcp.x;
+  const xSpan = Math.abs(thumbTip.x - indexMcp.x);
+  const xDirectionValid = isPinkyRight ? thumbTip.x < indexMcp.x : thumbTip.x > indexMcp.x;
+  const xExtended = xSpan > 0.05 && xDirectionValid;
+
+  // Vertical thumb (thumbs-up): thumb tip is higher (smaller Y) than thumb IP and MCP
+  const isThumbsUpVertical = thumbTip.y < thumbIp.y && thumbIp.y < thumbMcp.y;
+
+  return distBasedExtended || (xExtended && isThumbsUpVertical);
 }
 
 /**
@@ -70,7 +85,11 @@ function isThumbExtended(
  *
  * Returns 0-6 if valid gesture, or null if unclear/ambiguous.
  */
-export function classifyHandLandmarks(landmarks: Landmark[]): HandGesture | null {
+export function classifyHandLandmarks(
+  landmarks: Landmark[],
+  handedness?: "Left" | "Right" | string,
+  isMirrored?: boolean
+): HandGesture | null {
   if (!landmarks || landmarks.length < 21) {
     return null;
   }
@@ -110,7 +129,16 @@ export function classifyHandLandmarks(landmarks: Landmark[]): HandGesture | null
   const middleUp = isFingerExtended(wrist, middleMcp, middlePip, middleDip, middleTip);
   const ringUp = isFingerExtended(wrist, ringMcp, ringPip, ringDip, ringTip);
   const pinkyUp = isFingerExtended(wrist, pinkyMcp, pinkyPip, pinkyDip, pinkyTip);
-  const thumbUp = isThumbExtended(wrist, thumbMcp, thumbIp, thumbTip, indexMcp, pinkyMcp);
+  const thumbUp = isThumbExtended(
+    wrist,
+    thumbMcp,
+    thumbIp,
+    thumbTip,
+    indexMcp,
+    pinkyMcp,
+    handedness,
+    isMirrored
+  );
 
   // 6: Thumb only (Thumbs-up) -> thumb extended, all other 4 fingers curled
   if (thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) {
@@ -152,7 +180,7 @@ export function classifyHandLandmarks(landmarks: Landmark[]): HandGesture | null
 }
 
 /**
- * GestureStabilizer enforces holding a gesture steadily for ~300ms / 5 consecutive frames before locking.
+ * GestureStabilizer enforces holding a gesture steadily for ~300ms / ~8 consecutive frames before locking.
  * Once locked, subsequent detections are permanently ignored until reset.
  */
 export class GestureStabilizer {
@@ -162,7 +190,7 @@ export class GestureStabilizer {
   private isLocked: boolean = false;
   private lockedValue: HandGesture | null = null;
   private requiredHoldMs: number = 300;
-  private requiredConsecutiveFrames: number = 5;
+  private requiredConsecutiveFrames: number = 8;
 
   constructor(requiredHoldMs: number = 300, requiredConsecutiveFrames?: number) {
     this.requiredHoldMs = requiredHoldMs;
@@ -170,7 +198,7 @@ export class GestureStabilizer {
       requiredConsecutiveFrames !== undefined
         ? requiredConsecutiveFrames
         : requiredHoldMs === 300
-        ? 5
+        ? 8
         : 1;
   }
 
