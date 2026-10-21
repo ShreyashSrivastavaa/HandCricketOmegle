@@ -13,6 +13,7 @@ import { ResultBanner } from "@/components/ResultBanner";
 import { HowToPlayModal } from "@/components/HowToPlayModal";
 import { ReportModal } from "@/components/ReportModal";
 import { PlayWithFriendModal } from "@/components/PlayWithFriendModal";
+import { CameraCheckModal } from "@/components/CameraCheckModal";
 
 export default function HomePage() {
   const {
@@ -39,6 +40,7 @@ export default function HomePage() {
   } = useLiveMatchStore();
 
   const [isFriendModalOpen, setIsFriendModalOpen] = useState<boolean>(false);
+  const [isCameraCheckOpen, setIsCameraCheckOpen] = useState<boolean>(false);
 
   useEffect(() => {
     initGuestSession();
@@ -57,7 +59,7 @@ export default function HomePage() {
       <div className="flex-1 flex flex-col justify-center w-full">
         {screen === "landing" && (
           <LandingScreen
-            onFindMatch={() => startMatchmaking(false)}
+            onFindMatch={() => setIsCameraCheckOpen(true)}
             onPlayVsBot={() => startMatchmaking(true)}
             onPlayWithFriend={() => setIsFriendModalOpen(true)}
             onOpenRules={() => setIsRulesOpen(true)}
@@ -135,6 +137,16 @@ export default function HomePage() {
         guestId={guestId}
         guestName={guestName}
         defaultMode={mode}
+      />
+
+      <CameraCheckModal
+        isOpen={isCameraCheckOpen}
+        initialMode="video"
+        onReady={() => {
+          setIsCameraCheckOpen(false);
+          startMatchmaking(false);
+        }}
+        onCancel={() => setIsCameraCheckOpen(false)}
       />
     </div>
   );

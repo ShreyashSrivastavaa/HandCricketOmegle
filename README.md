@@ -9,14 +9,16 @@ Deployable directly to **Vercel** with **Ably Pub/Sub** and **Upstash Redis**.
 ## 🌟 Features
 
 - **Omegle-Style Matchmaking**: Instant 1v1 pairing via Upstash Redis atomic Lua queue pairing with guest IDs stored in `httpOnly` secure cookies.
-- **Mutual 5-Second Ready Check**: High-visibility countdown modal verifying both players are active and focused before launching WebRTC video or match deliveries (REL-02).
-- **Unlimited Search & Bot Warmup**: Indefinite matchmaking search with interactive "Warm Up vs Bot" practice directly in the waiting screen without losing queue position.
-- **Endless Multi-Round Series**: Running series scoreboard with automatic toss role alternation (Game 1 $\rightarrow$ P1, Game 2 $\rightarrow$ P2) for continuous duels.
-- **Stranger-to-Friend Bridge**: Convert any random stranger match into a persistent private friend duel with a shareable 6-character room code without stream interruption.
+- **Live Video Arena (WebRTC P2P)**: Peer-to-peer WebRTC video + audio over serverless Ably signaling with STUN/TURN relay fallbacks (Metered, Twilio, Cloudflare Calls).
+- **On-Device Computer Vision Gestures**: MediaPipe HandLandmarker running 100% locally in browser via WebAssembly/WebGL. Zero video frames sent to servers.
+- **Indian Hand Cricket Gestures**: 1 to 5 extended fingers = 1 to 5 runs; 6 runs = Thumbs-Up (fist with thumb extended). ~300ms gesture stability window, 3-2-1 countdown lock, and AR hand skeleton canvas overlay.
+- **Endless Mode**: No over limits! Bat until you are out. Features live strike streaks (🔥), runs/balls HUD, milestone celebrations at 25/50/100 runs, and sudden-death 1-ball super-over tiebreakers.
+- **Endless Pro & Solo Bot**: Support for 1-wicket (default) or 3-wicket ("Endless Pro") variants, plus Solo Endless mode with localStorage personal best and `/api/leaderboard` integration.
+- **Zero Video Storage Guarantee**: Strict privacy pledge with pre-match camera test, 18+ age verification, video blur toggle, and instant block/report/skip controls.
+- **Fail-Safe Tap Fallback**: Seamless manual tap buttons (1–6) available at all times, auto-suggested if no hand is detected for 3 seconds.
 - **Server-Authoritative State Engine**: Pure, framework-agnostic reducer engine (`/lib/game/engine.ts`). Clients never receive an opponent's pick until both are locked in.
-- **Screen Wake Lock & Visibility Recovery**: Screen Wake Lock API (`navigator.wakeLock`) prevents screen sleep during live matches, with auto-pause/resume on tab backgrounding (REL-04).
-- **Ephemeral ICE / TURN Security**: Short-lived credentials generated server-side via `POST /api/ice`, completely eliminating client-side credential extraction (SEC-01).
-- **Comprehensive Privacy & Safety**: 18+ age verification, zero video storage disclosure, mutual blocklist isolation, and automated 3-report 24-hour suspension.
+- **Screen Wake Lock & Tactical Pause**: Screen Wake Lock API (`navigator.wakeLock`) prevents screen sleep during live matches, with tactical pause support for marathon sessions.
+- **Ephemeral ICE / TURN Security**: Short-lived credentials generated server-side via `POST /api/ice`, completely eliminating client-side credential extraction.
 - **Accessibility & A11y**: Full keyboard hotkeys (`1`–`6` picks, `Enter`/`Space` lock-in), minimum 64px tap targets, and full `@media (prefers-reduced-motion: reduce)` support.
 - **Deployment Ready**: Fully deployable to Vercel with zero extra servers. See [DEPLOYMENT.md](file:///d:/HandCricketOmegle/DEPLOYMENT.md) for full setup instructions.
 
@@ -198,6 +200,19 @@ ABLY_API_KEY=your_actual_ably_key
 UPSTASH_REDIS_REST_URL=https://your-database.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your_actual_token
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Optional WebRTC TURN Server Fallbacks (Google STUN is active by default)
+# Option A: Metered TURN (metered.ca)
+METERED_API_KEY=your_metered_api_key
+METERED_APP_NAME=your_metered_app_name
+
+# Option B: Twilio Network Traversal (twilio.com)
+TWILIO_ACCOUNT_SID=your_twilio_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+
+# Option C: Coturn / Cloudflare Calls HMAC
+COTURN_URL=turn:turn.yourdomain.com:3478
+COTURN_SECRET=your_turn_shared_secret
 ```
 
 ### 4. Running the Development Server
@@ -219,7 +234,7 @@ npx tsc --noEmit
 # 2. Run ESLint
 npm run lint
 
-# 3. Run all Vitest Unit Tests (70 tests covering all game engine logic)
+# 3. Run all Vitest Unit Tests (131 tests covering engine, gesture detection, and endless mode)
 npm test
 
 # 4. Run Playwright E2E Smoke Tests
@@ -250,58 +265,71 @@ HandCricketOmegle is specifically engineered for zero-server deployment on Verce
    | `UPSTASH_REDIS_REST_URL` | `https://...upstash.io` | REST endpoint for queues & matches |
    | `UPSTASH_REDIS_REST_TOKEN` | `your_upstash_token` | REST bearer token |
    | `NEXT_PUBLIC_APP_URL` | `https://your-domain.vercel.app` | Production canonical URL |
+   | `METERED_API_KEY` | *(Optional)* | Ephemeral TURN relay fallback |
+   | `METERED_APP_NAME` | *(Optional)* | Metered app domain |
 6. Click **Deploy**. Vercel will build and assign your production URL.
 
 ---
 
 ## 📋 Manual QA Checklist
 
-### 1. Two Browser Tabs Stranger Match
-1. Open [http://localhost:3000](http://localhost:3000) in **Tab A** (Regular window).
-2. Open [http://localhost:3000](http://localhost:3000) in **Tab B** (Incognito window to guarantee separate cookies).
-3. In Tab A, click **"FIND STRANGER MATCH"** (Sudden Death mode).
-4. In Tab B, click **"FIND STRANGER MATCH"** (Sudden Death mode).
+### 1. Two Browser / Two Device Matchmaking & Video Call
+1. Open [http://localhost:3000](http://localhost:3000) on **Device/Tab A** (Regular window).
+2. Open [http://localhost:3000](http://localhost:3000) on **Device/Tab B** (Incognito window or phone).
+3. On Tab A, click **"FIND STRANGER MATCH"**. The **Camera Check & Consent Modal** opens:
+   - Verify camera preview starts up.
+   - Check the **"Blur my video until match starts"** toggle.
+   - Click **"Accept & Continue"**.
+4. Repeat step 3 on Tab B.
 5. **Expected Outcome**:
-   - Both tabs immediately exit searching and land on the **Toss Screen**.
-   - Tab A is assigned P1 (calls Toss), Tab B is assigned P2 (picks number).
-   - Once toss is resolved, winner chooses Bat or Bowl, and both smoothly transition to the **Live Match Screen**.
+   - Both tabs pair immediately and transition through the mutual ready-check and toss.
+   - Once the match starts, Tab A sees Tab B's large video, and vice versa.
+   - Each player's local stream displays as a PiP in the corner.
+   - Mic mute/unmute, Camera toggle, Flip Camera, and Blur Video controls respond instantly.
 
-### 2. Simultaneous Pick & Secret Reveal
-1. In Tab A (Batter), select number `4`. Notice Tab A shows `LOCKED IN 🔒` and Tab B shows `Opponent is Ready!`. Opponent's pick is **never visible**.
-2. In Tab B (Bowler), select number `6`.
-3. **Expected Outcome**:
-   - 3-2-1 suspense animation triggers on both screens.
-   - Hands flip: Tab A reveals `4`, Tab B reveals `6`.
-   - Scoreboard updates to `4/0`, runs banner says `+4 RUNS`, bat strike sound plays.
+### 2. Camera Finger Gestures & Live AR Skeleton
+1. Position your hand clearly in front of the camera with good lighting.
+2. Hold up **1 to 5 fingers**:
+   - The detected number badge updates with confidence (e.g., `3 ✋`).
+   - The AR hand skeleton canvas draws landmarks and joints in real time.
+3. Hold up a **thumbs-up** (closed fist, thumb extended):
+   - The detected number badge updates to `6 🏏` (Indian Hand Cricket convention).
+4. Watch the 3-2-1 turn countdown:
+   - When the countdown reaches "SHOW!", the stable reading locks in.
+   - The pick is submitted as a secret pick. Once both players submit, the reveal animation triggers.
+5. **Low-Light / 3s Auto-Suggest Fallback**:
+   - Move your hand out of frame for 3 seconds.
+   - An amber toast appears: *"Hand not detected? Tap buttons below!"*.
+   - Tap any number (1–6) on the numeric keypad to pick immediately.
 
-### 3. Wicket & Chase Resolution
-1. Have both players pick the same number (e.g., both pick `3`).
-2. **Expected Outcome**:
-   - Screen-shake animation triggers with a wooden wicket crash sound.
-   - In Sudden Death (1 wicket), Innings 1 concludes and transitions to the **Innings Break Screen** displaying target `Target: 5 runs`.
-   - Start 2nd Innings: Bowler and Batter switch roles.
-   - If Tab B scores 5 or more, Tab B wins; if out before 5, Tab A wins. Confetti shoots across the screen on victory.
+### 3. Endless Mode (1v1 Match)
+1. On the landing screen, select **"Endless Mode"** (1 wicket or 3 wickets "Endless Pro").
+2. Match with an opponent or friend via room code.
+3. **Batter's Turn**:
+   - Batter keeps scoring every ball (runs added = number picked).
+   - The live HUD tracks Runs, Balls Faced, and Strike Streak (🔥).
+   - Milestone celebratory animations trigger when crossing 25, 50, and 100 runs.
+   - Innings ends only when the bowler picks the exact same number (Wicket!).
+4. **Chaser's Turn**:
+   - Chaser sees a prominent live **Target** and **Runs Needed** display.
+   - The chase ends the exact ball the chaser exceeds the target.
+   - If scores are tied when the chaser loses their final wicket, the match triggers a sudden-death **1-Ball Super-Over Decider**!
 
-### 4. 10-Second Timer Auto-Pick Test
-1. When a new ball starts, do not click any number.
-2. Watch the circular SVG timer count down: green -> amber (3s) -> pulsing red (1s).
-3. **Expected Outcome**:
-   - At 0 seconds, the client automatically executes an auto-pick (1–6).
-   - The move is safely sent to the authoritative server and locks in without stalling the match.
+### 4. Solo Endless Mode (vs Practice Bot)
+1. Select **Endless Mode**, then click **"Practice vs Bot"**.
+2. Bat against the AI bot until out.
+3. Upon getting out:
+   - The summary screen displays final Runs, Balls Faced, Strike Rate, 4s, 6s, and Highest Streak.
+   - Personal best is stored locally in `localStorage` (`hand_cricket_endless_pb`).
+   - Scores are submitted to `/api/leaderboard` for daily and all-time rankings.
 
-### 5. 12-Second Bot Fallback Test
-1. In a single browser tab, click **"FIND STRANGER MATCH"**.
-2. Do not open any other tab. Wait 12 seconds on the searching screen.
-3. **Expected Outcome**:
-   - A pulsing card appears: *"No opponents in queue. Play vs Server Bot?"*.
-   - Clicking **"Play vs Bot"** immediately pairs with an AI opponent (clearly labeled with a 🤖 badge).
-
-### 6. Disconnect & Forfeit Test
-1. Pair Tab A and Tab B into an active match.
-2. Close Tab B.
-3. Tab A detects presence leave:
-   - A warning banner appears: *"Opponent disconnected! Waiting 15s before forfeit..."*.
-4. If Tab B does not return within 15 seconds, Tab A automatically wins by forfeit with full match resolution.
+### 5. Tactical Pause & Disconnect Handling
+1. During an Endless match, tap the **Pause** icon on the video controls bar.
+2. A tactical pause banner displays: *"Tactical Pause active"*.
+3. Tap **Resume** to continue play.
+4. If a player disconnects or closes their tab:
+   - The 15-second forfeit timer starts.
+   - If the player fails to reconnect within 15 seconds, the remaining player is awarded a forfeit win.
 
 ---
 

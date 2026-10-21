@@ -67,14 +67,31 @@ export default function TermsPage() {
             </ul>
           </section>
 
-          {/* Section 3: Privacy & Camera */}
+          {/* Section 3: Privacy, Camera & On-Device Gesture Vision */}
           <section className="flex flex-col gap-3">
             <h2 className="font-heading font-bold text-lg sm:text-xl text-turf uppercase flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5" />
-              3. Camera &amp; Peer-to-Peer Streaming
+              3. Camera, WebRTC &amp; On-Device Gesture Recognition
             </h2>
             <p className="text-xs sm:text-sm text-chalk/90 leading-relaxed">
-              Video streams in HandCricketOmegle travel directly peer-to-peer (P2P) between browsers via WebRTC (encrypted via DTLS/SRTP). <strong>We never record, intercept, or store your camera or microphone video streams on any server.</strong> You retain complete control to blur your video or mute your microphone at any time during a match.
+              Video streams in HandCricketOmegle travel directly peer-to-peer (P2P) between browsers via WebRTC (encrypted via DTLS/SRTP). <strong>We never record, intercept, or store your camera or microphone video streams on any server.</strong>
+            </p>
+            <p className="text-xs sm:text-sm text-chalk/90 leading-relaxed">
+              Hand gesture detection is executed 100% on-device using WebAssembly/WebGL (MediaPipe Hands). No camera frames or biometric images are ever transmitted to our servers or third parties. Only the locked pick value (an integer between 1 and 6) is transmitted via encrypted serverless signaling to resolve match deliveries authoritatively.
+            </p>
+            <p className="text-xs sm:text-sm text-chalk/90 leading-relaxed">
+              Players must provide camera consent prior to entering video-enabled matchmaking. You retain complete control to mute audio, toggle camera off, blur video, or switch to manual tap mode at any time.
+            </p>
+          </section>
+
+          {/* Section 4: Game Modes & Match Integrity */}
+          <section className="flex flex-col gap-3">
+            <h2 className="font-heading font-bold text-lg sm:text-xl text-turf uppercase flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5" />
+              4. Game Modes &amp; Server-Authoritative Integrity
+            </h2>
+            <p className="text-xs sm:text-sm text-chalk/90 leading-relaxed">
+              All deliveries across Sudden Death, Classic, and Endless modes are resolved by our authoritative game engine. Secret picks are locked before reveal. Stalling or leaving during active play will forfeit the match. In Endless mode, tactical pauses are permitted, but persistent inactivity beyond the turn clock will trigger automatic moves or forfeit resolution.
             </p>
           </section>
 
