@@ -12,9 +12,9 @@ const createRoomSchema = z.object({
   mode: z.enum(["video", "game_only"]).default("game_only"),
   format: z
     .object({
-      mode: z.enum(["sudden_death", "classic"]).optional(),
-      maxWickets: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
-      maxOvers: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
+      mode: z.enum(["sudden_death", "classic", "endless"]).optional(),
+      maxWickets: z.number().int().min(1).max(10).default(1),
+      maxOvers: z.number().int().min(0).max(50).default(1),
     })
     .default({ maxWickets: 1, maxOvers: 1 }),
 });

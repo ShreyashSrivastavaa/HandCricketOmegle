@@ -7,7 +7,7 @@ import { rateLimit } from "@/lib/server/ratelimit";
 export const runtime = "nodejs";
 
 const leaveQueueSchema = z.object({
-  mode: z.enum(["sudden_death", "classic"]).default("sudden_death"),
+  mode: z.enum(["sudden_death", "classic", "endless"]).default("sudden_death"),
 });
 
 export async function POST(req: NextRequest) {

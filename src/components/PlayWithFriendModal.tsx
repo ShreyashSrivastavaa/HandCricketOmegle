@@ -21,14 +21,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/Button";
 import { playClickSound } from "@/lib/client/audio";
-import type { OversOption, WicketsOption } from "@/lib/game-core/types";
+import type { OversOption, WicketsOption, MatchMode } from "@/lib/game/types";
 
 interface PlayWithFriendModalProps {
   isOpen: boolean;
   onClose: () => void;
   guestId?: string;
   guestName?: string;
-  defaultMode?: "sudden_death" | "classic";
+  defaultMode?: MatchMode;
 }
 
 export function PlayWithFriendModal({

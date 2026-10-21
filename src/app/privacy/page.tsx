@@ -75,6 +75,26 @@ export default function PrivacyPage() {
               Camera and microphone permissions are requested solely when you enter the Match Setup screen, never upon loading the website. When you click &ldquo;Next Opponent&rdquo; or return to the lobby, all media tracks are immediately and completely terminated.
             </p>
           </section>
+
+          <section className="bg-surface border border-line rounded-xl p-5 sm:p-6 space-y-2">
+            <div className="flex items-center gap-2 text-turf font-bold text-sm sm:text-base uppercase tracking-wide">
+              <Lock className="w-4 h-4" />
+              <span>5. On-Device Finger Tracking (MediaPipe Hands)</span>
+            </div>
+            <p className="text-muted leading-relaxed">
+              Hand landmark detection and finger counting run 100% locally on your device inside your web browser via WebAssembly. Camera video frames, hand coordinates, and visual data are <strong>never transmitted to any server</strong>. Only your final locked choice (1 to 6) is sent over the network to resolve each ball.
+            </p>
+          </section>
+
+          <section className="bg-surface border border-line rounded-xl p-5 sm:p-6 space-y-2">
+            <div className="flex items-center gap-2 text-turf font-bold text-sm sm:text-base uppercase tracking-wide">
+              <Database className="w-4 h-4" />
+              <span>6. 18+ Verification &amp; Leaderboards</span>
+            </div>
+            <p className="text-muted leading-relaxed">
+              This stranger-facing platform is strictly for adults (18+). If you participate in Endless Mode, your high score, balls faced, and strike streak may be listed on the community leaderboard using your anonymous guest nickname.
+            </p>
+          </section>
         </div>
       </main>
 

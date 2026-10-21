@@ -8,7 +8,7 @@ import { isGuestBanned } from "@/lib/server/safety";
 export const runtime = "nodejs";
 
 const joinQueueSchema = z.object({
-  mode: z.enum(["sudden_death", "classic"]).default("sudden_death"),
+  mode: z.enum(["sudden_death", "classic", "endless"]).default("sudden_death"),
   playVsBot: z.boolean().default(false),
   guestName: z.string().optional(),
   guestId: z.string().optional(),
