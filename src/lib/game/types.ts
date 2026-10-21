@@ -1,11 +1,63 @@
 export type WicketsOption = 1 | 2 | 3;
-export type OversOption = 1 | 2 | 3;
-export type MatchMode = "sudden_death" | "classic";
+export type OversOption = 0 | 1 | 2 | 3;
+export type MatchMode = "sudden_death" | "classic" | "endless";
+
+export interface ModeVariant {
+  id: string;
+  label: string;
+  wickets: number;
+}
+
+export interface ModeConfig {
+  id: MatchMode;
+  wickets: number;
+  overs: number; // 0 for endless (no limit)
+  endless: boolean;
+  label: string;
+  description: string;
+  badge?: string;
+  variants?: ModeVariant[];
+}
+
+export const MODE_CONFIGS: Record<MatchMode, ModeConfig> = {
+  sudden_death: {
+    id: "sudden_death",
+    wickets: 1,
+    overs: 2,
+    endless: false,
+    label: "Sudden Death",
+    description: "Instant knockout. Innings ends on the very first wicket!",
+    badge: "DEFAULT",
+  },
+  classic: {
+    id: "classic",
+    wickets: 2,
+    overs: 2,
+    endless: false,
+    label: "Classic Match",
+    description: "12 balls total with 2 wickets. Strategic chase pacing.",
+  },
+  endless: {
+    id: "endless",
+    wickets: 1,
+    overs: 0,
+    endless: true,
+    label: "Endless Mode",
+    description: "No over limit! Bat until you are out. Higher total wins; tie goes to super over.",
+    badge: "NEW",
+    variants: [
+      { id: "standard", label: "1 Wicket (Default)", wickets: 1 },
+      { id: "pro", label: "3 Wickets (Endless Pro)", wickets: 3 },
+    ],
+  },
+};
 
 export interface MatchFormat {
   mode?: MatchMode;
-  maxWickets: WicketsOption;
-  maxOvers: OversOption;
+  maxWickets: number;
+  maxOvers: number; // 0 or Infinity for endless
+  isEndless?: boolean;
+  endlessVariant?: "standard" | "pro";
 }
 
 export type PlayerId = "p1" | "p2";
@@ -26,6 +78,7 @@ export interface BallOutcome {
   isInningsComplete: boolean;
   isMatchComplete: boolean;
   commentary: string;
+  isSuperOver?: boolean;
 }
 
 export interface InningsState {
@@ -37,6 +90,10 @@ export interface InningsState {
   overHistory: BallOutcome[][]; // completed overs
   currentOver: BallOutcome[];   // balls in current over
   target?: number; // only defined in innings 2
+  strikeStreak?: number; // active streak of balls scoring runs
+  bestStreak?: number;   // highest streak in innings
+  fours?: number;        // count of 4s
+  sixes?: number;        // count of 6s
 }
 
 export type MatchPhase =
@@ -48,6 +105,7 @@ export type MatchPhase =
   | "innings_1"
   | "innings_break"
   | "innings_2"
+  | "super_over"
   | "match_ended";
 
 export interface GameState {
@@ -68,6 +126,20 @@ export interface GameState {
   innings1: InningsState;
   innings2: InningsState | null;
 
+  // Super-over state (for Endless tie decider)
+  superOver?: {
+    batterId: PlayerId;
+    bowlerId: PlayerId;
+    ball: number;
+  };
+  superOverPicks?: { [key in PlayerId]?: number };
+  superOverBatter?: PlayerId;
+  isSuperOver?: boolean;
+
+  // Pause state for long sessions
+  isPaused?: boolean;
+  pausedBy?: PlayerId | null;
+
   // Last ball outcome for reveal
   lastOutcome: BallOutcome | null;
 
@@ -83,6 +155,8 @@ export type GameAction =
   | { type: "SUBMIT_TOSS_DECISION"; decision: TossDecision }
   | { type: "START_SECOND_INNINGS" }
   | { type: "APPLY_BALL"; batterPick: number; bowlerPick: number }
+  | { type: "APPLY_SUPER_OVER_BALL"; p1Pick: number; p2Pick: number }
+  | { type: "TOGGLE_PAUSE"; playerId: PlayerId }
   | { type: "TIMEOUT_AUTO_PICK"; playerId: PlayerId; isToss?: boolean }
   | { type: "FORFEIT"; forfeitingPlayerId: PlayerId; reason?: string }
   | { type: "RESET"; format?: MatchFormat; player1Name?: string; player2Name?: string };

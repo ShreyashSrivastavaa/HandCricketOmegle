@@ -127,6 +127,78 @@ export class MemoryRedis {
     return s ? (Array.from(s) as T[]) : [];
   }
 
+  private sortedSets = new Map<string, Map<string, number>>();
+
+  async zadd(
+    key: string,
+    ...scoreMembers: (number | string | { score: number; member: string })[]
+  ): Promise<number> {
+    let map = this.sortedSets.get(key);
+    if (!map) {
+      map = new Map<string, number>();
+      this.sortedSets.set(key, map);
+    }
+    let added = 0;
+    for (const item of scoreMembers) {
+      if (typeof item === "object" && item !== null && "score" in item && "member" in item) {
+        if (!map.has(item.member)) added++;
+        map.set(item.member, item.score);
+      }
+    }
+    return added;
+  }
+
+  async zrevrange<T = string>(
+    key: string,
+    start: number,
+    stop: number,
+    opts?: { withScores?: boolean }
+  ): Promise<any[]> {
+    const map = this.sortedSets.get(key);
+    if (!map) return [];
+    const sorted = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+    const end = stop === -1 ? sorted.length : stop + 1;
+    const sliced = sorted.slice(start, end);
+    if (opts?.withScores) {
+      const result: any[] = [];
+      for (const [member, score] of sliced) {
+        result.push(member, score);
+      }
+      return result;
+    }
+    return sliced.map(([member]) => member);
+  }
+
+  async zrange<T = string>(
+    key: string,
+    start: number,
+    stop: number,
+    opts?: { withScores?: boolean; rev?: boolean }
+  ): Promise<any[]> {
+    if (opts?.rev) {
+      return this.zrevrange(key, start, stop, opts);
+    }
+    const map = this.sortedSets.get(key);
+    if (!map) return [];
+    const sorted = Array.from(map.entries()).sort((a, b) => a[1] - b[1]);
+    const end = stop === -1 ? sorted.length : stop + 1;
+    const sliced = sorted.slice(start, end);
+    if (opts?.withScores) {
+      const result: any[] = [];
+      for (const [member, score] of sliced) {
+        result.push(member, score);
+      }
+      return result;
+    }
+    return sliced.map(([member]) => member);
+  }
+
+  async zscore(key: string, member: string): Promise<number | null> {
+    const map = this.sortedSets.get(key);
+    if (!map || !map.has(member)) return null;
+    return map.get(member) ?? null;
+  }
+
   async eval<T = any>(
     _script: string,
     keys: string[],
@@ -159,6 +231,7 @@ export class MemoryRedis {
     this.store.clear();
     this.lists.clear();
     this.sets.clear();
+    this.sortedSets.clear();
     return "OK";
   }
 }

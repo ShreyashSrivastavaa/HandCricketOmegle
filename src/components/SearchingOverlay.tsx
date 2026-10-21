@@ -3,8 +3,10 @@ import { Bot, X, Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { playClickSound } from "@/lib/client/audio";
 
+import type { MatchMode } from "@/lib/game/types";
+
 interface SearchingOverlayProps {
-  mode: "sudden_death" | "classic";
+  mode: MatchMode;
   onCancel: () => void;
   onPlayVsBot: () => void;
 }
@@ -77,7 +79,11 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
           <p className="text-xs text-muted">
             Pairing with a live player for{" "}
             <span className="text-turf font-bold uppercase">
-              {mode === "classic" ? "Classic Mode (2 Wkts)" : "Sudden Death (1 Wkt)"}
+              {mode === "endless"
+                ? "Endless Mode (No Over Limit)"
+                : mode === "classic"
+                ? "Classic Mode (2 Wkts)"
+                : "Sudden Death (1 Wkt)"}
             </span>
           </p>
           <span className="font-tabular text-sm font-semibold text-muted/80 mt-1">

@@ -28,7 +28,7 @@ export const tossDecisionSchema = z.enum(["bat", "bowl"]);
 /**
  * Match modes
  */
-export const matchModeSchema = z.enum(["sudden_death", "classic"]);
+export const matchModeSchema = z.enum(["sudden_death", "classic", "endless"]);
 
 /**
  * Validated Toss Action message

@@ -21,6 +21,22 @@ export const CLASSIC_FORMAT: MatchFormat = {
   maxOvers: 2,
 };
 
+export const DEFAULT_ENDLESS_FORMAT: MatchFormat = {
+  mode: "endless",
+  maxWickets: 1,
+  maxOvers: 0,
+  isEndless: true,
+  endlessVariant: "standard",
+};
+
+export const ENDLESS_PRO_FORMAT: MatchFormat = {
+  mode: "endless",
+  maxWickets: 3,
+  maxOvers: 0,
+  isEndless: true,
+  endlessVariant: "pro",
+};
+
 /**
  * Returns a cryptographically random or pseudo-random integer between 1 and 6.
  */
@@ -241,7 +257,17 @@ export function applyBall(
     commentary = `${runsScored} run${runsScored === 1 ? "" : "s"} scored.`;
   }
 
-  const maxTotalBalls = state.format.maxOvers * 6;
+  const isEndless = Boolean(
+    state.format.isEndless || state.format.mode === "endless" || state.format.maxOvers === 0
+  );
+  const maxTotalBalls = isEndless ? Infinity : state.format.maxOvers * 6;
+
+  const prevStreak = activeInnings.strikeStreak || 0;
+  const currentStreak = isWicket || runsScored === 0 ? 0 : prevStreak + 1;
+  const bestStreak = Math.max(activeInnings.bestStreak || 0, currentStreak);
+  const fours = (activeInnings.fours || 0) + (runsScored === 4 ? 1 : 0);
+  const sixes = (activeInnings.sixes || 0) + (runsScored === 6 ? 1 : 0);
+
   let isInningsComplete = false;
   let isMatchComplete = false;
   let nextPhase: GameState["phase"] = state.phase;
@@ -252,7 +278,7 @@ export function applyBall(
   // Innings 1 Completion Check
   if (inningsNumber === 1) {
     const isAllOut = newWickets >= state.format.maxWickets;
-    const areOversCompleted = newBalls >= maxTotalBalls;
+    const areOversCompleted = !isEndless && newBalls >= maxTotalBalls;
 
     if (isAllOut || areOversCompleted) {
       isInningsComplete = true;
@@ -268,6 +294,10 @@ export function applyBall(
         overHistory: [],
         currentOver: [],
         target,
+        strikeStreak: 0,
+        bestStreak: 0,
+        fours: 0,
+        sixes: 0,
       };
     }
   } else {
@@ -275,7 +305,7 @@ export function applyBall(
     const target = activeInnings.target!;
     const isTargetChased = newScore >= target;
     const isAllOut = newWickets >= state.format.maxWickets;
-    const areOversCompleted = newBalls >= maxTotalBalls;
+    const areOversCompleted = !isEndless && newBalls >= maxTotalBalls;
 
     const chasingPlayerName =
       activeInnings.battingPlayer === "p1" ? state.player1Name : state.player2Name;
@@ -295,13 +325,22 @@ export function applyBall(
     } else if (isAllOut || areOversCompleted) {
       // Innings 2 ended without reaching target
       isInningsComplete = true;
-      isMatchComplete = true;
-      nextPhase = "match_ended";
 
       if (newScore === state.innings1.score) {
-        winner = "tie";
-        resultSummary = "Match Tied! Scores are level.";
+        if (isEndless) {
+          nextPhase = "super_over";
+          winner = null;
+          isMatchComplete = false;
+          resultSummary = "Scores level! Tied match moves to One-Ball Super-Over Decider!";
+        } else {
+          isMatchComplete = true;
+          nextPhase = "match_ended";
+          winner = "tie";
+          resultSummary = "Match Tied! Scores are level.";
+        }
       } else {
+        isMatchComplete = true;
+        nextPhase = "match_ended";
         winner = activeInnings.bowlingPlayer;
         const runsMargin = state.innings1.score - newScore;
         resultSummary = `${defendingPlayerName} won by ${runsMargin} run${
@@ -342,6 +381,10 @@ export function applyBall(
     balls: newBalls,
     currentOver: newCurrentOver,
     overHistory: newOverHistory,
+    strikeStreak: currentStreak,
+    bestStreak,
+    fours,
+    sixes,
   };
 
   const nextState: GameState = {
@@ -352,6 +395,82 @@ export function applyBall(
     lastOutcome: outcome,
     winner: winner ?? state.winner,
     resultSummary: resultSummary ?? state.resultSummary,
+    superOver:
+      nextPhase === "super_over"
+        ? {
+            batterId: state.innings1.battingPlayer,
+            bowlerId: state.innings1.bowlingPlayer,
+            ball: 0,
+          }
+        : state.superOver,
+  };
+
+  return { nextState, outcome };
+}
+
+/**
+ * Resolves a one-ball super over decider when scores are tied in Endless mode.
+ */
+export function applySuperOverBall(
+  state: GameState,
+  p1Pick: number,
+  p2Pick: number
+): { nextState: GameState; outcome: BallOutcome } {
+  if (
+    p1Pick < 1 ||
+    p1Pick > 6 ||
+    p2Pick < 1 ||
+    p2Pick > 6 ||
+    !Number.isInteger(p1Pick) ||
+    !Number.isInteger(p2Pick)
+  ) {
+    throw new Error(`Invalid picks: p1=${p1Pick}, p2=${p2Pick}. Must be integers 1-6.`);
+  }
+
+  const isWicket = p1Pick === p2Pick;
+  let winner: PlayerId | "tie" | null = null;
+  let commentary = "";
+  let resultSummary = "";
+
+  if (isWicket) {
+    winner = state.innings1.bowlingPlayer;
+    const bowlerName = winner === "p1" ? state.player1Name : state.player2Name;
+    commentary = `OUT! Both picked ${p1Pick}! ${bowlerName} takes a wicket on the Super-Over ball!`;
+    resultSummary = `${bowlerName} won by taking a wicket on the Super-Over ball!`;
+  } else if (p1Pick > p2Pick) {
+    winner = "p1";
+    commentary = `${state.player1Name} showed ${p1Pick} vs ${p2Pick}! ${state.player1Name} wins the Super Over!`;
+    resultSummary = `${state.player1Name} won the One-Ball Super-Over Decider!`;
+  } else {
+    winner = "p2";
+    commentary = `${state.player2Name} showed ${p2Pick} vs ${p1Pick}! ${state.player2Name} wins the Super Over!`;
+    resultSummary = `${state.player2Name} won the One-Ball Super-Over Decider!`;
+  }
+
+  const outcome: BallOutcome = {
+    innings: 2,
+    overIndex: 0,
+    ballInOver: 1,
+    totalBallsInInnings: (state.innings2?.balls || 0) + 1,
+    batterPick: p1Pick,
+    bowlerPick: p2Pick,
+    isWicket,
+    runsScored: isWicket ? 0 : Math.abs(p1Pick - p2Pick),
+    isOverComplete: true,
+    isInningsComplete: winner !== null,
+    isMatchComplete: winner !== null,
+    commentary,
+    isSuperOver: true,
+  };
+
+  const nextState: GameState = {
+    ...state,
+    phase: winner !== null ? "match_ended" : "super_over",
+    winner: winner ?? state.winner,
+    resultSummary: resultSummary || state.resultSummary,
+    lastOutcome: outcome,
+    superOverPicks: { p1: p1Pick, p2: p2Pick },
+    isSuperOver: true,
   };
 
   return { nextState, outcome };
@@ -397,6 +516,16 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case "APPLY_BALL":
       return applyBall(state, action.batterPick, action.bowlerPick).nextState;
 
+    case "APPLY_SUPER_OVER_BALL":
+      return applySuperOverBall(state, action.p1Pick, action.p2Pick).nextState;
+
+    case "TOGGLE_PAUSE":
+      return {
+        ...state,
+        isPaused: !state.isPaused,
+        pausedBy: !state.isPaused ? action.playerId : null,
+      };
+
     case "TIMEOUT_AUTO_PICK": {
       const randomPick = getRandomPick();
       if (state.phase === "toss_pick") {
@@ -435,6 +564,9 @@ export function getRequiredRuns(state: GameState): number {
 }
 
 export function getRemainingBalls(state: GameState): number {
+  if (state.format.isEndless || state.format.mode === "endless" || state.format.maxOvers === 0) {
+    return Infinity;
+  }
   const activeInnings = state.currentInnings === 1 ? state.innings1 : state.innings2;
   if (!activeInnings) return 0;
   const maxBalls = state.format.maxOvers * 6;
@@ -442,10 +574,13 @@ export function getRemainingBalls(state: GameState): number {
 }
 
 export function getRequiredRunRate(state: GameState): number | null {
+  if (state.format.isEndless || state.format.mode === "endless" || state.format.maxOvers === 0) {
+    return null;
+  }
   if (state.currentInnings !== 2 || !state.innings2) return null;
   const ballsLeft = getRemainingBalls(state);
   const runsLeft = getRequiredRuns(state);
-  if (ballsLeft <= 0) return null;
+  if (ballsLeft <= 0 || !Number.isFinite(ballsLeft)) return null;
   return Number(((runsLeft / ballsLeft) * 6).toFixed(2));
 }
 
@@ -454,3 +589,4 @@ export function getCurrentRunRate(state: GameState): number {
   if (!activeInnings || activeInnings.balls === 0) return 0;
   return Number(((activeInnings.score / activeInnings.balls) * 6).toFixed(2));
 }
+
