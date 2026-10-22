@@ -125,6 +125,7 @@ export const LiveMatchScreen: React.FC = () => {
     }
 
     if (localVideoRef.current) {
+      handDetector.autoLock = false;
       handDetector.resetForNextBall();
       handDetector.onDetectionChange = (res) => {
         setDetectedGesture(res.gesture);
@@ -142,17 +143,6 @@ export const LiveMatchScreen: React.FC = () => {
         if (res.landmarks && skeletonCanvasRef.current) {
           drawHandSkeleton(skeletonCanvasRef.current, res.landmarks, res.locked);
         }
-
-        // Lock in gesture if valid pick 1-6
-        if (
-          res.locked &&
-          res.lockedNumber !== undefined &&
-          res.lockedNumber >= 1 &&
-          res.lockedNumber <= 6 &&
-          !isUserLocked
-        ) {
-          submitBallPick(res.lockedNumber);
-        }
       };
 
       handDetector.start(localVideoRef.current);
@@ -161,7 +151,17 @@ export const LiveMatchScreen: React.FC = () => {
     return () => {
       handDetector.stop();
     };
-  }, [useTapMode, isUserLocked, submitBallPick, gameState?.innings1?.balls, gameState?.innings2?.balls]);
+  }, [useTapMode, isUserLocked, gameState?.innings1?.balls, gameState?.innings2?.balls]);
+
+  // Lock in gesture at 1 second remaining ("jb 1 sec bacha ho toh jodikhra ho voh lock kre")
+  useEffect(() => {
+    if (timerSeconds === 1 && !isUserLocked && !useTapMode) {
+      const pickToLock = detectedGesture ?? lastStableGesture;
+      if (pickToLock && pickToLock >= 1 && pickToLock <= 6) {
+        submitBallPick(pickToLock);
+      }
+    }
+  }, [timerSeconds, isUserLocked, useTapMode, detectedGesture, lastStableGesture, submitBallPick]);
 
   if (!gameState) return null;
 

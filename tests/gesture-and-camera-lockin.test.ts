@@ -309,5 +309,45 @@ describe("Show to Camera Gesture Lock-in & Stability Tests", () => {
       expect(detector["handLandmarker"]).toBeNull();
       expect(detectedCalled).toBe(false);
     });
+
+    it("allows gestures to change continuously during the turn and locks whatever is visible at 1s remaining", () => {
+      const detector = new HandDetector();
+      detector.autoLock = false;
+
+      let latestResult: any = null;
+      detector.onDetectionChange = (res) => {
+        latestResult = res;
+      };
+
+      // Player switches gestures throughout countdown: 1 -> 3 -> 5 -> 6
+      // Simulate frame-by-frame updates without auto-locking
+      detector["currentDetectedGesture"] = 1;
+      detector["latestValidGesture"] = 1;
+      expect(detector.isAlreadyLocked()).toBe(false);
+
+      detector["currentDetectedGesture"] = 3;
+      detector["latestValidGesture"] = 3;
+      expect(detector.isAlreadyLocked()).toBe(false);
+
+      detector["currentDetectedGesture"] = 5;
+      detector["latestValidGesture"] = 5;
+      expect(detector.isAlreadyLocked()).toBe(false);
+
+      // Player changes to 4 just before 1s mark
+      detector["currentDetectedGesture"] = 4;
+      detector["latestValidGesture"] = 4;
+      expect(detector.isAlreadyLocked()).toBe(false);
+
+      // At 1s remaining: lock whatever is currently visible ("jb 1 sec bacha ho toh jodikhra ho voh lock kre")
+      const locked = detector.lockCurrent();
+      expect(locked).toBe(4);
+      expect(detector.isAlreadyLocked()).toBe(true);
+      expect(latestResult?.locked).toBe(true);
+      expect(latestResult?.lockedNumber).toBe(4);
+
+      // Subsequent changes are rejected because it is locked
+      const tryChange = detector.lockCurrent();
+      expect(tryChange).toBe(4);
+    });
   });
 });

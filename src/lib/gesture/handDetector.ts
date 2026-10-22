@@ -89,6 +89,12 @@ export class HandDetector {
   private minIntervalMs: number = 40; // ~25 fps (1000ms / 25 = 40ms)
   private currentVideoElement: HTMLVideoElement | null = null;
 
+  public autoLock: boolean = false; // By default false: tracks continuously so player can change moves until 1s remaining
+  private isLocked: boolean = false;
+  private lockedNumber?: HandGesture;
+  private currentDetectedGesture: HandGesture | null = null;
+  private latestValidGesture: HandGesture | null = null;
+
   // 3-second undetected timeout tracking for tap fallback suggestion
   private runStartTime: number = 0;
   private lastHandDetectedTime: number = 0;
@@ -112,7 +118,7 @@ export class HandDetector {
         cancelAnimationFrame(this.animFrameId);
         this.animFrameId = null;
       }
-    } else if (this.isRunning && this.currentVideoElement && !this.stabilizer.isAlreadyLocked()) {
+    } else if (this.isRunning && this.currentVideoElement && !this.isAlreadyLocked()) {
       this.lastProcessTime = performance.now();
       this.animFrameId = requestAnimationFrame(() => this.loop(this.currentVideoElement!));
     }
@@ -268,7 +274,7 @@ export class HandDetector {
       this.processFrame(videoElement, now);
     }
 
-    if (this.isRunning && !this.stabilizer.isAlreadyLocked()) {
+    if (this.isRunning && !this.isAlreadyLocked()) {
       this.animFrameId = requestAnimationFrame(() => this.loop(videoElement));
     }
   };
@@ -304,12 +310,26 @@ export class HandDetector {
         this.lastHandDetectedTime = Date.now();
       }
 
-      const updateResult = this.stabilizer.update(detectedGesture);
+      if (detectedGesture !== null && detectedGesture >= 1 && detectedGesture <= 6) {
+        this.latestValidGesture = detectedGesture;
+      }
+      this.currentDetectedGesture = detectedGesture;
+
+      let locked = this.isLocked;
+      let lockedNumber = this.lockedNumber;
+      let progress = 0;
+
+      if (this.autoLock) {
+        const updateResult = this.stabilizer.update(detectedGesture);
+        locked = updateResult.locked;
+        lockedNumber = updateResult.lockedNumber;
+        progress = updateResult.progress;
+      }
 
       // 3-second hand undetected auto-suggestion
       const now = Date.now();
       let suggestTapMode = false;
-      if (now - this.lastHandDetectedTime >= 3000 && !updateResult.locked) {
+      if (now - this.lastHandDetectedTime >= 3000 && !locked) {
         suggestTapMode = true;
         this.hasSuggestedTap = true;
       }
@@ -325,9 +345,9 @@ export class HandDetector {
 
       this.onDetectionChange?.({
         gesture: detectedGesture,
-        progress: updateResult.progress,
-        locked: updateResult.locked,
-        lockedNumber: updateResult.lockedNumber,
+        progress,
+        locked,
+        lockedNumber,
         hint,
         isLowLight,
         landmarks: rawLandmarks,
@@ -335,12 +355,59 @@ export class HandDetector {
       });
 
       // STOP the detector immediately once locked!
-      if (updateResult.locked) {
+      if (locked) {
         this.stop();
       }
     } catch (err) {
       // Ignore frame errors silently
     }
+  }
+
+  /**
+   * Locks the currently visible or latest valid gesture (used when 1s remains in turn or practice)
+   */
+  public lockCurrent(): HandGesture | null {
+    const toLock = this.currentDetectedGesture ?? this.latestValidGesture;
+    if (toLock !== null && toLock >= 1 && toLock <= 6) {
+      this.isLocked = true;
+      this.lockedNumber = toLock;
+      this.onDetectionChange?.({
+        gesture: toLock,
+        progress: 1,
+        locked: true,
+        lockedNumber: toLock,
+      });
+      this.stop();
+      return toLock;
+    }
+    return null;
+  }
+
+  /**
+   * Explicitly locks a specific gesture
+   */
+  public lockGesture(num: HandGesture): void {
+    this.isLocked = true;
+    this.lockedNumber = num;
+    this.onDetectionChange?.({
+      gesture: num,
+      progress: 1,
+      locked: true,
+      lockedNumber: num,
+    });
+    this.stop();
+  }
+
+  public getCurrentGesture(): HandGesture | null {
+    return this.currentDetectedGesture;
+  }
+
+  public getLatestValidGesture(): HandGesture | null {
+    return this.latestValidGesture;
+  }
+
+  public isAlreadyLocked(): boolean {
+    return this.isLocked || (this.autoLock && this.stabilizer.isAlreadyLocked());
   }
 
   /**
@@ -356,9 +423,13 @@ export class HandDetector {
   }
 
   /**
-   * Reset stabilizer for next ball
+   * Reset detector & stabilizer for next ball
    */
   public resetForNextBall(): void {
+    this.isLocked = false;
+    this.lockedNumber = undefined;
+    this.currentDetectedGesture = null;
+    this.latestValidGesture = null;
     this.stabilizer.reset();
     this.hasSuggestedTap = false;
     this.lastHandDetectedTime = Date.now();
@@ -369,7 +440,7 @@ export class HandDetector {
    */
   public destroy(): void {
     this.stop();
-    this.stabilizer.reset();
+    this.resetForNextBall();
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", this.handleVisibilityChange);
     }

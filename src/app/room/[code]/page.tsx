@@ -135,6 +135,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // Timer & Emotes & Reporting
   const [timerSeconds, setTimerSeconds] = useState<number>(8);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const latestDetectedGestureRef = useRef<HandGesture | null>(null);
   const [receivedEmote, setReceivedEmote] = useState<{ emote: string; id: number } | null>(null);
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -590,6 +591,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           setOpponentTileState("empty");
           setOutcomeText(null);
           setDetectedGesture(null);
+          latestDetectedGestureRef.current = null;
           setGestureProgress(0);
           setGestureHint(undefined);
           handDetector.resetForNextBall();
@@ -625,6 +627,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     setTimerSeconds(8);
     timerIntervalRef.current = setInterval(() => {
       setTimerSeconds((prev) => {
+        if (prev === 2) {
+          // At 1s remaining: Lock whatever is showing right now ("jb 1 sec bacha ho toh jodikhra ho voh lock kre")
+          const gestureToLock = latestDetectedGestureRef.current;
+          if (gestureToLock && gestureToLock >= 1 && gestureToLock <= 6 && !isUserLocked) {
+            handleConfirmBallPick(gestureToLock);
+          }
+        }
         if (prev <= 1) {
           stopTurnCountdown();
           handleTurnTimeout();
@@ -663,22 +672,21 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       if (!isMounted) return;
       const video = localVideoRef.current;
       if (video && video.videoWidth > 0 && !video.paused) {
+        handDetector.autoLock = false;
         handDetector.start(video);
       } else {
         setTimeout(startDetectionWhenReady, 150);
       }
     };
 
+    handDetector.autoLock = false;
     handDetector.onDetectionChange = (res) => {
       if (!isMounted) return;
       setDetectedGesture(res.gesture);
+      latestDetectedGestureRef.current = res.gesture;
       setGestureProgress(res.progress);
       setGestureHint(res.hint);
       setIsLowLight(!!res.isLowLight);
-
-      if (res.locked && res.lockedNumber) {
-        handleConfirmBallPick(res.lockedNumber);
-      }
     };
 
     startDetectionWhenReady();

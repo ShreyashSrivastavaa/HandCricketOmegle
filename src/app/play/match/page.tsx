@@ -120,6 +120,7 @@ function PlayMatchContent() {
   // Turn timer
   const [timerSeconds, setTimerSeconds] = useState<number>(8);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const latestDetectedGestureRef = useRef<HandGesture | null>(null);
 
   // Bridge & Series State
   const [isConvertedToFriend, setIsConvertedToFriend] = useState<boolean>(false);
@@ -519,6 +520,7 @@ function PlayMatchContent() {
           setOpponentTileState("empty");
           setOutcomeText(null);
           setDetectedGesture(null);
+          latestDetectedGestureRef.current = null;
           setGestureProgress(0);
           setGestureHint(undefined);
           handDetector.resetForNextBall();
@@ -602,6 +604,13 @@ function PlayMatchContent() {
 
     timerIntervalRef.current = setInterval(() => {
       setTimerSeconds((prev) => {
+        if (prev === 2) {
+          // At 1s remaining: Lock whatever is showing right now ("jb 1 sec bacha ho toh jodikhra ho voh lock kre")
+          const gestureToLock = latestDetectedGestureRef.current;
+          if (gestureToLock && gestureToLock >= 1 && gestureToLock <= 6 && !isUserLocked) {
+            handleConfirmBallPick(gestureToLock);
+          }
+        }
         if (prev <= 1) {
           stopTurnCountdown();
           handleTurnTimeout();
@@ -640,22 +649,21 @@ function PlayMatchContent() {
       if (!isMounted) return;
       const video = localVideoRef.current;
       if (video && video.videoWidth > 0 && !video.paused) {
+        handDetector.autoLock = false;
         handDetector.start(video);
       } else {
         setTimeout(startDetectionWhenReady, 150);
       }
     };
 
+    handDetector.autoLock = false;
     handDetector.onDetectionChange = (res) => {
       if (!isMounted) return;
       setDetectedGesture(res.gesture);
+      latestDetectedGestureRef.current = res.gesture;
       setGestureProgress(res.progress);
       setGestureHint(res.hint);
       setIsLowLight(!!res.isLowLight);
-
-      if (res.locked && res.lockedNumber) {
-        handleConfirmBallPick(res.lockedNumber);
-      }
     };
 
     startDetectionWhenReady();
