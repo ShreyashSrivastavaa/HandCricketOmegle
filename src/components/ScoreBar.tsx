@@ -45,20 +45,20 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
 
   return (
     <div
-      className={`bg-surface border border-line rounded-[14px] p-3 sm:p-4 text-chalk shadow-sm select-none ${className}`}
+      className={`bg-bone-white border-2 border-pure-black rounded-[6px] p-3.5 sm:p-4 text-ink-black shadow-none select-none ${className}`}
       role="region"
       aria-label="Match Scoreboard"
     >
       {/* Top Meta Line: Innings and Format */}
-      <div className="flex flex-wrap items-center justify-between gap-1 pb-2 border-b border-line text-[10px] sm:text-[11px] font-semibold tracking-wider text-muted uppercase">
+      <div className="flex flex-wrap items-center justify-between gap-1 pb-2 border-b-2 border-pure-black text-[10px] sm:text-[11px] font-mono font-bold tracking-wider text-pure-black uppercase">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-turf" />
+          <span className="inline-block w-2.5 h-2.5 rounded-full bg-firecracker-red border border-pure-black animate-pulse" />
           <span>
             {isInnings2 ? "2nd Innings • The Chase" : "1st Innings • Setting Target"}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-chalk font-bold">
+          <span className="text-pure-black font-black bg-hi-vis-yellow px-2 py-0.5 rounded-[100px] border border-pure-black">
             {state.format.mode === "classic" ? "CLASSIC" : "SUDDEN DEATH"}
           </span>
           <span>•</span>
@@ -73,62 +73,62 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
         {/* Batting Team and Big Score */}
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-muted tracking-wide uppercase">
+            <span className="text-xs font-mono font-bold text-pure-black/80 tracking-wide uppercase">
               {battingPlayerName}
             </span>
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-turf/10 text-turf border border-turf/30">
+            <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-[100px] bg-hi-vis-yellow text-pure-black border border-pure-black">
               BAT
             </span>
           </div>
 
           <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="font-heading font-black text-4xl sm:text-5xl tracking-tight tabular-nums text-chalk">
+            <span className="font-heading font-black text-5xl sm:text-6xl tracking-tight tabular-nums text-pure-black">
               {runs}
             </span>
-            <span className="font-heading font-bold text-2xl sm:text-3xl text-ball/90 tabular-nums">
+            <span className="font-heading font-black text-3xl sm:text-4xl text-firecracker-red tabular-nums">
               /{wickets}
             </span>
-            <span className="text-xs text-muted font-heading ml-1 uppercase">
-              ({maxWickets} max)
+            <span className="text-xs text-pure-black/70 font-mono ml-1 uppercase font-bold">
+              ({maxWickets} MAX)
             </span>
           </div>
         </div>
 
         {/* Overs & Run Rate Display */}
         <div className="flex flex-col items-end">
-          <span className="text-xs font-semibold text-muted tracking-wide uppercase">
+          <span className="text-xs font-mono font-bold text-pure-black/80 tracking-wide uppercase">
             Overs
           </span>
           <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="font-heading font-black text-3xl sm:text-4xl tabular-nums text-chalk">
+            <span className="font-heading font-black text-4xl sm:text-5xl tabular-nums text-pure-black">
               {oversFormatted}
             </span>
-            <span className="text-xs text-muted font-sans font-medium">
+            <span className="text-xs text-pure-black/70 font-mono font-bold">
               /{maxOvers}.0
             </span>
           </div>
-          <span className="text-[10px] text-muted tracking-wider uppercase mt-0.5">
-            CRR: <strong className="text-chalk font-mono">{crr}</strong>
+          <span className="text-[10px] font-mono font-bold text-pure-black uppercase mt-0.5">
+            CRR: <strong className="text-pure-black">{crr}</strong>
           </span>
         </div>
       </div>
 
       {/* Target Equation Bar (Only in Innings 2 Chase) */}
       {isInnings2 && target !== null && (
-        <div className="mt-2 pt-2 border-t border-line flex flex-wrap items-center justify-between gap-1.5 text-xs bg-surface-2/40 px-2.5 py-1.5 rounded-lg">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-muted uppercase font-semibold">Target:</span>
-            <strong className="text-amber font-heading text-sm tabular-nums">{target}</strong>
-            <span className="text-muted uppercase text-[10px] font-medium">
-              (Need <strong className="text-chalk font-semibold">{runsNeeded}</strong> from{" "}
-              <strong className="text-chalk font-semibold">{ballsLeft}b</strong>)
+        <div className="mt-2 pt-2 border-t-2 border-pure-black flex flex-wrap items-center justify-between gap-1.5 text-xs bg-hi-vis-yellow px-3 py-2 rounded-[6px] border border-pure-black text-pure-black">
+          <div className="flex items-center gap-1.5 flex-wrap font-mono font-bold">
+            <span className="uppercase">Target:</span>
+            <strong className="text-pure-black font-black text-base tabular-nums">{target}</strong>
+            <span className="text-[11px] uppercase">
+              (Need <strong className="underline">{runsNeeded}</strong> from{" "}
+              <strong>{ballsLeft}b</strong>)
             </span>
           </div>
 
           {rrr !== null && (
-            <div className="flex items-center gap-1 text-[11px] text-muted ml-auto">
+            <div className="flex items-center gap-1 text-[11px] font-mono font-bold ml-auto">
               <span>RRR:</span>
-              <strong className="text-amber font-mono font-semibold">{rrr}</strong>
+              <strong className="text-pure-black">{rrr}</strong>
             </div>
           )}
         </div>

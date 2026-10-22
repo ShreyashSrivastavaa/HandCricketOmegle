@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow_Condensed, Inter } from "next/font/google";
+import { Barlow_Condensed, Inter, JetBrains_Mono } from "next/font/google";
 import "@/styles/tokens.css";
 import "./globals.css";
 
@@ -17,8 +17,15 @@ const inter = Inter({
   display: "swap",
 });
 
+const jetbrainsMono = JetBrains_Mono({
+  weight: ["400", "600"],
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
+
 export const viewport: Viewport = {
-  themeColor: "#0B1210",
+  themeColor: "#8584bd",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -87,14 +94,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${barlowCondensed.variable} ${inter.variable}`}>
+    <html lang="en" className={`${barlowCondensed.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script src="/ably.min.js" async></script>
       </head>
-      <body className="min-h-screen bg-ink text-chalk antialiased selection:bg-turf selection:text-ink">
+      <body className="min-h-screen bg-dusk-violet text-bone-white antialiased selection:bg-hi-vis-yellow selection:text-pure-black">
         {children}
         <Analytics />
         <SpeedInsights />

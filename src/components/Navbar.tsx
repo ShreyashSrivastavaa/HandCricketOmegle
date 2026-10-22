@@ -101,76 +101,76 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
 
   return (
     <nav
-      className="w-full max-w-4xl mx-auto border-b border-line bg-surface/85 backdrop-blur-md rounded-b-[16px] relative z-40 transition-colors"
+      className="w-full max-w-4xl mx-auto border-b-2 border-pure-black bg-dusk-violet relative z-40 select-none"
       role="navigation"
       aria-label="Main Navigation"
     >
-      <div className="flex items-center justify-between py-3 px-3 sm:px-5">
-        {/* Clickable Brand Logo (Pillar 2 Requirement) */}
+      <div className="flex items-center justify-between py-3.5 px-3 sm:px-5">
+        {/* Brand Wordmark */}
         <Link
           href="/"
           onClick={() => setIsMobileMenuOpen(false)}
-          className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink group"
+          className="flex items-center gap-2.5 rounded-[100px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow group"
           aria-label="HandCricketOmegle Home"
         >
-          <span className="w-8 h-8 rounded-lg bg-turf/15 border border-turf/35 flex items-center justify-center text-lg group-hover:scale-105 transition-transform shadow-[0_0_12px_rgba(16,185,129,0.18)]">
+          <span className="w-9 h-9 rounded-[100px] bg-hi-vis-yellow border-2 border-pure-black flex items-center justify-center text-lg group-hover:scale-105 transition-transform text-pure-black">
             🏏
           </span>
           <div className="flex flex-col">
-            <span className="font-heading font-black text-lg sm:text-xl uppercase tracking-wider text-chalk leading-none group-hover:text-chalk/90">
-              HAND CRICKET <span className="text-turf">OMEGLE</span>
+            <span className="font-heading font-black text-xl sm:text-2xl uppercase tracking-tight text-hi-vis-yellow leading-none">
+              HAND CRICKET <span className="text-bone-white">CONFESSIONAL</span>
             </span>
-            <span className="text-[10px] text-muted tracking-widest uppercase font-semibold">
+            <span className="text-[10px] font-mono text-buttery-yellow uppercase tracking-wider font-semibold">
               1v1 Stranger Matchmaking
             </span>
           </div>
         </Link>
 
         {/* Desktop Quick Links */}
-        <div className="hidden lg:flex items-center gap-4 text-xs font-heading uppercase tracking-wider text-muted font-bold">
+        <div className="hidden lg:flex items-center gap-4 text-xs font-mono uppercase tracking-wider text-bone-white font-bold">
           <Link
             href="/play/bot"
-            className={`hover:text-turf transition-colors ${pathname === "/play/bot" ? "text-turf" : ""}`}
+            className={`hover:text-hi-vis-yellow transition-colors ${pathname === "/play/bot" ? "text-hi-vis-yellow underline decoration-2 underline-offset-4" : ""}`}
           >
             Practice Bot
           </Link>
           <Link
             href="/guidelines"
-            className={`hover:text-turf transition-colors ${pathname === "/guidelines" ? "text-turf" : ""}`}
+            className={`hover:text-hi-vis-yellow transition-colors ${pathname === "/guidelines" ? "text-hi-vis-yellow underline decoration-2 underline-offset-4" : ""}`}
           >
             Guidelines
           </Link>
           <Link
             href="/privacy"
-            className={`hover:text-turf transition-colors ${pathname === "/privacy" ? "text-turf" : ""}`}
+            className={`hover:text-hi-vis-yellow transition-colors ${pathname === "/privacy" ? "text-hi-vis-yellow underline decoration-2 underline-offset-4" : ""}`}
           >
             Privacy
           </Link>
         </div>
 
         {/* Right Action Bar */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Live Online Badge */}
           <div
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 border border-line text-xs font-medium text-chalk/90"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-[100px] bg-bone-white border-2 border-pure-black text-xs font-mono font-bold text-pure-black"
             title="Live online players"
             aria-label={`${onlineCount} players online right now`}
           >
-            <span className="w-2 h-2 rounded-full bg-turf animate-pulse" aria-hidden="true" />
-            <Users className="w-3.5 h-3.5 text-muted hidden sm:inline" aria-hidden="true" />
-            <span className="font-tabular font-bold text-turf">{onlineCount}</span>
-            <span className="text-[10px] text-muted uppercase hidden sm:inline">Online</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-firecracker-red border border-pure-black animate-pulse" aria-hidden="true" />
+            <Users className="w-3.5 h-3.5 text-pure-black hidden sm:inline" aria-hidden="true" />
+            <span className="font-tabular font-black">{onlineCount}</span>
+            <span className="text-[10px] uppercase hidden sm:inline">LIVE</span>
           </div>
 
-          {/* Light / Dark Mode Toggle */}
+          {/* Light / Cartoon Theme Toggle */}
           <button
             type="button"
             onClick={handleToggleTheme}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="p-2 rounded-full border border-line bg-surface-2 text-muted hover:text-chalk hover:border-turf/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+            className="p-2 rounded-[100px] border-2 border-pure-black bg-bone-white text-pure-black hover:bg-hi-vis-yellow transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow active:scale-95"
           >
-            {theme === "dark" ? <Sun className="w-4 h-4 text-amber" /> : <Moon className="w-4 h-4 text-sky" />}
+            {theme === "dark" ? <Sun className="w-4 h-4 text-pure-black" /> : <Moon className="w-4 h-4 text-pure-black" />}
           </button>
 
           {/* Audio Mute Toggle */}
@@ -178,13 +178,13 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
             type="button"
             onClick={handleToggleMute}
             aria-label={muted ? "Unmute game audio" : "Mute game audio"}
-            className={`p-2 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
+            className={`p-2 rounded-[100px] border-2 border-pure-black transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow active:scale-95 ${
               muted
-                ? "bg-surface-2 border-line text-muted hover:text-chalk"
-                : "bg-turf/15 border-turf/30 text-turf hover:bg-turf/25"
+                ? "bg-bone-white text-pure-black/50 hover:bg-bone-white/80"
+                : "bg-hi-vis-yellow text-pure-black hover:bg-buttery-yellow"
             }`}
           >
-            {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            {muted ? <VolumeX className="w-4 h-4 stroke-[2.5]" /> : <Volume2 className="w-4 h-4 stroke-[2.5]" />}
           </button>
 
           {/* How to Play Rules Button (Desktop/Tablet) */}
@@ -194,21 +194,21 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
               onClick={handleRulesClick}
               aria-label="View Hand Cricket rules"
               title="How to play rules"
-              className="p-2 rounded-full bg-surface-2 border border-line text-muted hover:text-chalk hover:border-turf/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+              className="p-2 rounded-[100px] bg-bone-white border-2 border-pure-black text-pure-black hover:bg-hi-vis-yellow transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow active:scale-95"
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-4 h-4 stroke-[2.5]" />
             </button>
           )}
 
           {/* Guest Name pill */}
           {guestName && (
-            <div className="hidden md:flex items-center gap-1 px-3 py-1 rounded-full bg-surface border border-line text-xs font-semibold text-chalk/90">
-              <span className="text-muted">👤</span>
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-[100px] bg-bone-white border-2 border-pure-black text-xs font-mono font-bold text-pure-black">
+              <span>👤</span>
               <span className="truncate max-w-[100px]">{guestName}</span>
             </div>
           )}
 
-          {/* Mobile Hamburger Toggle Button (Pillar 1 Requirement) */}
+          {/* Mobile Hamburger Toggle Button */}
           <button
             type="button"
             onClick={() => {
@@ -218,25 +218,25 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
             aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={isMobileMenuOpen}
             aria-controls="mobile-nav-drawer"
-            className="p-2 rounded-lg bg-surface border border-line text-chalk hover:text-turf hover:border-turf/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf flex items-center justify-center"
+            className="p-2 rounded-[6px] bg-bone-white border-2 border-pure-black text-pure-black hover:bg-hi-vis-yellow transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow flex items-center justify-center lg:hidden"
           >
-            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {isMobileMenuOpen ? <X className="w-5 h-5 stroke-[2.5]" /> : <Menu className="w-5 h-5 stroke-[2.5]" />}
           </button>
         </div>
       </div>
 
-      {/* Accessible Responsive Mobile Navigation Drawer */}
+      {/* Responsive Mobile Navigation Drawer */}
       {isMobileMenuOpen && (
         <div
           id="mobile-nav-drawer"
           ref={menuRef}
-          className="border-t border-line/80 bg-surface/95 backdrop-blur-xl px-4 py-4 rounded-b-[16px] flex flex-col gap-2 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150"
+          className="border-t-2 border-pure-black bg-bone-white text-ink-black px-4 py-4 rounded-b-[6px] flex flex-col gap-2.5 animate-in fade-in duration-150"
         >
-          <div className="text-[10px] font-heading uppercase tracking-widest text-muted font-bold px-2 pb-1">
-            Navigation Menu
+          <div className="text-[11px] font-mono uppercase tracking-widest text-pure-black font-bold px-1">
+            Menu Navigation
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {navLinks.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -245,13 +245,13 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
                   key={item.href}
                   href={item.href}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-heading uppercase tracking-wider font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-[6px] text-sm font-heading uppercase tracking-wider font-bold transition-all border-2 border-pure-black ${
                     isActive
-                      ? "bg-turf/15 text-turf border border-turf/30"
-                      : "bg-surface-2/60 text-chalk hover:bg-surface-2 hover:text-turf border border-line/60"
+                      ? "bg-hi-vis-yellow text-pure-black"
+                      : "bg-bone-white text-ink-black hover:bg-buttery-yellow"
                   }`}
                 >
-                  <Icon className="w-4 h-4 text-turf shrink-0" />
+                  <Icon className="w-4 h-4 text-pure-black shrink-0 stroke-[2.5]" />
                   <span>{item.label}</span>
                 </Link>
               );
@@ -262,30 +262,17 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
             <button
               type="button"
               onClick={handleRulesClick}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-heading uppercase tracking-wider font-bold text-chalk bg-surface-2/60 hover:bg-surface-2 hover:text-turf border border-line/60 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[6px] text-sm font-heading uppercase tracking-wider font-bold text-ink-black bg-bone-white hover:bg-matcha-cream border-2 border-pure-black transition-all text-left"
             >
-              <HelpCircle className="w-4 h-4 text-turf shrink-0" />
+              <HelpCircle className="w-4 h-4 text-pure-black shrink-0 stroke-[2.5]" />
               <span>How To Play (Rules &amp; Gestures)</span>
             </button>
           )}
 
-          {/* Mobile Theme Toggle */}
-          <button
-            type="button"
-            onClick={handleToggleTheme}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-heading uppercase tracking-wider font-bold text-chalk bg-surface-2/60 hover:bg-surface-2 hover:text-turf border border-line/60 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
-          >
-            <span className="flex items-center gap-2.5">
-              {theme === "dark" ? <Sun className="w-4 h-4 text-amber" /> : <Moon className="w-4 h-4 text-sky" />}
-              <span>Theme</span>
-            </span>
-            <span className="text-xs font-normal text-muted capitalize">{theme} Mode</span>
-          </button>
-
           {guestName && (
-            <div className="mt-2 pt-2 border-t border-line/50 flex items-center justify-between text-xs text-muted px-2">
+            <div className="mt-2 pt-2 border-t-2 border-pure-black flex items-center justify-between text-xs font-mono text-pure-black px-1">
               <span>Playing as:</span>
-              <span className="font-bold text-chalk truncate max-w-[160px]">👤 {guestName}</span>
+              <span className="font-bold truncate max-w-[160px]">👤 {guestName}</span>
             </div>
           )}
         </div>

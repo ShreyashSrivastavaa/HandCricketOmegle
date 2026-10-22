@@ -43,33 +43,35 @@ export const HandTile: React.FC<HandTileProps> = ({
   const displayName = isUser ? "You" : playerName;
 
   // Derive dynamic border and shadow for out / scored states
-  let cardBorder = "border-line";
+  let cardBorder = "border-2 border-pure-black";
   if (state === "out") {
-    cardBorder = "border-ball shadow-[0_0_16px_rgba(255,77,77,0.3)] border-2";
+    cardBorder = "border-2 border-pure-black bg-firecracker-red/15";
   } else if (state === "scored") {
-    cardBorder = "border-amber shadow-[0_0_16px_rgba(255,176,32,0.25)] border-2";
+    cardBorder = "border-2 border-pure-black bg-hi-vis-yellow/20";
   }
 
   return (
     <div
-      className={`relative flex flex-col items-center justify-between p-3 sm:p-5 rounded-[12px] bg-surface border select-none transition-all duration-200 min-h-[160px] sm:min-h-[220px] flex-1 ${cardBorder} ${className}`}
+      className={`relative flex flex-col items-center justify-between p-3 sm:p-5 rounded-[6px] bg-bone-white text-ink-black select-none transition-all duration-200 min-h-[160px] sm:min-h-[220px] flex-1 shadow-none ${cardBorder} ${className}`}
       role="region"
       aria-label={`${displayName} arena hand tile (${state})`}
     >
       {/* Header Info */}
-      <div className="w-full flex items-center justify-between gap-2 border-b border-line pb-2">
+      <div className="w-full flex items-center justify-between gap-2 border-b-2 border-pure-black pb-2">
         <div className="flex items-center gap-2">
           <span
-            className="w-2.5 h-2.5 rounded-full"
+            className="w-3 h-3 rounded-full border border-pure-black"
             style={{ backgroundColor: accentColor }}
           />
-          <span className="text-xs sm:text-sm font-semibold tracking-wider uppercase text-chalk font-sans">
+          <span className="text-xs sm:text-sm font-black tracking-wider uppercase text-pure-black font-heading">
             {displayName}
           </span>
         </div>
 
         <span
-          className={`text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full border ${tagBg}`}
+          className={`text-[10px] font-mono font-black tracking-wider px-2 py-0.5 rounded-[100px] border border-pure-black ${
+            isBatting ? "bg-hi-vis-yellow text-pure-black" : "bg-matcha-cream text-pure-black"
+          }`}
         >
           {isBatting ? "BATTING" : "BOWLING"}
         </span>

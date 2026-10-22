@@ -60,21 +60,28 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   };
 
   return (
-    <main className="w-full max-w-lg mx-auto flex flex-col items-center gap-6 px-4 py-8 select-none">
-      {/* 1. Clean Title */}
-      <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="font-heading font-black text-4xl sm:text-5xl uppercase tracking-tight text-chalk">
-          HAND <span className="text-turf">CRICKET</span>
+    <main className="w-full max-w-xl mx-auto flex flex-col items-center gap-6 px-4 py-8 select-none">
+      {/* 1. Flying Papers Hero Poster Display */}
+      <div className="flex flex-col items-center gap-2 text-center pt-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-[100px] bg-pure-black border-2 border-bone-white text-bone-white font-mono text-xs uppercase tracking-wider font-bold mb-1">
+          <span>⚡</span>
+          <span>Saturday Morning Confessional</span>
+        </div>
+        <h1 className="font-display-hero font-black text-6xl sm:text-7xl md:text-8xl uppercase tracking-tight leading-[0.82]">
+          <span className="text-hi-vis-yellow drop-shadow-none">HAND</span>{" "}
+          <span className="text-buttery-yellow drop-shadow-none">CRICKET</span>
         </h1>
-        <p className="text-sm text-muted">
-          Classic schoolyard hand cricket, played live in browser.
+        <p className="text-xs sm:text-sm font-mono text-bone-white max-w-md pt-1 uppercase tracking-wide">
+          One hand • Six fingers • Pure skill duels live on the violet stage.
         </p>
       </div>
 
-      {/* 2. Compact Anonymous Identity */}
-      <div className="w-full bg-surface border border-line rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="text-xl shrink-0">🏏</span>
+      {/* 2. Anonymous Identity Card (Bone White Card, 6px radius, 17px padding, 2px border) */}
+      <div className="w-full bg-bone-white text-ink-black border-2 border-pure-black rounded-[6px] p-[17px] flex items-center justify-between gap-3 shadow-none">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-[6px] bg-hi-vis-yellow border-2 border-pure-black flex items-center justify-center text-xl shrink-0">
+            🏏
+          </div>
           {isEditing ? (
             <form onSubmit={handleSaveName} className="flex items-center gap-2">
               <input
@@ -83,37 +90,37 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                 onChange={(e) => setNameInput(e.target.value)}
                 maxLength={16}
                 autoFocus
-                className="px-2.5 py-1 rounded-lg bg-surface-2 border border-turf text-chalk text-sm font-semibold focus:outline-none w-36"
+                className="px-3 py-1 rounded-[6px] bg-bone-white border-2 border-pure-black text-pure-black text-sm font-bold focus:outline-none w-36"
               />
               <button
                 type="submit"
-                className="px-2.5 py-1 rounded-lg bg-turf text-ink font-heading font-bold text-xs uppercase"
+                className="px-3 py-1 rounded-[100px] bg-hi-vis-yellow text-pure-black font-heading font-black text-xs uppercase border-2 border-pure-black hover:bg-buttery-yellow"
               >
-                <Check className="w-3.5 h-3.5" />
+                <Check className="w-4 h-4 stroke-[3]" />
               </button>
             </form>
           ) : (
             <div className="flex flex-col min-w-0">
-              <span className="text-sm font-bold text-chalk truncate">
+              <span className="text-base font-black font-heading uppercase text-pure-black truncate">
                 {guestName}
               </span>
-              <span className="text-[11px] text-muted">
-                Your Anonymous Identity • Ready to play
+              <span className="text-[11px] font-mono text-pure-black/70 uppercase tracking-wider font-semibold">
+                Anonymous Identity • Stage Ready
               </span>
             </div>
           )}
         </div>
 
         {!isEditing && (
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleRandomizeName}
               title="Randomize Moniker"
               aria-label="Randomize"
-              className="p-1.5 rounded-lg text-muted hover:text-chalk hover:bg-surface-2 transition-colors"
+              className="p-2 rounded-[100px] border-2 border-pure-black bg-bone-white text-pure-black hover:bg-hi-vis-yellow transition-all active:scale-95"
             >
-              <Dices className="w-4 h-4" />
+              <Dices className="w-4 h-4 stroke-[2.5]" />
             </button>
             <button
               type="button"
@@ -123,17 +130,17 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               }}
               title="Edit Name"
               aria-label="Edit"
-              className="p-1.5 rounded-lg text-muted hover:text-chalk hover:bg-surface-2 transition-colors"
+              className="p-2 rounded-[100px] border-2 border-pure-black bg-bone-white text-pure-black hover:bg-hi-vis-yellow transition-all active:scale-95"
             >
-              <Edit2 className="w-3.5 h-3.5" />
+              <Edit2 className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
         )}
       </div>
 
-      {/* 3. The 3 Game Modes (Clean, Distinct Action Cards) */}
-      <div className="w-full flex flex-col gap-3">
-        {/* OPTION 1: PLAY RANDOM */}
+      {/* 3. The 3 Game Modes (Confetti Cards: Hi-Vis Yellow, Bubblegum Pink, Matcha Cream) */}
+      <div className="w-full flex flex-col gap-3.5">
+        {/* OPTION 1: PLAY RANDOM (Hi-Vis Yellow Action Card) */}
         <button
           type="button"
           onClick={() => {
@@ -141,27 +148,27 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             onFindMatch();
           }}
           aria-label="FIND STRANGER MATCH"
-          className="group w-full p-4 rounded-xl bg-surface border border-line hover:border-turf hover:bg-surface-2 transition-all flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+          className="group w-full p-[17px] rounded-[6px] bg-hi-vis-yellow border-2 border-pure-black hover:translate-x-0.5 hover:-translate-y-0.5 transition-transform flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pure-black"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-lg bg-turf/15 text-turf flex items-center justify-center shrink-0 group-hover:bg-turf group-hover:text-ink transition-colors">
-              <Shuffle className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-[6px] bg-bone-white border-2 border-pure-black text-pure-black flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Shuffle className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div className="flex flex-col">
-              <span className="font-heading font-black text-lg text-chalk group-hover:text-turf transition-colors">
-                Play Random
+              <span className="font-heading font-black text-xl sm:text-2xl text-pure-black uppercase tracking-tight leading-tight">
+                Play Random Stranger
               </span>
-              <span className="text-xs text-muted">
-                Match 1v1 with an online opponent
+              <span className="text-xs font-mono font-semibold text-pure-black/80 uppercase tracking-wide">
+                Live 1v1 Camera &amp; Gesture Arena
               </span>
             </div>
           </div>
-          <span className="hidden sm:inline-block text-xs font-heading font-bold uppercase text-turf bg-turf/10 px-3 py-1.5 rounded-lg border border-turf/20 group-hover:bg-turf group-hover:text-ink transition-colors">
-            FIND STRANGER MATCH
+          <span className="hidden sm:inline-block text-xs font-mono font-black uppercase text-pure-black bg-bone-white px-3.5 py-1.5 rounded-[100px] border-2 border-pure-black group-hover:bg-pure-black group-hover:text-bone-white transition-colors">
+            ENTER QUEUE
           </span>
         </button>
 
-        {/* OPTION 2: PLAY WITH FRIEND */}
+        {/* OPTION 2: PLAY WITH FRIEND (Bubblegum Pink Confetti Card) */}
         <button
           type="button"
           onClick={() => {
@@ -169,27 +176,27 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             onPlayWithFriend();
           }}
           aria-label="Play with friend in a private room"
-          className="group w-full p-4 rounded-xl bg-surface border border-line hover:border-sky hover:bg-surface-2 transition-all flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky"
+          className="group w-full p-[17px] rounded-[6px] bg-bubblegum-pink border-2 border-pure-black hover:translate-x-0.5 hover:-translate-y-0.5 transition-transform flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pure-black"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-lg bg-sky/15 text-sky flex items-center justify-center shrink-0 group-hover:bg-sky group-hover:text-ink transition-colors">
-              <Users className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-[6px] bg-bone-white border-2 border-pure-black text-pure-black flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Users className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div className="flex flex-col">
-              <span className="font-heading font-black text-lg text-chalk group-hover:text-sky transition-colors">
-                Play with Friend
+              <span className="font-heading font-black text-xl sm:text-2xl text-pure-black uppercase tracking-tight leading-tight">
+                Play With Friend
               </span>
-              <span className="text-xs text-muted">
-                Private room with invite code or link
+              <span className="text-xs font-mono font-semibold text-pure-black/80 uppercase tracking-wide">
+                Custom Private Room &amp; Share Link
               </span>
             </div>
           </div>
-          <span className="hidden sm:inline-block text-xs font-heading font-bold uppercase text-sky bg-sky/10 px-3 py-1.5 rounded-lg border border-sky/20 group-hover:bg-sky group-hover:text-ink transition-colors">
-            Play with Friend
+          <span className="hidden sm:inline-block text-xs font-mono font-black uppercase text-pure-black bg-bone-white px-3.5 py-1.5 rounded-[100px] border-2 border-pure-black group-hover:bg-pure-black group-hover:text-bone-white transition-colors">
+            CREATE ROOM
           </span>
         </button>
 
-        {/* OPTION 3: PLAY WITH COMPUTER */}
+        {/* OPTION 3: PLAY WITH COMPUTER (Matcha Cream Confetti Card) */}
         <button
           type="button"
           onClick={() => {
@@ -197,34 +204,34 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             onPlayVsBot();
           }}
           aria-label="Practice vs Server Bot"
-          className="group w-full p-4 rounded-xl bg-surface border border-line hover:border-amber hover:bg-surface-2 transition-all flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
+          className="group w-full p-[17px] rounded-[6px] bg-matcha-cream border-2 border-pure-black hover:translate-x-0.5 hover:-translate-y-0.5 transition-transform flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-pure-black"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-lg bg-amber/15 text-amber flex items-center justify-center shrink-0 group-hover:bg-amber group-hover:text-ink transition-colors">
-              <Bot className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-[6px] bg-bone-white border-2 border-pure-black text-pure-black flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+              <Bot className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div className="flex flex-col">
-              <span className="font-heading font-black text-lg text-chalk group-hover:text-amber transition-colors">
-                Play with Computer
+              <span className="font-heading font-black text-xl sm:text-2xl text-pure-black uppercase tracking-tight leading-tight">
+                Play With Bot
               </span>
-              <span className="text-xs text-muted">
-                Instant match vs smart bot, zero wait
+              <span className="text-xs font-mono font-semibold text-pure-black/80 uppercase tracking-wide">
+                Zero Wait Solo Endless Practice
               </span>
             </div>
           </div>
-          <span className="hidden sm:inline-block text-xs font-heading font-bold uppercase text-amber bg-amber/10 px-3 py-1.5 rounded-lg border border-amber/20 group-hover:bg-amber group-hover:text-ink transition-colors">
-            Practice vs Server Bot
+          <span className="hidden sm:inline-block text-xs font-mono font-black uppercase text-pure-black bg-bone-white px-3.5 py-1.5 rounded-[100px] border-2 border-pure-black group-hover:bg-pure-black group-hover:text-bone-white transition-colors">
+            INSTANT PLAY
           </span>
         </button>
       </div>
 
-      {/* 4. Compact Format Selector */}
-      <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">
-        <span className="text-[11px] font-heading font-bold text-muted uppercase tracking-wider text-center">
-          Match Format
+      {/* 4. Match Format Selector (Pills, 100px radius, 2px borders) */}
+      <div className="w-full flex flex-col gap-2.5 pt-2 border-t-2 border-pure-black">
+        <span className="text-xs font-mono font-black text-hi-vis-yellow uppercase tracking-widest text-center">
+          MATCH FORMAT SELECTOR
         </span>
 
-        <div className="grid grid-cols-3 gap-2 w-full">
+        <div className="grid grid-cols-3 gap-2.5 w-full">
           {/* Sudden Death */}
           <button
             type="button"
@@ -233,14 +240,14 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               setMode("sudden_death");
             }}
             aria-pressed={mode === "sudden_death"}
-            className={`py-2 px-3 rounded-lg text-center transition-all ${
+            className={`py-2 px-3 rounded-[100px] border-2 border-pure-black text-center transition-all ${
               mode === "sudden_death"
-                ? "bg-surface-2 border border-turf text-turf font-bold text-xs"
-                : "bg-surface border border-line text-muted hover:text-chalk text-xs"
+                ? "bg-hi-vis-yellow text-pure-black font-black"
+                : "bg-bone-white text-pure-black hover:bg-buttery-yellow font-bold"
             }`}
           >
-            <div className="font-heading font-bold">Sudden Death</div>
-            <div className="text-[10px] text-muted font-normal">1 WICKET</div>
+            <div className="font-heading font-black text-xs uppercase leading-tight">Sudden Death</div>
+            <div className="text-[10px] font-mono leading-tight">1 WKT</div>
           </button>
 
           {/* Classic */}
@@ -251,14 +258,14 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               setMode("classic");
             }}
             aria-pressed={mode === "classic"}
-            className={`py-2 px-3 rounded-lg text-center transition-all ${
+            className={`py-2 px-3 rounded-[100px] border-2 border-pure-black text-center transition-all ${
               mode === "classic"
-                ? "bg-surface-2 border border-turf text-turf font-bold text-xs"
-                : "bg-surface border border-line text-muted hover:text-chalk text-xs"
+                ? "bg-hi-vis-yellow text-pure-black font-black"
+                : "bg-bone-white text-pure-black hover:bg-buttery-yellow font-bold"
             }`}
           >
-            <div className="font-heading font-bold">Classic Match</div>
-            <div className="text-[10px] text-muted font-normal">2 WKTS • 2 OVERS</div>
+            <div className="font-heading font-black text-xs uppercase leading-tight">Classic</div>
+            <div className="text-[10px] font-mono leading-tight">2 OVERS</div>
           </button>
 
           {/* Endless */}
@@ -269,19 +276,19 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               setMode("endless");
             }}
             aria-pressed={mode === "endless"}
-            className={`py-2 px-3 rounded-lg text-center transition-all ${
+            className={`py-2 px-3 rounded-[100px] border-2 border-pure-black text-center transition-all ${
               mode === "endless"
-                ? "bg-surface-2 border border-amber text-amber font-bold text-xs"
-                : "bg-surface border border-line text-muted hover:text-chalk text-xs"
+                ? "bg-hi-vis-yellow text-pure-black font-black"
+                : "bg-bone-white text-pure-black hover:bg-buttery-yellow font-bold"
             }`}
           >
-            <div className="font-heading font-bold">Endless</div>
-            <div className="text-[10px] text-muted font-normal">NO LIMIT</div>
+            <div className="font-heading font-black text-xs uppercase leading-tight">Endless</div>
+            <div className="text-[10px] font-mono leading-tight">NO LIMIT</div>
           </button>
         </div>
       </div>
 
-      {/* 5. Simple Rules Link */}
+      {/* 5. Underline Text Link for Rules */}
       <button
         type="button"
         onClick={() => {
@@ -289,10 +296,10 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           onOpenRules();
         }}
         aria-label="View Hand Cricket rules"
-        className="flex items-center gap-1.5 text-xs text-muted hover:text-chalk transition-colors py-1 focus-visible:outline-none focus-visible:underline"
+        className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-bone-white underline decoration-2 underline-offset-4 hover:text-hi-vis-yellow transition-colors py-1 focus-visible:outline-none"
       >
-        <HelpCircle className="w-3.5 h-3.5 text-turf" />
-        <span>View rules &amp; how to play</span>
+        <HelpCircle className="w-4 h-4 text-hi-vis-yellow stroke-[2.5]" />
+        <span>View Rules &amp; Hand Gestures Guide</span>
       </button>
     </main>
   );

@@ -1,61 +1,128 @@
-/* Hand Cricket Arena Design Tokens — Ergonomic Midnight Slate Palette */
+/* Flying Papers — Design System & Tokens: Saturday Morning Cartoon Confessional */
 :root {
-  /* Eye-friendly Midnight Slate Dark Theme (Default) */
-  --color-ink: #0B0F19;         /* Midnight Obsidian Background — Calming & low-glare */
-  --color-surface: #141B2D;     /* Smooth Deep Slate Card Surface */
-  --color-surface-2: #1E273D;   /* Elevated Slate Tile / Hover */
-  --color-line: #2D3748;        /* Soft Subtle Slate Border Line */
-  --color-chalk: #F8FAFC;       /* Slate-50 Pure Crisp Text */
-  --color-muted: #94A3B8;       /* Slate-400 Gentle Low-Strain Secondary Text */
-  --color-turf: #10B981;        /* Natural Stadium Emerald */
-  --color-turf-hover: #059669;  /* Deep Emerald Hover */
-  --color-ball: #F43F5E;        /* Warm Rose / Cricket Crimson */
-  --color-amber: #F59E0B;       /* Warm Honey Gold */
-  --color-sky: #38BDF8;         /* Soft Cerulean Sky Blue */
-  --color-indigo: #6366F1;      /* Gentle Modern Indigo */
+  /* Flying Papers Core Palette */
+  --color-dusk-violet: #8584bd;       /* Primary canvas and hero background stage */
+  --color-hi-vis-yellow: #f4ed36;     /* Outlined action borders, linked labels, highlight */
+  --color-buttery-yellow: #f9cc73;    /* Secondary display text and softer borders */
+  --color-lilac-shadow: #61609a;      /* Nested surfaces and block backgrounds on violet */
+  --color-bubblegum-pink: #f8c1ba;    /* Decorative borders and confetti accent */
+  --color-matcha-cream: #b5c995;      /* Decorative borders and confetti accent */
+  --color-magenta-punch: #ac4f98;     /* Accent standout card surface */
+  --color-firecracker-red: #c94245;   /* Red wash, wickets, balls, highlight */
+  --color-bone-white: #f9f5f2;        /* Hairline borders, dividers, light card surface */
+  --color-ink-black: #1a1a1a;         /* Body text, primary borders on cream */
+  --color-pure-black: #000000;        /* Hard borders, icons, maximum edge contrast */
+
+  /* Semantic Mappings for HandCricketOmegle Application */
+  --color-ink: #8584bd;               /* Dusk Violet Stage Canvas */
+  --color-surface: #61609a;           /* Lilac Shadow nested card block */
+  --color-surface-2: #f9f5f2;         /* Bone White light card surface */
+  --color-line: #000000;              /* Hard Crisp Pure Black Borders */
+  --color-chalk: #f9f5f2;             /* Bone White crisp primary text on stage */
+  --color-muted: #f9cc73;             /* Buttery Yellow secondary/micro-text */
+  --color-turf: #f4ed36;              /* Hi-Vis Yellow primary action accent */
+  --color-turf-hover: #f9cc73;        /* Buttery Yellow hover */
+  --color-ball: #c94245;              /* Firecracker Red */
+  --color-amber: #f9cc73;             /* Buttery Yellow */
+  --color-sky: #b5c995;               /* Matcha Cream */
+  --color-indigo: #ac4f98;            /* Magenta Punch */
+  --color-pink: #f8c1ba;              /* Bubblegum Pink */
+
+  /* Flying Papers Typography Tokens */
+  --text-caption: 10px;
+  --leading-caption: 1;
+  --tracking-caption: 0px;
+  --text-body: 16px;
+  --leading-body: 1;
+  --tracking-body: 0.8px;
+  --text-body-lg: 18px;
+  --leading-body-lg: 0.9;
+  --tracking-body-lg: 0.36px;
+  --text-subheading: 30px;
+  --leading-subheading: 0.9;
+  --tracking-subheading: 0.6px;
+  --text-heading-sm: 100px;
+  --leading-heading-sm: 0.9;
+  --tracking-heading-sm: 2px;
+  --text-heading: 149px;
+  --leading-heading: 0.85;
+  --tracking-heading: 2.98px;
+  --text-heading-lg: 184px;
+  --leading-heading-lg: 0.85;
+  --tracking-heading-lg: 3.68px;
+  --text-display: 341px;
+  --leading-display: 0.8;
+  --tracking-display: 6.82px;
 
   /* Spacing Scale */
   --space-4: 4px;
   --space-8: 8px;
   --space-12: 12px;
   --space-16: 16px;
+  --space-20: 20px;
   --space-24: 24px;
   --space-32: 32px;
+  --space-40: 40px;
+  --space-60: 60px;
+  --space-80: 80px;
+  --space-160: 160px;
 
-  /* Border Radii */
-  --radius-card: 16px;
-  --radius-pill: 999px;
+  /* Layout & Density */
+  --section-gap: 40px;
+  --card-padding: 17px;
+  --element-gap: 17px;
 
-  /* 1px Border */
-  --border-width: 1px;
+  /* Border Radius — Strict Flying Papers Specs (6px cards, 100px pills) */
+  --radius-card: 6px;
+  --radius-pill: 100px;
+  --radius-tags: 100px;
+  --radius-buttons: 100px;
+
+  /* Border Width */
+  --border-width: 2px;
 }
 
-/* Eye-Friendly Light Mode Theme */
+/* Light / Cartoon Confessional Preset */
 :root[data-theme="light"],
 html[data-theme="light"],
 body[data-theme="light"] {
-  --color-ink: #F1F5F9;         /* Soft Clean Slate-100 Background */
-  --color-surface: #FFFFFF;     /* Pure Crisp White Card Surface */
-  --color-surface-2: #F8FAFC;   /* Soft Slate-50 Tile / Hover */
-  --color-line: #E2E8F0;        /* Gentle Slate-200 Border Line */
-  --color-chalk: #0F172A;       /* Slate-900 High-Readability Primary Text */
-  --color-muted: #64748B;       /* Slate-500 Readable Secondary Text */
-  --color-turf: #059669;        /* Rich Turf Emerald-600 */
-  --color-turf-hover: #047857;  /* Deep Turf Emerald-700 */
-  --color-ball: #E11D48;        /* Warm Rose-600 */
-  --color-amber: #D97706;       /* Warm Amber-600 */
-  --color-sky: #0284C7;         /* Cerulean Sky-600 */
-  --color-indigo: #4F46E5;      /* Indigo-600 */
+  --color-ink: #8584bd;
+  --color-surface: #61609a;
+  --color-surface-2: #f9f5f2;
+  --color-line: #000000;
+  --color-chalk: #f9f5f2;
+  --color-muted: #f9cc73;
+  --color-turf: #f4ed36;
+  --color-turf-hover: #f9cc73;
+  --color-ball: #c94245;
+  --color-amber: #f9cc73;
+  --color-sky: #b5c995;
+  --color-indigo: #ac4f98;
 }
 
 body {
-  background-color: var(--color-ink);
-  color: var(--color-chalk);
+  background-color: var(--color-dusk-violet);
+  color: var(--color-bone-white);
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Riso Display Headlines with tight leading and wide geometric impact */
+.font-display-hero {
+  font-family: var(--font-barlow-condensed), Impact, "Arial Black", sans-serif;
+  font-feature-settings: "calt" 0;
+  letter-spacing: 0.02em;
+  line-height: 0.85;
+}
+
+/* Monospaced Receipt Micro-Type */
+.font-receipt-mono {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  font-feature-settings: "calt" 0;
+  line-height: 0.85;
+  letter-spacing: 0.05em;
 }
 
 /* Tabular numerals for all scores, overs, timers */
@@ -63,13 +130,13 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Focus outline standard */
+/* Hard outline accessibility focus state */
 :focus-visible {
-  outline: 2px solid var(--color-turf);
+  outline: 3px solid var(--color-hi-vis-yellow);
   outline-offset: 2px;
 }
 
-/* Respect prefers-reduced-motion: disable shake and count-up/transitions */
+/* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -79,23 +146,22 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .animate-shake {
-    animation: none !important;
-  }
 }
 
-/* Custom smooth scrollbar */
+/* Flat Riso Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--color-ink);
+  background: var(--color-dusk-violet);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-line);
-  border-radius: 999px;
+  background: var(--color-hi-vis-yellow);
+  border: 2px solid var(--color-pure-black);
+  border-radius: 100px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-muted);
+  background: var(--color-buttery-yellow);
 }
+

@@ -228,28 +228,28 @@ export function PlayWithFriendModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="friend-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/80 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-pure-black/70 backdrop-blur-none animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-surface border border-line rounded-[18px] p-5 sm:p-6 text-chalk shadow-2xl relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-md bg-bone-white border-2 border-pure-black rounded-[6px] p-5 sm:p-6 text-ink-black shadow-none relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto select-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-line pb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-turf/10 border border-turf/40 flex items-center justify-center text-turf">
-              <Users className="w-4 h-4" />
+        <div className="flex items-center justify-between border-b-2 border-pure-black pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-[6px] bg-bubblegum-pink border-2 border-pure-black flex items-center justify-center text-pure-black">
+              <Users className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
               <h2
                 id="friend-modal-title"
-                className="font-heading font-black text-xl uppercase tracking-tight text-chalk leading-none"
+                className="font-heading font-black text-2xl uppercase tracking-tight text-pure-black leading-none"
               >
                 Play with Friend
               </h2>
-              <p className="text-[11px] text-muted leading-tight mt-0.5">
-                Private 1v1 match with custom rules &amp; instant sync
+              <p className="text-[11px] font-mono text-pure-black/70 leading-tight mt-0.5 uppercase tracking-wide">
+                Private room • Custom rules &amp; instant sync
               </p>
             </div>
           </div>
@@ -257,15 +257,15 @@ export function PlayWithFriendModal({
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="p-1.5 rounded-lg text-muted hover:text-chalk hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-turf"
+            className="p-1.5 rounded-[100px] border-2 border-pure-black bg-bone-white text-pure-black hover:bg-hi-vis-yellow transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pure-black"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 stroke-[2.5]" />
           </button>
         </div>
 
         {/* Tab Switcher (Visible when not in Room Created screen) */}
         {!createdRoomCode && (
-          <div className="grid grid-cols-2 gap-1.5 p-1 bg-surface-2 border border-line rounded-xl">
+          <div className="grid grid-cols-2 gap-2 p-1 bg-dusk-violet border-2 border-pure-black rounded-[100px]">
             <button
               type="button"
               onClick={() => {
@@ -273,13 +273,13 @@ export function PlayWithFriendModal({
                 setActiveTab("create");
                 setCreateError(null);
               }}
-              className={`py-2 px-3 rounded-lg text-xs font-heading font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-2 px-3 rounded-[100px] text-xs font-mono font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all border-2 ${
                 activeTab === "create"
-                  ? "bg-turf text-ink shadow-sm"
-                  : "text-muted hover:text-chalk"
+                  ? "bg-hi-vis-yellow text-pure-black border-pure-black"
+                  : "bg-transparent text-bone-white border-transparent hover:text-hi-vis-yellow"
               }`}
             >
-              <PlusCircle className="w-3.5 h-3.5" />
+              <PlusCircle className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>Create Room</span>
             </button>
             <button
@@ -289,13 +289,13 @@ export function PlayWithFriendModal({
                 setActiveTab("join");
                 setJoinError(null);
               }}
-              className={`py-2 px-3 rounded-lg text-xs font-heading font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all ${
+              className={`py-2 px-3 rounded-[100px] text-xs font-mono font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all border-2 ${
                 activeTab === "join"
-                  ? "bg-turf text-ink shadow-sm"
-                  : "text-muted hover:text-chalk"
+                  ? "bg-hi-vis-yellow text-pure-black border-pure-black"
+                  : "bg-transparent text-bone-white border-transparent hover:text-hi-vis-yellow"
               }`}
             >
-              <LogIn className="w-3.5 h-3.5" />
+              <LogIn className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>Join Room</span>
             </button>
           </div>

@@ -35,99 +35,105 @@ export function AgeGateModal({ isOpen, onConfirm, onDecline }: AgeGateModalProps
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/90 backdrop-blur-none"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-pure-black/70 backdrop-blur-none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="agegate-title"
     >
-      <div className="w-full max-w-md bg-surface border border-line rounded-xl p-6 shadow-2xl space-y-5">
-        <div className="flex items-center gap-3 border-b border-line pb-4">
-          <div className="w-10 h-10 rounded-lg bg-ball/10 border border-ball/30 flex items-center justify-center text-ball">
-            <ShieldAlert className="w-6 h-6" />
+      <div className="w-full max-w-md bg-bone-white border-2 border-pure-black rounded-[6px] p-[17px] space-y-4 text-ink-black select-none">
+        {/* Header Block */}
+        <div className="flex items-center gap-3 border-b-2 border-pure-black pb-3">
+          <div className="w-11 h-11 rounded-[6px] bg-firecracker-red border-2 border-pure-black flex items-center justify-center text-bone-white shrink-0">
+            <ShieldAlert className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div>
-            <h2 id="agegate-title" className="text-xl font-bold font-heading uppercase tracking-wide text-chalk">
-              18+ Verification &amp; Safety
+            <h2 id="agegate-title" className="text-2xl font-black font-heading uppercase tracking-tight text-ink-black leading-tight">
+              18+ Gate &amp; Confession
             </h2>
-            <p className="text-xs text-muted">Required for stranger matchmaking</p>
+            <p className="text-xs font-mono font-semibold text-pure-black/70 tracking-wide uppercase">
+              Adults Only • Live Video Matchmaking
+            </p>
           </div>
         </div>
 
-        <div className="space-y-3 text-sm text-chalk/90 bg-surface-2 p-3.5 rounded-lg border border-line">
-          <p className="font-semibold text-chalk text-xs uppercase tracking-wider">
+        {/* Safety Standards Block — Lilac Shadow card inside Bone White */}
+        <div className="space-y-2.5 text-xs text-bone-white bg-lilac-shadow p-[14px] rounded-[6px] border-2 border-pure-black">
+          <p className="font-bold font-mono text-hi-vis-yellow uppercase tracking-wider text-[11px]">
             Community Safety Standards:
           </p>
-          <ul className="space-y-2 text-xs text-muted leading-relaxed">
+          <ul className="space-y-1.5 font-sans text-bone-white leading-relaxed">
             <li className="flex items-start gap-2">
-              <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">Strictly 18+:</strong> Stranger mode is restricted to adults 18 years and older.</span>
+              <span className="text-hi-vis-yellow font-black text-sm leading-none">•</span>
+              <span><strong className="text-hi-vis-yellow">Strictly 18+:</strong> Stranger duels are strictly reserved for adults 18+.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">No Nudity:</strong> Zero tolerance for explicit or sexual content on camera.</span>
+              <span className="text-hi-vis-yellow font-black text-sm leading-none">•</span>
+              <span><strong className="text-hi-vis-yellow">Zero Nudity:</strong> Permanent hardware &amp; IP ban on explicit camera conduct.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">No Harassment:</strong> Zero tolerance for hate speech, bullying, or threats.</span>
+              <span className="text-hi-vis-yellow font-black text-sm leading-none">•</span>
+              <span><strong className="text-hi-vis-yellow">No Harassment:</strong> Zero tolerance for hate speech, abuse, or threats.</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-ball font-bold">•</span>
-              <span><strong className="text-chalk">Strict Privacy:</strong> Live video is strictly peer-to-peer. Zero video is ever recorded or stored.</span>
+              <span className="text-hi-vis-yellow font-black text-sm leading-none">•</span>
+              <span><strong className="text-hi-vis-yellow">Zero Cloud Video:</strong> Direct peer-to-peer WebRTC only. Never recorded.</span>
             </li>
           </ul>
         </div>
 
-        <div className="space-y-3 pt-1">
-          <label className="flex items-start gap-3 cursor-pointer select-none text-xs text-chalk">
+        {/* Checkbox Disclaimers */}
+        <div className="space-y-2.5 pt-1 text-ink-black font-medium text-xs">
+          <label className="flex items-start gap-3 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={agreedToAge}
               onChange={(e) => setAgreedToAge(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-line bg-surface-2 text-turf focus:ring-0 focus:outline-none cursor-pointer"
+              className="mt-0.5 w-4 h-4 rounded-[3px] border-2 border-pure-black text-pure-black focus:ring-0 focus:outline-none cursor-pointer accent-pure-black"
             />
             <span>
-              I confirm that I am <strong>18 years of age or older</strong>.
+              I solemnly confirm that I am <strong className="font-bold underline decoration-2 decoration-pure-black">18 years of age or older</strong>.
             </span>
           </label>
 
-          <label className="flex items-start gap-3 cursor-pointer select-none text-xs text-chalk">
+          <label className="flex items-start gap-3 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={agreedToRules}
               onChange={(e) => setAgreedToRules(e.target.checked)}
-              className="mt-0.5 w-4 h-4 rounded border-line bg-surface-2 text-turf focus:ring-0 focus:outline-none cursor-pointer"
+              className="mt-0.5 w-4 h-4 rounded-[3px] border-2 border-pure-black text-pure-black focus:ring-0 focus:outline-none cursor-pointer accent-pure-black"
             />
             <span>
               I accept the{" "}
-              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-turf underline">
+              <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-bold underline text-ink-black hover:text-firecracker-red">
                 Terms of Service
               </Link>{" "}
               and{" "}
-              <Link href="/guidelines" target="_blank" rel="noopener noreferrer" className="text-turf underline">
-                Community Guidelines
+              <Link href="/guidelines" target="_blank" rel="noopener noreferrer" className="font-bold underline text-ink-black hover:text-firecracker-red">
+                Safety Guidelines
               </Link>
-              . I understand violations result in an immediate ban.
+              .
             </span>
           </label>
         </div>
 
-        <div className="flex gap-3 pt-2">
-          <Button
-            variant="secondary"
-            className="flex-1"
+        {/* Actions: Gate Pill Button & Underline Link */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+          <button
+            type="button"
             onClick={onDecline}
+            className="w-full sm:w-auto px-4 py-2 text-xs font-mono font-bold uppercase tracking-wider text-pure-black/80 underline decoration-1 hover:text-firecracker-red hover:decoration-2 transition-all order-2 sm:order-1"
           >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            className="flex-1"
+            I Decline / Exit
+          </button>
+          <button
+            type="button"
             disabled={!agreedToAge || !agreedToRules}
             onClick={handleConfirm}
+            className="w-full sm:flex-1 py-3 px-5 rounded-[100px] border-2 border-pure-black bg-hi-vis-yellow text-pure-black font-heading font-black text-base uppercase tracking-wider hover:bg-buttery-yellow active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 order-1 sm:order-2"
           >
-            <Check className="w-4 h-4 mr-1.5" />
-            Confirm &amp; Enter
-          </Button>
+            <Check className="w-5 h-5 stroke-[3]" />
+            I&apos;M OVER 18, LET ME IN
+          </button>
         </div>
       </div>
     </div>
