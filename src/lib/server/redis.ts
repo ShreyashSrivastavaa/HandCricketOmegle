@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { getEnv } from "../env";
+import { getEnv } from "../env.ts";
 
 // In-memory fallback cache for development or tests without live Upstash Redis
 export class MemoryRedis {
@@ -236,10 +236,13 @@ export class MemoryRedis {
   }
 }
 
-let redisInstance: Redis | MemoryRedis | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __hand_cricket_redis__: Redis | MemoryRedis | undefined;
+}
 
 export function getRedis(): Redis | MemoryRedis {
-  if (redisInstance) return redisInstance;
+  if (globalThis.__hand_cricket_redis__) return globalThis.__hand_cricket_redis__;
 
   try {
     const env = getEnv();
@@ -248,18 +251,18 @@ export function getRedis(): Redis | MemoryRedis {
       env.UPSTASH_REDIS_REST_TOKEN.includes("mock")
     ) {
       console.warn("[Hand Cricket Live] Using In-Memory Redis fallback for development/testing.");
-      redisInstance = new MemoryRedis();
-      return redisInstance;
+      globalThis.__hand_cricket_redis__ = new MemoryRedis();
+      return globalThis.__hand_cricket_redis__;
     }
 
-    redisInstance = new Redis({
+    globalThis.__hand_cricket_redis__ = new Redis({
       url: env.UPSTASH_REDIS_REST_URL,
       token: env.UPSTASH_REDIS_REST_TOKEN,
     });
-    return redisInstance;
+    return globalThis.__hand_cricket_redis__;
   } catch (err) {
     console.warn("[Hand Cricket Live] Failed to initialize Upstash Redis, falling back to memory store:", err);
-    redisInstance = new MemoryRedis();
-    return redisInstance;
+    globalThis.__hand_cricket_redis__ = new MemoryRedis();
+    return globalThis.__hand_cricket_redis__;
   }
 }

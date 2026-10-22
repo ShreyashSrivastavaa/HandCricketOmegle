@@ -193,6 +193,32 @@ export async function joinMatchmakingQueue(
       ex: MATCH_TTL_SECONDS,
     });
 
+    // Store quick match-found lookup for polling fallback
+    await Promise.all([
+      redis.set(
+        `user_match:${p1.guestId}`,
+        JSON.stringify({
+          matchId,
+          role: "p1",
+          opponentName: p2.name,
+          isBot: false,
+          mode,
+        }),
+        { ex: 60 }
+      ),
+      redis.set(
+        `user_match:${p2.guestId}`,
+        JSON.stringify({
+          matchId,
+          role: "p2",
+          opponentName: p1.name,
+          isBot: false,
+          mode,
+        }),
+        { ex: 60 }
+      ),
+    ]);
+
     // Notify waiting player on their private channel
     await publishToAbly(`user:${p1.guestId}`, "match-found", {
       matchId,
@@ -394,9 +420,9 @@ export async function handleTossAction(
     match.tossPicks[guestId] = action.value;
     state = submitTossPick(state, playerId, action.value);
 
-    // If bot opponent, submit bot's toss pick if not already submitted
-    if (match.isBot && match.tossPicks[match.player2.guestId] === undefined) {
-      const botPick = getBotTossPick();
+    // If bot opponent, submit bot's toss pick to game state if not already in state
+    if (match.isBot && state.tossPicks["p2"] === undefined) {
+      const botPick = match.tossPicks[match.player2.guestId] ?? getBotTossPick();
       match.tossPicks[match.player2.guestId] = botPick;
       state = submitTossPick(state, "p2", botPick);
     }
@@ -478,6 +504,8 @@ export async function handleBallMove(
   status: "waiting_opponent" | "resolved";
   outcome?: BallOutcome;
   gameState: GameState;
+  p1Pick?: number;
+  p2Pick?: number;
 }> {
   const match = await getMatch(matchId);
   if (!match) throw new Error("Match not found");
@@ -565,6 +593,8 @@ export async function handleBallMove(
 
     return {
       status: "resolved",
+      p1Pick,
+      p2Pick,
       outcome,
       gameState: nextState,
     };

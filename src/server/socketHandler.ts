@@ -1,6 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import { matchmaker } from "./matchmaker.ts";
 import { roomStore, type ActiveRoom } from "./roomStore.ts";
+import { getRedis } from "../lib/server/redis.ts";
 import {
   joinQueueSchema,
   friendCreateSchema,
@@ -168,7 +169,7 @@ export function registerSocketHandlers(io: Server) {
       emitFriendState(result.room);
     });
 
-    socket.on("friend:join", (rawPayload: unknown) => {
+    socket.on("friend:join", async (rawPayload: unknown) => {
       const parsed = friendJoinSchema.safeParse(rawPayload);
       if (!parsed.success) {
         socket.emit("friend:error", { message: "Invalid room join code or name." });
@@ -176,6 +177,37 @@ export function registerSocketHandlers(io: Server) {
       }
 
       const { code, guestId, name, ageConfirmed } = parsed.data;
+
+      // Hydrate from Redis if room was created via REST route
+      let existingRoom = roomStore.getRoomByCode(code);
+      if (!existingRoom) {
+        try {
+          const rawCode = code.trim().toUpperCase();
+          const cleanCode = rawCode.startsWith("HC-")
+            ? rawCode.slice(3)
+            : rawCode.startsWith("HC") && rawCode.length > 6
+            ? rawCode.slice(2)
+            : rawCode;
+          const redis = getRedis();
+          const redisRoomRaw = await redis.get(`friend_room:${cleanCode}`);
+          if (redisRoomRaw) {
+            const redisRoom =
+              typeof redisRoomRaw === "string" ? JSON.parse(redisRoomRaw) : redisRoomRaw;
+            if (redisRoom && redisRoom.roomId && redisRoom.host) {
+              roomStore.registerExistingRoom({
+                roomId: redisRoom.roomId,
+                code: cleanCode,
+                hostGuestId: redisRoom.host.guestId,
+                hostName: redisRoom.host.name,
+                mode: redisRoom.mode || "game_only",
+                format: redisRoom.format || { maxWickets: 1, maxOvers: 1 },
+              });
+            }
+          }
+        } catch (e) {
+          console.warn("[socketHandler] Error hydrating room from Redis:", e);
+        }
+      }
 
       const result = roomStore.joinFriendRoom({
         code,
@@ -229,19 +261,41 @@ export function registerSocketHandlers(io: Server) {
       emitFriendState(room);
     });
 
-    socket.on("friend:ready", (rawPayload: unknown) => {
+    socket.on("friend:ready", async (rawPayload: unknown) => {
       const parsed = friendReadySchema.safeParse(rawPayload);
       if (!parsed.success) return;
 
       const { room } = getPartnerInfo();
       if (!room) return;
 
-      const guestId = room.p1.socketId === socket.id ? room.p1.guestId : room.p2?.guestId;
+      const guestId =
+        parsed.data.guestId ||
+        (room.p1.socketId === socket.id ? room.p1.guestId : room.p2?.guestId);
       if (!guestId) return;
 
       const result = roomStore.setReady(room.roomId, guestId, parsed.data.ready);
       if (result.room) {
         emitFriendState(result.room);
+
+        // Keep Redis friend room in sync
+        try {
+          const redis = getRedis();
+          const cleanCode = result.room.code;
+          if (cleanCode) {
+            const raw = await redis.get(`friend_room:${cleanCode}`);
+            if (raw) {
+              const parsedRoom = typeof raw === "string" ? JSON.parse(raw) : raw;
+              if (parsedRoom && parsedRoom.host) {
+                parsedRoom.host.ready = result.room.p1Ready;
+                if (parsedRoom.guest) parsedRoom.guest.ready = result.room.p2Ready;
+                if (result.bothReady) parsedRoom.status = "playing";
+                await redis.set(`friend_room:${cleanCode}`, JSON.stringify(parsedRoom));
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[socketHandler] Error syncing ready state to Redis:", e);
+        }
 
         // When both players are ready, start the match!
         if (result.bothReady && result.room.p2) {
@@ -595,17 +649,25 @@ export function registerSocketHandlers(io: Server) {
     socket.on("game:toss_pick", (payload: unknown) => {
       const parsed = tossPickSchema.safeParse(payload);
       if (!parsed.success) return;
-      const { partnerId } = getPartnerInfo();
+      const { partnerId, isP1 } = getPartnerInfo();
       if (!partnerId) return;
-      io.to(partnerId).emit("game:toss_pick", parsed.data);
+      const senderRole: "p1" | "p2" = isP1 ? "p1" : "p2";
+      io.to(partnerId).emit("game:toss_pick", {
+        pick: parsed.data.pick,
+        pickerId: parsed.data.pickerId || senderRole,
+      });
     });
 
     socket.on("game:toss_decision", (payload: unknown) => {
       const parsed = tossDecisionSchema.safeParse(payload);
       if (!parsed.success) return;
-      const { partnerId, room } = getPartnerInfo();
+      const { partnerId, room, isP1 } = getPartnerInfo();
       if (!partnerId) return;
-      io.to(partnerId).emit("game:toss_decision", parsed.data);
+      const senderRole: "p1" | "p2" = isP1 ? "p1" : "p2";
+      io.to(partnerId).emit("game:toss_decision", {
+        role: parsed.data.role,
+        winner: parsed.data.winner || senderRole,
+      });
       if (room) {
         startServerBallTimer(room, 0);
       }

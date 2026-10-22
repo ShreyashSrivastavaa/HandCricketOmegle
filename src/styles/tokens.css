@@ -1,16 +1,18 @@
-/* Hand Cricket Arena Design Tokens */
+/* Hand Cricket Arena Design Tokens — Ergonomic Midnight Slate Palette */
 :root {
-  /* Dark, turf-inspired palette */
-  --color-ink: #0B1210;         /* Background */
-  --color-surface: #121C18;     /* Surface 1 */
-  --color-surface-2: #1A2722;   /* Surface 2 / elevated */
-  --color-line: #2A3A33;        /* 1px border line */
-  --color-chalk: #F2EFE6;       /* Main text */
-  --color-muted: #8FA39A;       /* Secondary text */
-  --color-turf: #3DDC84;        /* Primary / You / Batting */
-  --color-ball: #FF4D4D;        /* Wicket / Danger / Out */
-  --color-amber: #FFB020;       /* Runs / Highlights / Boundary */
-  --color-sky: #4DA3FF;         /* Opponent / Bowling */
+  /* Eye-friendly Midnight Slate Dark Theme (Default) */
+  --color-ink: #0B0F19;         /* Midnight Obsidian Background — Calming & low-glare */
+  --color-surface: #141B2D;     /* Smooth Deep Slate Card Surface */
+  --color-surface-2: #1E273D;   /* Elevated Slate Tile / Hover */
+  --color-line: #2D3748;        /* Soft Subtle Slate Border Line */
+  --color-chalk: #F8FAFC;       /* Slate-50 Pure Crisp Text */
+  --color-muted: #94A3B8;       /* Slate-400 Gentle Low-Strain Secondary Text */
+  --color-turf: #10B981;        /* Natural Stadium Emerald */
+  --color-turf-hover: #059669;  /* Deep Emerald Hover */
+  --color-ball: #F43F5E;        /* Warm Rose / Cricket Crimson */
+  --color-amber: #F59E0B;       /* Warm Honey Gold */
+  --color-sky: #38BDF8;         /* Soft Cerulean Sky Blue */
+  --color-indigo: #6366F1;      /* Gentle Modern Indigo */
 
   /* Spacing Scale */
   --space-4: 4px;
@@ -21,11 +23,29 @@
   --space-32: 32px;
 
   /* Border Radii */
-  --radius-card: 12px;
+  --radius-card: 16px;
   --radius-pill: 999px;
 
   /* 1px Border */
   --border-width: 1px;
+}
+
+/* Eye-Friendly Light Mode Theme */
+:root[data-theme="light"],
+html[data-theme="light"],
+body[data-theme="light"] {
+  --color-ink: #F1F5F9;         /* Soft Clean Slate-100 Background */
+  --color-surface: #FFFFFF;     /* Pure Crisp White Card Surface */
+  --color-surface-2: #F8FAFC;   /* Soft Slate-50 Tile / Hover */
+  --color-line: #E2E8F0;        /* Gentle Slate-200 Border Line */
+  --color-chalk: #0F172A;       /* Slate-900 High-Readability Primary Text */
+  --color-muted: #64748B;       /* Slate-500 Readable Secondary Text */
+  --color-turf: #059669;        /* Rich Turf Emerald-600 */
+  --color-turf-hover: #047857;  /* Deep Turf Emerald-700 */
+  --color-ball: #E11D48;        /* Warm Rose-600 */
+  --color-amber: #D97706;       /* Warm Amber-600 */
+  --color-sky: #0284C7;         /* Cerulean Sky-600 */
+  --color-indigo: #4F46E5;      /* Indigo-600 */
 }
 
 body {
@@ -35,6 +55,7 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Tabular numerals for all scores, overs, timers */
@@ -63,7 +84,7 @@ body {
   }
 }
 
-/* Custom turf scrollbar */
+/* Custom smooth scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

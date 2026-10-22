@@ -17,11 +17,11 @@ await app.prepare();
 const expressApp = express();
 const server = http.createServer(expressApp);
 
-// Configure body parser with 10MB limit for snapshot frame uploads
-expressApp.use(express.json({ limit: "10mb" }));
+// Body parser scoped only to custom Express routes (avoids locking body stream for Next.js App Router)
+const jsonParser = express.json({ limit: "10mb" });
 
 // 1. Safety report API
-expressApp.post("/api/reports", (req, res) => {
+expressApp.post("/api/reports", jsonParser, (req, res) => {
   const { reporterGuestId, reportedGuestId, roomId, reason, snapshotBase64 } = req.body;
 
   if (!reporterGuestId || !reportedGuestId || !reason) {
@@ -65,7 +65,7 @@ expressApp.get("/api/admin/reports", (req, res) => {
 });
 
 // 3. Admin action API
-expressApp.post("/api/admin/reports/action", (req, res) => {
+expressApp.post("/api/admin/reports/action", jsonParser, (req, res) => {
   const password = req.headers["x-admin-password"] || req.query.password;
   if (password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: "Unauthorized: Invalid admin password" });

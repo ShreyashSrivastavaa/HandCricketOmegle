@@ -142,7 +142,7 @@ export const TossScreen: React.FC<TossScreenProps> = ({
       )}
 
       {/* STEP 3: TOSS OUTCOME & DECISION */}
-      {gameState.phase === "toss_decision" && (
+      {(gameState.phase === "toss_decision" || (gameState.phase === "innings_1" && !userWonToss)) && (
         <div className="w-full flex flex-col items-center gap-5 bg-surface-2/60 border border-line rounded-[14px] p-5">
           {/* Summary of picks and sum */}
           {userPick && otherPick && (
@@ -179,6 +179,16 @@ export const TossScreen: React.FC<TossScreenProps> = ({
                   : `${otherPlayerName.toUpperCase()} WON THE TOSS`}
               </span>
             </div>
+            {gameState.phase === "innings_1" && !userWonToss && (
+              <div className="flex flex-col items-center gap-1 mt-2">
+                <span className="text-sm font-heading font-bold text-amber">
+                  {otherPlayerName} elected to {gameState.tossDecision?.toUpperCase()} first!
+                </span>
+                <span className="text-xs text-turf font-bold animate-pulse mt-1">
+                  Starting match...
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Decision Buttons (If user won) */}

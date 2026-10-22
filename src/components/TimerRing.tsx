@@ -5,6 +5,7 @@ export interface TimerRingProps {
   totalSeconds?: number;
   size?: number;
   strokeWidth?: number;
+  showText?: boolean;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export const TimerRing: React.FC<TimerRingProps> = ({
   totalSeconds = 8,
   size = 56,
   strokeWidth = 4,
+  showText = true,
   className = "",
 }) => {
   const radius = (size - strokeWidth) / 2;
@@ -81,15 +83,17 @@ export const TimerRing: React.FC<TimerRingProps> = ({
       </svg>
 
       {/* Number in center */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span
-          className={`font-heading font-black tabular-nums transition-colors ${
-            size >= 64 ? "text-xl sm:text-2xl" : "text-base sm:text-lg"
-          } ${textColor}`}
-        >
-          {Math.ceil(remainingSeconds)}s
-        </span>
-      </div>
+      {showText && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span
+            className={`font-heading font-black tabular-nums transition-colors ${
+              size >= 64 ? "text-xl sm:text-2xl" : "text-base sm:text-lg"
+            } ${textColor}`}
+          >
+            {Math.ceil(remainingSeconds)}s
+          </span>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "server": "node --env-file=.env.local server.mjs",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",

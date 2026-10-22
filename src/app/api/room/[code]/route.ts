@@ -30,20 +30,25 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("ready"),
     ready: z.boolean().optional(),
+    guestId: z.string().optional(),
   }),
   z.object({
     action: z.literal("format"),
     format: formatSchema,
+    guestId: z.string().optional(),
   }),
   z.object({
     action: z.literal("kick"),
     targetGuestId: z.string(),
+    guestId: z.string().optional(),
   }),
   z.object({
     action: z.literal("leave"),
+    guestId: z.string().optional(),
   }),
   z.object({
     action: z.literal("rematch"),
+    guestId: z.string().optional(),
   }),
 ]);
 
@@ -81,9 +86,12 @@ export async function POST(
   }
 
   const payload = parseResult.data;
-  if ("guestId" in payload && payload.guestId && payload.guestId.length > 3) {
-    session.guestId = payload.guestId;
-  }
+  const effectiveGuestId =
+    ("guestId" in payload && payload.guestId && payload.guestId.length > 3)
+      ? payload.guestId
+      : session.guestId;
+  session.guestId = effectiveGuestId;
+
   if ("name" in payload && payload.name) {
     session.guestName = payload.name;
   }
@@ -93,7 +101,7 @@ export async function POST(
     return NextResponse.json({ error: "Room not found or expired." }, { status: 404 });
   }
 
-  const guestId = session.guestId;
+  const guestId = effectiveGuestId;
   const isHost = room.host.guestId === guestId;
   const isGuest = room.guest?.guestId === guestId;
 

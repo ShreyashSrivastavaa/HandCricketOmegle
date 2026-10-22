@@ -418,4 +418,135 @@ describe("Friend Rooms, Random Matchmaking, and Bridge Tests", () => {
     reconnectedHost.disconnect();
     guest.disconnect();
   });
+
+  // 7. Hydrates REST/Redis created friend room on Socket.IO friend:join
+  it("Hydrates REST/Redis created friend room on Socket.IO friend:join", async () => {
+    const { getRedis } = await import("../src/lib/server/redis");
+    const redis = getRedis();
+
+    const code = "TST123";
+    const redisRoom = {
+      roomId: "room_rest_test_1",
+      code,
+      type: "friend",
+      mode: "game_only",
+      format: { maxWickets: 1, maxOvers: 1 },
+      status: "waiting",
+      host: { guestId: "host_rest_1", name: "HostFromREST", ready: false },
+      guest: null,
+      seriesScore: { host_rest_1: 0 },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await redis.set(`friend_room:${code}`, JSON.stringify(redisRoom));
+
+    // Connect host socket and join
+    const hostSocket: ClientSocket = ClientIO(`http://localhost:${port}`);
+    await new Promise<void>((res) => hostSocket.on("connect", () => res()));
+
+    const statePromise = new Promise<any>((resolve) => {
+      hostSocket.on("friend:state", resolve);
+    });
+
+    hostSocket.emit("friend:join", {
+      code,
+      guestId: "host_rest_1",
+      name: "HostFromREST",
+      ageConfirmed: true,
+    });
+
+    const state = await statePromise;
+    expect(state.code).toBe(code);
+    expect(state.host.guestId).toBe("host_rest_1");
+    expect(state.status).toBe("waiting");
+
+    // Connect friend socket and join
+    const friendSocket: ClientSocket = ClientIO(`http://localhost:${port}`);
+    await new Promise<void>((res) => friendSocket.on("connect", () => res()));
+
+    const friendJoinedPromise = new Promise<any>((resolve) => {
+      friendSocket.on("friend:joined", resolve);
+    });
+
+    friendSocket.emit("friend:join", {
+      code,
+      guestId: "friend_rest_2",
+      name: "FriendFromREST",
+      ageConfirmed: true,
+    });
+
+    const joined = await friendJoinedPromise;
+    expect(joined.code).toBe(code);
+
+    hostSocket.disconnect();
+    friendSocket.disconnect();
+  });
+
+  // 8. Full Coin Toss flow: toss call -> both pick with pickerId -> toss decision received cleanly
+  it("Full Coin Toss flow: toss call -> both pick with pickerId -> toss decision received cleanly", async () => {
+    const client1: ClientSocket = ClientIO(`http://localhost:${port}`);
+    const client2: ClientSocket = ClientIO(`http://localhost:${port}`);
+
+    await Promise.all([
+      new Promise<void>((res) => client1.on("connect", () => res())),
+      new Promise<void>((res) => client2.on("connect", () => res())),
+    ]);
+
+    const createdPromise = new Promise<any>((resolve) => client1.on("friend:created", resolve));
+    client1.emit("friend:create", {
+      guestId: "host_toss_1",
+      name: "TossHost",
+      mode: "game_only",
+      format: { maxWickets: 1, maxOvers: 1 },
+    });
+    const { code } = await createdPromise;
+
+    const joinedPromise = new Promise<any>((resolve) => client2.on("friend:joined", resolve));
+    client2.emit("friend:join", {
+      code,
+      guestId: "guest_toss_2",
+      name: "TossGuest",
+      ageConfirmed: true,
+    });
+    await joinedPromise;
+
+    // Both ready
+    const matchStart1 = new Promise<any>((res) => client1.on("match:found", res));
+    const matchStart2 = new Promise<any>((res) => client2.on("match:found", res));
+    client1.emit("friend:ready", { ready: true });
+    client2.emit("friend:ready", { ready: true });
+    const [m1, m2] = await Promise.all([matchStart1, matchStart2]);
+
+    expect(m1.isInitiator).toBe(true);
+    expect(m2.isInitiator).toBe(false);
+
+    // Toss Call: p1 calls odd
+    const callPromise = new Promise<any>((res) => client2.on("game:toss_call", res));
+    client1.emit("game:toss_call", { call: "odd" });
+    const callData = await callPromise;
+    expect(callData.call).toBe("odd");
+
+    // Toss Picks: p1 picks 3, p2 picks 4 -> sum 7 (odd) -> p1 caller wins!
+    const pickForClient2 = new Promise<any>((res) => client2.on("game:toss_pick", res));
+    const pickForClient1 = new Promise<any>((res) => client1.on("game:toss_pick", res));
+
+    client1.emit("game:toss_pick", { pick: 3, pickerId: "p1" });
+    client2.emit("game:toss_pick", { pick: 4, pickerId: "p2" });
+
+    const [p1Recv, p2Recv] = await Promise.all([pickForClient1, pickForClient2]);
+    expect(p1Recv.pick).toBe(4);
+    expect(p1Recv.pickerId).toBe("p2");
+    expect(p2Recv.pick).toBe(3);
+    expect(p2Recv.pickerId).toBe("p1");
+
+    // Toss Decision: p1 (winner) chooses bat
+    const decisionPromise = new Promise<any>((res) => client2.on("game:toss_decision", res));
+    client1.emit("game:toss_decision", { role: "bat", winner: "p1" });
+    const decision = await decisionPromise;
+    expect(decision.role).toBe("bat");
+    expect(decision.winner).toBe("p1");
+
+    client1.disconnect();
+    client2.disconnect();
+  });
 });

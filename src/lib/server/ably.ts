@@ -1,5 +1,19 @@
 import * as Ably from "ably";
+import { EventEmitter } from "events";
 import { getEnv } from "../env";
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __hand_cricket_emitter__: EventEmitter | undefined;
+}
+
+export function getLocalEventEmitter(): EventEmitter {
+  if (!globalThis.__hand_cricket_emitter__) {
+    globalThis.__hand_cricket_emitter__ = new EventEmitter();
+    globalThis.__hand_cricket_emitter__.setMaxListeners(200);
+  }
+  return globalThis.__hand_cricket_emitter__;
+}
 
 let ablyRestInstance: Ably.Rest | null = null;
 
@@ -60,10 +74,15 @@ export async function publishToAbly(
   eventName: string,
   data: any
 ): Promise<void> {
+  // Always broadcast on local server event bus (for local dev, offline fallback & SSE)
+  const emitter = getLocalEventEmitter();
+  emitter.emit(channelName, { event: eventName, data });
+  emitter.emit(`${channelName}:${eventName}`, data);
+
   const ably = getAblyRest();
   if (!ably) {
-    // Offline or mock mode: log event
-    console.log(`[Ably Mock Publish] [${channelName}] ${eventName}:`, data);
+    // Offline or mock mode
+    console.log(`[Realtime Broadcast] [${channelName}] ${eventName}`);
     return;
   }
 

@@ -24,6 +24,7 @@ export default function HomePage() {
     mode,
     opponentName,
     userRole,
+    isBotMatch,
     gameState,
     isRulesOpen,
     setIsRulesOpen,
@@ -47,7 +48,12 @@ export default function HomePage() {
   }, [initGuestSession]);
 
   return (
-    <div className="min-h-screen bg-ink text-chalk flex flex-col justify-between selection:bg-turf selection:text-ink">
+    <div className="min-h-screen bg-ink text-chalk flex flex-col justify-between selection:bg-turf selection:text-ink relative overflow-hidden">
+      {/* Gentle ambient background glow for eye comfort */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(16,185,129,0.07),rgba(56,189,248,0.03),transparent)]"
+        aria-hidden="true"
+      />
       {/* Navigation Bar (visible during landing, result, and toss) */}
       {screen !== "match" && (
         <header className="w-full px-2 pt-2">
@@ -59,7 +65,7 @@ export default function HomePage() {
       <div className="flex-1 flex flex-col justify-center w-full">
         {screen === "landing" && (
           <LandingScreen
-            onFindMatch={() => setIsCameraCheckOpen(true)}
+            onFindMatch={() => startMatchmaking(false)}
             onPlayVsBot={() => startMatchmaking(true)}
             onPlayWithFriend={() => setIsFriendModalOpen(true)}
             onOpenRules={() => setIsRulesOpen(true)}
@@ -103,7 +109,7 @@ export default function HomePage() {
             <ResultBanner
               state={gameState}
               userPlayerId={userRole}
-              onPlayAgain={() => startMatchmaking(false)}
+              onPlayAgain={() => startMatchmaking(isBotMatch)}
               onFindNewOpponent={() => startMatchmaking(false)}
               onBackToLobby={resetToLanding}
             />

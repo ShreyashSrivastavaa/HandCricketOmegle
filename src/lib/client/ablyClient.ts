@@ -25,12 +25,102 @@ export function loadAblyScript(): Promise<any> {
   });
 }
 
+const activeSseChannels = new Map<string, any>();
+
 function createMockChannel(name: string) {
-  return {
+  if (activeSseChannels.has(name)) {
+    return activeSseChannels.get(name);
+  }
+
+  const listeners = new Map<string, Set<(msg: any) => void>>();
+  let eventSource: EventSource | null = null;
+
+  const ensureEventSource = () => {
+    if (typeof window === "undefined" || eventSource) return;
+    try {
+      eventSource = new EventSource(`/api/realtime?channel=${encodeURIComponent(name)}`);
+
+      const forwardEvent = (eventName: string, data: any) => {
+        const cbs = listeners.get(eventName);
+        if (cbs) {
+          cbs.forEach((cb) => {
+            try {
+              cb({ name: eventName, data });
+            } catch (err) {
+              console.error(`[SSE ${name}] Handler error:`, err);
+            }
+          });
+        }
+      };
+
+      const knownEvents = [
+        "match-found",
+        "toss-call-submitted",
+        "toss-pick-submitted",
+        "toss-decision-submitted",
+        "player-locked",
+        "ball-resolved",
+        "second-innings-started",
+        "match-forfeited",
+        "reaction",
+      ];
+
+      for (const ev of knownEvents) {
+        eventSource.addEventListener(ev, (e: MessageEvent) => {
+          try {
+            const parsed = JSON.parse(e.data);
+            forwardEvent(ev, parsed);
+          } catch {
+            forwardEvent(ev, e.data);
+          }
+        });
+      }
+
+      eventSource.onerror = () => {
+        // Native EventSource automatically handles reconnect
+      };
+    } catch (err) {
+      console.warn(`[Realtime Channel ${name}] EventSource connection error:`, err);
+    }
+  };
+
+  const channelObj = {
     name,
-    subscribe: () => {},
-    unsubscribe: () => {},
-    publish: async () => {},
+    subscribe: (eventName: string, callback: (msg: any) => void) => {
+      ensureEventSource();
+      if (!listeners.has(eventName)) {
+        listeners.set(eventName, new Set());
+      }
+      listeners.get(eventName)!.add(callback);
+
+      if (eventSource) {
+        eventSource.addEventListener(eventName, (e: MessageEvent) => {
+          try {
+            const data = JSON.parse(e.data);
+            callback({ name: eventName, data });
+          } catch {
+            callback({ name: eventName, data: e.data });
+          }
+        });
+      }
+    },
+    unsubscribe: (eventName?: string) => {
+      if (eventName) {
+        listeners.delete(eventName);
+      } else {
+        listeners.clear();
+        if (eventSource) {
+          try {
+            eventSource.close();
+          } catch {}
+          eventSource = null;
+        }
+        activeSseChannels.delete(name);
+      }
+    },
+    publish: async (_eventName: string, _data: any) => {
+      // Moves and actions are submitted via API endpoints directly
+    },
     presence: {
       enter: async () => {},
       leave: async () => {},
@@ -39,6 +129,9 @@ function createMockChannel(name: string) {
       unsubscribe: () => {},
     },
   };
+
+  activeSseChannels.set(name, channelObj);
+  return channelObj;
 }
 
 export function getClientAbly(): any {
@@ -51,37 +144,17 @@ export function getClientAbly(): any {
 
   if (ablyClient) return ablyClient;
 
-  const AblyGlobal = (window as any).Ably;
-  if (AblyGlobal && AblyGlobal.Realtime) {
-    try {
-      ablyClient = new AblyGlobal.Realtime({
-        authUrl: "/api/ably-token",
-        autoConnect: true,
-      });
-      return ablyClient;
-    } catch (err) {
-      console.warn("[Ably] Error creating Realtime instance:", err);
-    }
-  }
-
-  // Pre-instantiate mock client so synchronous calls don't crash
-  const mockClient = {
+  // Use the native SSE realtime channel fallback
+  const sseClient = {
     channels: { get: createMockChannel },
-    close: () => {},
+    close: () => {
+      for (const ch of activeSseChannels.values()) {
+        ch.unsubscribe();
+      }
+      activeSseChannels.clear();
+    },
   };
-  ablyClient = mockClient;
-
-  // Asynchronously initialize when script is ready
-  loadAblyScript().then((AblyLib) => {
-    if (AblyLib && AblyLib.Realtime) {
-      try {
-        ablyClient = new AblyLib.Realtime({
-          authUrl: "/api/ably-token",
-          autoConnect: true,
-        });
-      } catch {}
-    }
-  });
+  ablyClient = sseClient;
 
   return ablyClient;
 }

@@ -34,13 +34,15 @@ export async function POST(req: NextRequest) {
   const effectiveName = guestName?.trim() || session.guestName;
   session.guestName = effectiveName;
 
-  // 1. Churn & Skip spam rate limiting (6 join/leave requests per 10s)
-  const rl = await rateLimitQueue(req, session.guestId);
-  if (!rl.success) {
-    return NextResponse.json(
-      { error: "Too many matchmaking requests. Please wait a moment before searching again." },
-      { status: 429 }
-    );
+  // 1. Churn & Skip spam rate limiting (skip for instant bot play)
+  if (!playVsBot) {
+    const rl = await rateLimitQueue(req, session.guestId);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many matchmaking requests. Please wait a moment before searching again." },
+        { status: 429 }
+      );
+    }
   }
 
   // 2. Client IP extraction for security checks

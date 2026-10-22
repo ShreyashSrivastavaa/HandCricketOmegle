@@ -15,6 +15,8 @@ import {
   Shield,
   FileText,
   Play,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { isSoundMuted, toggleSoundMute, playClickSound } from "@/lib/client/audio";
 import { subscribeToLobbyPresence } from "@/lib/client/ablyClient";
@@ -27,9 +29,29 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
   const pathname = usePathname();
   const [muted, setMuted] = useState<boolean>(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("hca_theme") as "dark" | "light" | null;
+      const initial = saved || "dark";
+      setTheme(initial);
+      document.documentElement.setAttribute("data-theme", initial);
+    }
+  }, []);
+
+  const handleToggleTheme = () => {
+    playClickSound();
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("hca_theme", next);
+      document.documentElement.setAttribute("data-theme", next);
+    }
+  };
 
   useEffect(() => {
     setMuted(isSoundMuted());
@@ -91,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
           className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink group"
           aria-label="HandCricketOmegle Home"
         >
-          <span className="w-8 h-8 rounded-lg bg-turf/20 border border-turf/40 flex items-center justify-center text-lg group-hover:scale-105 transition-transform shadow-[0_0_12px_rgba(61,220,132,0.2)]">
+          <span className="w-8 h-8 rounded-lg bg-turf/15 border border-turf/35 flex items-center justify-center text-lg group-hover:scale-105 transition-transform shadow-[0_0_12px_rgba(16,185,129,0.18)]">
             🏏
           </span>
           <div className="flex flex-col">
@@ -139,6 +161,17 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
             <span className="font-tabular font-bold text-turf">{onlineCount}</span>
             <span className="text-[10px] text-muted uppercase hidden sm:inline">Online</span>
           </div>
+
+          {/* Light / Dark Mode Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="p-2 rounded-full border border-line bg-surface-2 text-muted hover:text-chalk hover:border-turf/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+          >
+            {theme === "dark" ? <Sun className="w-4 h-4 text-amber" /> : <Moon className="w-4 h-4 text-sky" />}
+          </button>
 
           {/* Audio Mute Toggle */}
           <button
@@ -235,6 +268,19 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
               <span>How To Play (Rules &amp; Gestures)</span>
             </button>
           )}
+
+          {/* Mobile Theme Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleTheme}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-heading uppercase tracking-wider font-bold text-chalk bg-surface-2/60 hover:bg-surface-2 hover:text-turf border border-line/60 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+          >
+            <span className="flex items-center gap-2.5">
+              {theme === "dark" ? <Sun className="w-4 h-4 text-amber" /> : <Moon className="w-4 h-4 text-sky" />}
+              <span>Theme</span>
+            </span>
+            <span className="text-xs font-normal text-muted capitalize">{theme} Mode</span>
+          </button>
 
           {guestName && (
             <div className="mt-2 pt-2 border-t border-line/50 flex items-center justify-between text-xs text-muted px-2">

@@ -34,6 +34,7 @@ export const friendJoinSchema = z.object({
 // 4. Friend Room Ready Toggle
 export const friendReadySchema = z.object({
   ready: z.boolean(),
+  guestId: z.string().optional(),
 });
 
 // 5. Friend Format Update
@@ -59,10 +60,12 @@ export const tossCallSchema = z.object({
 
 export const tossPickSchema = z.object({
   pick: z.number().int().min(1).max(6),
+  pickerId: z.enum(["p1", "p2"]).optional(),
 });
 
 export const tossDecisionSchema = z.object({
   role: z.enum(["bat", "bowl"]),
+  winner: z.enum(["p1", "p2"]).optional(),
 });
 
 export const ballPickSchema = z.object({

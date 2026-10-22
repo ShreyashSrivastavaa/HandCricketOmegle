@@ -98,6 +98,21 @@ export async function createFriendRoomServerless({
     ex: FRIEND_ROOM_TTL_SECONDS,
   });
 
+  // Register in in-memory roomStore if running in Node/Express environment
+  try {
+    const { roomStore } = await import("@/server/roomStore");
+    roomStore.registerExistingRoom({
+      roomId: room.roomId,
+      code: room.code,
+      hostGuestId: room.host.guestId,
+      hostName: room.host.name,
+      mode: room.mode,
+      format: room.format,
+    });
+  } catch {
+    // Non-fatal in edge/serverless runtimes
+  }
+
   return room;
 }
 

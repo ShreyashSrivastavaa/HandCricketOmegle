@@ -667,6 +667,68 @@ export class RoomStore {
   }
 
   /**
+   * Registers a friend room created externally (e.g. via REST API / Redis) into the memory store.
+   */
+  public registerExistingRoom(params: {
+    roomId: string;
+    code: string;
+    hostGuestId: string;
+    hostName: string;
+    mode: MatchQueueType;
+    format: MatchFormat;
+  }): ActiveRoom {
+    const rawCode = params.code.trim().toUpperCase();
+    const cleanCode = rawCode.startsWith("HC-")
+      ? rawCode.slice(3)
+      : rawCode.startsWith("HC") && rawCode.length > 6
+      ? rawCode.slice(2)
+      : rawCode;
+
+    const existingId = this.codeToRoomId.get(cleanCode);
+    if (existingId) {
+      const existing = this.rooms.get(existingId);
+      if (existing) return existing;
+    }
+
+    const host: RoomUser = {
+      socketId: "",
+      guestId: params.hostGuestId,
+      name: params.hostName,
+      ip: "127.0.0.1",
+      queueType: params.mode,
+      ageConfirmed: true,
+    };
+
+    const room: ActiveRoom = {
+      roomId: params.roomId,
+      code: cleanCode,
+      type: "friend",
+      visibility: "private",
+      mode: params.mode,
+      format: params.format,
+      p1: host,
+      p2: undefined,
+      p1Ready: false,
+      p2Ready: false,
+      status: "waiting",
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 30 * 60 * 1000,
+      seriesScore: {
+        [params.hostGuestId]: 0,
+      },
+      rematchVotes: new Set(),
+      playAgainVotes: new Set(),
+      disconnectTimers: new Map(),
+    };
+
+    this.rooms.set(params.roomId, room);
+    this.codeToRoomId.set(cleanCode, params.roomId);
+    this.guestToRoom.set(params.hostGuestId, params.roomId);
+
+    return room;
+  }
+
+  /**
    * Clear all rooms and limits (used in testing).
    */
   public clear(): void {
@@ -684,4 +746,12 @@ export class RoomStore {
   }
 }
 
-export const roomStore = new RoomStore();
+declare global {
+  // eslint-disable-next-line no-var
+  var __hand_cricket_room_store__: RoomStore | undefined;
+}
+
+export const roomStore = globalThis.__hand_cricket_room_store__ || new RoomStore();
+if (process.env.NODE_ENV !== "production") {
+  globalThis.__hand_cricket_room_store__ = roomStore;
+}

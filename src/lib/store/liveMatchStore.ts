@@ -99,8 +99,24 @@ interface LiveMatchStore {
 export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
   let ballTimerInterval: NodeJS.Timeout | null = null;
   let disconnectTimerInterval: NodeJS.Timeout | null = null;
+  let queuePollInterval: NodeJS.Timeout | null = null;
+  let matchSyncInterval: NodeJS.Timeout | null = null;
   let activeAblyChannel: any = null;
   let userPrivateChannel: any = null;
+
+  const clearQueuePoll = () => {
+    if (queuePollInterval) {
+      clearInterval(queuePollInterval);
+      queuePollInterval = null;
+    }
+  };
+
+  const clearMatchSync = () => {
+    if (matchSyncInterval) {
+      clearInterval(matchSyncInterval);
+      matchSyncInterval = null;
+    }
+  };
 
   const clearBallTimer = () => {
     if (ballTimerInterval) {
@@ -160,6 +176,127 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     }, 1000);
   };
 
+  let isResolvingBall = false;
+
+  const handleBallResolution = (data: {
+    p1Pick: number;
+    p2Pick: number;
+    outcome: BallOutcome;
+    gameState: GameState;
+    ballIndex: number;
+  }) => {
+    const { p1Pick, p2Pick, outcome, gameState, ballIndex } = data;
+    if (isResolvingBall) return;
+    isResolvingBall = true;
+
+    const state = get();
+    const isUserP1 = state.userRole === "p1";
+    const userPickVal = isUserP1 ? p1Pick : p2Pick;
+    const opponentPickVal = isUserP1 ? p2Pick : p1Pick;
+
+    clearBallTimer();
+
+    // 3.. 2.. 1.. Reveal countdown animation
+    set({
+      revealCountdown: 3,
+      opponentTileState: "revealing",
+      userTileState: "revealing",
+    });
+
+    setTimeout(() => set({ revealCountdown: 2 }), 350);
+    setTimeout(() => set({ revealCountdown: 1 }), 700);
+
+    setTimeout(() => {
+      // Play sound & haptic based on outcome
+      if (outcome.isWicket) {
+        playWicketSound();
+        set({ screenShake: true });
+        setTimeout(() => set({ screenShake: false }), 450);
+      } else if (outcome.runsScored === 4 || outcome.runsScored === 6) {
+        playBoundarySound();
+      } else {
+        playBatHitSound();
+      }
+
+      const isWicket = outcome.isWicket;
+      const userTileState: HandTileState = isWicket ? "out" : outcome.runsScored > 0 ? "scored" : "revealed";
+      const opponentTileState: HandTileState = isWicket ? "out" : outcome.runsScored > 0 ? "scored" : "revealed";
+
+      set({
+        revealCountdown: null,
+        opponentPick: opponentPickVal,
+        userPick: userPickVal,
+        opponentTileState,
+        userTileState,
+        outcomeText: isWicket ? "OUT!" : outcome.runsScored === 6 ? "SIX!" : outcome.runsScored === 4 ? "FOUR!" : `+${outcome.runsScored} RUNS`,
+        isOutcomeWicket: isWicket,
+        gameState,
+        currentBallIndex: ballIndex + 1,
+      });
+
+      // After 2.0s outcome banner, prepare for next ball or transition screen
+      setTimeout(() => {
+        isResolvingBall = false;
+        const latestState = get().gameState;
+        if (!latestState) return;
+
+        // Track Personal Best and leaderboard in Endless mode
+        if (latestState.format.isEndless) {
+          const activeInnings =
+            latestState.currentInnings === 1 ? latestState.innings1 : latestState.innings2;
+          const isUserBatting = activeInnings?.battingPlayer === get().userRole;
+          if (isUserBatting && activeInnings) {
+            const userScore = activeInnings.score;
+            const pb = get().personalBest;
+            if (userScore > pb) {
+              get().setPersonalBest(userScore);
+              fetch("/api/leaderboard", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  guestId: get().guestId,
+                  guestName: get().guestName,
+                  score: userScore,
+                  balls: activeInnings.balls,
+                  strikeStreak: activeInnings.strikeStreak,
+                }),
+              }).catch(() => {});
+            }
+          }
+        }
+
+        if (latestState.phase === "match_ended") {
+          set({ screen: "result", outcomeText: null });
+        } else if (latestState.phase === "innings_break") {
+          set({ screen: "innings_break", outcomeText: null });
+        } else if (latestState.phase === "super_over") {
+          set({
+            userPick: null,
+            isUserLocked: false,
+            opponentPick: null,
+            opponentTileState: "empty",
+            userTileState: "empty",
+            outcomeText: "SUPER OVER!",
+            isOutcomeWicket: false,
+          });
+          startBallTimer();
+        } else {
+          // Next ball
+          set({
+            userPick: null,
+            isUserLocked: false,
+            opponentPick: null,
+            opponentTileState: "empty",
+            userTileState: "empty",
+            outcomeText: null,
+            isOutcomeWicket: false,
+          });
+          startBallTimer();
+        }
+      }, 2000);
+    }, 1050);
+  };
+
   const setupMatchChannel = (matchId: string) => {
     try {
       const ably = getClientAbly();
@@ -196,112 +333,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
       // Ball resolved event
       channel.subscribe("ball-resolved", (msg: any) => {
-        const { p1Pick, p2Pick, outcome, gameState, ballIndex } = msg.data;
-        const state = get();
-        const isUserP1 = state.userRole === "p1";
-        const userPickVal = isUserP1 ? p1Pick : p2Pick;
-        const opponentPickVal = isUserP1 ? p2Pick : p1Pick;
-
-        clearBallTimer();
-
-        // 3.. 2.. 1.. Reveal countdown animation
-        set({
-          revealCountdown: 3,
-          opponentTileState: "revealing",
-          userTileState: "revealing",
-        });
-
-        setTimeout(() => set({ revealCountdown: 2 }), 350);
-        setTimeout(() => set({ revealCountdown: 1 }), 700);
-
-        setTimeout(() => {
-          // Play sound & haptic based on outcome
-          if (outcome.isWicket) {
-            playWicketSound();
-            set({ screenShake: true });
-            setTimeout(() => set({ screenShake: false }), 450);
-          } else if (outcome.runsScored === 4 || outcome.runsScored === 6) {
-            playBoundarySound();
-          } else {
-            playBatHitSound();
-          }
-
-          const isWicket = outcome.isWicket;
-          const userTileState: HandTileState = isWicket ? "out" : outcome.runsScored > 0 ? "scored" : "revealed";
-          const opponentTileState: HandTileState = isWicket ? "out" : outcome.runsScored > 0 ? "scored" : "revealed";
-
-          set({
-            revealCountdown: null,
-            opponentPick: opponentPickVal,
-            userPick: userPickVal,
-            opponentTileState,
-            userTileState,
-            outcomeText: isWicket ? "OUT!" : outcome.runsScored === 6 ? "SIX!" : outcome.runsScored === 4 ? "FOUR!" : `+${outcome.runsScored} RUNS`,
-            isOutcomeWicket: isWicket,
-            gameState,
-            currentBallIndex: ballIndex + 1,
-          });
-
-          // After 2.0s outcome banner, prepare for next ball or transition screen
-          setTimeout(() => {
-            const latestState = get().gameState;
-            if (!latestState) return;
-
-            // Track Personal Best and leaderboard in Endless mode
-            if (latestState.format.isEndless) {
-              const activeInnings =
-                latestState.currentInnings === 1 ? latestState.innings1 : latestState.innings2;
-              const isUserBatting = activeInnings?.battingPlayer === get().userRole;
-              if (isUserBatting && activeInnings) {
-                const userScore = activeInnings.score;
-                const pb = get().personalBest;
-                if (userScore > pb) {
-                  get().setPersonalBest(userScore);
-                  fetch("/api/leaderboard", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      guestId: get().guestId,
-                      guestName: get().guestName,
-                      score: userScore,
-                      balls: activeInnings.balls,
-                      strikeStreak: activeInnings.strikeStreak,
-                    }),
-                  }).catch(() => {});
-                }
-              }
-            }
-
-            if (latestState.phase === "match_ended") {
-              set({ screen: "result", outcomeText: null });
-            } else if (latestState.phase === "innings_break") {
-              set({ screen: "innings_break", outcomeText: null });
-            } else if (latestState.phase === "super_over") {
-              set({
-                userPick: null,
-                isUserLocked: false,
-                opponentPick: null,
-                opponentTileState: "empty",
-                userTileState: "empty",
-                outcomeText: "SUPER OVER!",
-                isOutcomeWicket: false,
-              });
-              startBallTimer();
-            } else {
-              // Next ball
-              set({
-                userPick: null,
-                isUserLocked: false,
-                opponentPick: null,
-                opponentTileState: "empty",
-                userTileState: "empty",
-                outcomeText: null,
-                isOutcomeWicket: false,
-              });
-              startBallTimer();
-            }
-          }, 2000);
-        }, 1050);
+        handleBallResolution(msg.data);
       });
 
       // Player locked event
@@ -374,6 +406,64 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           }));
         }, 2600);
       });
+
+      // Set up background sync interval for live multiplayer matches
+      clearMatchSync();
+      if (!isBotMatch) {
+        matchSyncInterval = setInterval(async () => {
+          const currentScreen = get().screen;
+          if (currentScreen !== "toss" && currentScreen !== "match" && currentScreen !== "innings_break") {
+            clearMatchSync();
+            return;
+          }
+          try {
+            const res = await fetch(`/api/match/${matchId}/move`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.gameState) {
+                const localState = get().gameState;
+                if (currentScreen === "toss") {
+                  if (
+                    data.gameState.tossCall !== localState?.tossCall ||
+                    data.gameState.phase !== localState?.phase ||
+                    JSON.stringify(data.gameState.tossPicks) !== JSON.stringify(localState?.tossPicks)
+                  ) {
+                    set({ gameState: data.gameState });
+                    if (data.gameState.phase === "innings_1") {
+                      setTimeout(() => {
+                        if (get().screen === "toss") {
+                          set({ screen: "match" });
+                          startBallTimer();
+                        }
+                      }, 1800);
+                    }
+                  }
+                } else if (currentScreen === "match") {
+                  if (data.gameState.phase === "innings_break" && localState?.phase !== "innings_break") {
+                    set({ gameState: data.gameState, screen: "innings_break" });
+                  } else if (data.gameState.phase === "match_ended" && localState?.phase !== "match_ended") {
+                    set({ gameState: data.gameState, screen: "result" });
+                  }
+                } else if (currentScreen === "innings_break") {
+                  if (data.gameState.phase === "innings_2") {
+                    set({
+                      gameState: data.gameState,
+                      screen: "match",
+                      userPick: null,
+                      isUserLocked: false,
+                      opponentPick: null,
+                      opponentTileState: "empty",
+                      userTileState: "empty",
+                      outcomeText: null,
+                    });
+                    startBallTimer();
+                  }
+                }
+              }
+            }
+          } catch {}
+        }, 1500);
+      }
     } catch (err) {
       console.error("[Ably Channel Setup] Error:", err);
     }
@@ -445,10 +535,24 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
     initGuestSession: async () => {
       try {
+        let tabGuestId = typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_id") : null;
+        let tabGuestName = typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_name") : null;
+
         const res = await fetch("/api/session");
         if (res.ok) {
           const data = await res.json();
-          set({ guestId: data.guestId, guestName: data.guestName });
+          if (!tabGuestId && typeof window !== "undefined" && data.guestId) {
+            tabGuestId = data.guestId;
+            sessionStorage.setItem("hca_tab_guest_id", data.guestId);
+          }
+          if (!tabGuestName && typeof window !== "undefined" && data.guestName) {
+            tabGuestName = data.guestName;
+            sessionStorage.setItem("hca_tab_guest_name", data.guestName);
+          }
+          set({
+            guestId: tabGuestId || data.guestId || "guest",
+            guestName: tabGuestName || data.guestName || "Player",
+          });
         }
       } catch (err) {
         console.warn("[Session] Could not fetch session:", err);
@@ -458,18 +562,18 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     startMatchmaking: async (playVsBot = false) => {
       clearBallTimer();
       clearDisconnectTimer();
+      clearQueuePoll();
+      clearMatchSync();
 
       let { mode, guestName, guestId } = get();
       if (!guestId && typeof window !== "undefined") {
-        guestId = localStorage.getItem("hca_guest_id") || "";
+        guestId =
+          sessionStorage.getItem("hca_tab_guest_id") ||
+          localStorage.getItem("hca_guest_id") ||
+          "";
         if (guestId) set({ guestId });
       }
       set({ screen: "searching" });
-
-      const isAgeVerified =
-        typeof window !== "undefined"
-          ? localStorage.getItem("hca_age_verified") !== "false"
-          : true;
 
       try {
         const res = await fetch("/api/queue/join", {
@@ -480,26 +584,29 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
             playVsBot,
             guestName,
             guestId: guestId || undefined,
-            ageConfirmed: isAgeVerified,
+            ageConfirmed: true,
           }),
         });
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
           console.error("[Matchmaking] Join failed:", errData);
-          if (res.status === 403 && errData.code === "AGE_VERIFICATION_REQUIRED") {
-            if (typeof window !== "undefined") {
-              localStorage.setItem("hca_age_verified", "true");
-            }
-          }
+          clearQueuePoll();
           set({ screen: "landing" });
           return;
         }
 
         const data = await res.json();
 
-        if (data.status === "matched") {
-          // Instant match (bot or paired with waiting player)
+        const onMatchJoined = (matchData: {
+          matchId: string;
+          role?: "p1" | "p2";
+          opponentName?: string;
+          isBot?: boolean;
+        }) => {
+          clearQueuePoll();
+          if (get().screen !== "searching") return;
+
           const format =
             mode === "endless"
               ? get().endlessVariant === "pro"
@@ -508,17 +615,18 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
               : mode === "classic"
               ? CLASSIC_FORMAT
               : DEFAULT_SUDDEN_DEATH_FORMAT;
+
           set({
-            matchId: data.matchId,
-            userRole: data.role || "p1",
-            opponentName: data.opponentName || "Opponent",
-            isBotMatch: !!data.isBot,
+            matchId: matchData.matchId,
+            userRole: matchData.role || "p1",
+            opponentName: matchData.opponentName || "Opponent",
+            isBotMatch: !!matchData.isBot,
             screen: "toss",
             gameState: {
               format,
               phase: "toss_call",
-              player1Name: data.role === "p1" ? guestName : data.opponentName,
-              player2Name: data.role === "p1" ? data.opponentName : guestName,
+              player1Name: matchData.role === "p1" ? (guestName || "Player") : (matchData.opponentName || "Opponent"),
+              player2Name: matchData.role === "p1" ? (matchData.opponentName || "Opponent") : (guestName || "Player"),
               tossCaller: "p1",
               tossCall: null,
               tossPicks: {},
@@ -540,7 +648,11 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
               resultSummary: null,
             },
           });
-          setupMatchChannel(data.matchId);
+          setupMatchChannel(matchData.matchId);
+        };
+
+        if (data.status === "matched") {
+          onMatchJoined(data);
           return;
         }
 
@@ -555,58 +667,42 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
         userPrivateChannel = ably.channels.get(`user:${currentGuestId}`);
         userPrivateChannel.subscribe("match-found", (msg: any) => {
-          const matchData = msg.data;
-          const format =
-            mode === "endless"
-              ? get().endlessVariant === "pro"
-                ? ENDLESS_PRO_FORMAT
-                : DEFAULT_ENDLESS_FORMAT
-              : mode === "classic"
-              ? CLASSIC_FORMAT
-              : DEFAULT_SUDDEN_DEATH_FORMAT;
-
-          set({
-            matchId: matchData.matchId,
-            userRole: matchData.role,
-            opponentName: matchData.opponentName,
-            isBotMatch: !!matchData.isBot,
-            screen: "toss",
-            gameState: {
-              format,
-              phase: "toss_call",
-              player1Name: matchData.role === "p1" ? guestName : matchData.opponentName,
-              player2Name: matchData.role === "p1" ? matchData.opponentName : guestName,
-              tossCaller: "p1",
-              tossCall: null,
-              tossPicks: {},
-              tossWinner: null,
-              tossDecision: null,
-              currentInnings: 1,
-              innings1: {
-                battingPlayer: "p1",
-                bowlingPlayer: "p2",
-                score: 0,
-                wickets: 0,
-                balls: 0,
-                overHistory: [],
-                currentOver: [],
-              },
-              innings2: null,
-              lastOutcome: null,
-              winner: null,
-              resultSummary: null,
-            },
-          });
-
-          setupMatchChannel(matchData.matchId);
+          onMatchJoined(msg.data);
         });
+
+        // Fail-safe queue polling: checks /api/queue/status every 1s
+        queuePollInterval = setInterval(async () => {
+          if (get().screen !== "searching") {
+            clearQueuePoll();
+            return;
+          }
+          try {
+            const checkRes = await fetch(
+              `/api/queue/status?guestId=${encodeURIComponent(currentGuestId)}`
+            );
+            if (checkRes.ok) {
+              const checkData = await checkRes.json();
+              if (checkData.status === "matched") {
+                onMatchJoined(checkData);
+              }
+            }
+          } catch {}
+        }, 1000);
       } catch (err) {
         console.error("[Matchmaking] Error joining queue:", err);
+        clearQueuePoll();
         set({ screen: "landing" });
       }
     },
 
     cancelMatchmaking: async () => {
+      clearQueuePoll();
+      clearMatchSync();
+      if (userPrivateChannel) {
+        try {
+          userPrivateChannel.unsubscribe();
+        } catch {}
+      }
       const { mode } = get();
       set({ screen: "landing" });
       try {
@@ -665,6 +761,14 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         const data = await res.json();
         if (data.gameState) {
           set({ gameState: data.gameState });
+          if (data.gameState.phase === "innings_1") {
+            setTimeout(() => {
+              if (get().screen === "toss") {
+                set({ screen: "match" });
+                startBallTimer();
+              }
+            }, 1800);
+          }
         }
       } catch (err) {
         console.error("[Toss Pick] Error:", err);
@@ -712,9 +816,15 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           }),
         });
         const data = await res.json();
-        if (data.status === "resolved" && data.gameState) {
-          // If response already resolved (e.g. vs bot)
-          // The Ably event will handle the synchronous reveal countdown
+        if (data.status === "resolved" && data.gameState && data.outcome) {
+          const isUserP1 = get().userRole === "p1";
+          handleBallResolution({
+            p1Pick: data.p1Pick ?? (isUserP1 ? pick : (data.outcome.batterPick ?? 1)),
+            p2Pick: data.p2Pick ?? (isUserP1 ? (data.outcome.bowlerPick ?? 1) : pick),
+            outcome: data.outcome,
+            gameState: data.gameState,
+            ballIndex: currentBallIndex,
+          });
         }
       } catch (err) {
         console.error("[Ball Pick] Error submitting move:", err);
@@ -765,6 +875,8 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     forfeitCurrentMatch: async (reason = "You left the match") => {
       clearBallTimer();
       clearDisconnectTimer();
+      clearQueuePoll();
+      clearMatchSync();
 
       const { matchId } = get();
       if (matchId) {
@@ -782,6 +894,8 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     resetToLanding: () => {
       clearBallTimer();
       clearDisconnectTimer();
+      clearQueuePoll();
+      clearMatchSync();
       if (activeAblyChannel) {
         try {
           activeAblyChannel.unsubscribe();

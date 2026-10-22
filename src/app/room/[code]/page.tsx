@@ -83,6 +83,17 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // Room & Socket State
   const [socket, setSocket] = useState<Socket | null>(null);
   const [roomState, setRoomState] = useState<FriendRoomState | null>(null);
+  const roomStateRef = useRef<FriendRoomState | null>(null);
+
+  const updateRoomState = (
+    updater: FriendRoomState | null | ((prev: FriendRoomState | null) => FriendRoomState | null)
+  ) => {
+    setRoomState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      roomStateRef.current = next;
+      return next;
+    });
+  };
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -97,6 +108,12 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // Game Core State
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<PlayerId>("p1");
+  const myPlayerIdRef = useRef<PlayerId>("p1");
+
+  const updateMyPlayerId = (role: PlayerId) => {
+    myPlayerIdRef.current = role;
+    setMyPlayerId(role);
+  };
   const [opponent, setOpponent] = useState<{ guestId: string; name: string } | null>(null);
   const [isInitiator, setIsInitiator] = useState<boolean>(false);
 
@@ -190,6 +207,52 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
   // Initialize Guest Info with server session sync & localStorage fallback
   useEffect(() => {
+    // Check if this tab is the room creator
+    const isCreatorTab =
+      typeof window !== "undefined" &&
+      sessionStorage.getItem("hca_created_room") === roomCode;
+
+    // Check if this browser created this room recently in another tab
+    const isOtherTabOfCreator =
+      !isCreatorTab &&
+      typeof window !== "undefined" &&
+      localStorage.getItem("hca_last_created_room") === roomCode;
+
+    const tabGid =
+      typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_id") : null;
+    const tabGName =
+      typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_name") : null;
+
+    if (tabGid) {
+      setGuestId(tabGid);
+      setGuestName(tabGName || `Player ${tabGid.slice(-4).toUpperCase()}`);
+      return;
+    }
+
+    if (isCreatorTab) {
+      const storedId = localStorage.getItem("hca_guest_id");
+      const storedName = localStorage.getItem("hca_guest_name");
+      const finalId =
+        storedId || `g_host_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const finalName = storedName || `Host ${finalId.slice(-4).toUpperCase()}`;
+      sessionStorage.setItem("hca_tab_guest_id", finalId);
+      sessionStorage.setItem("hca_tab_guest_name", finalName);
+      setGuestId(finalId);
+      setGuestName(finalName);
+      return;
+    }
+
+    if (isOtherTabOfCreator) {
+      // Distinct guest ID so 2 tabs on the same computer can duel as host and guest!
+      const finalId = `g_friend_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const finalName = `Friend ${finalId.slice(-4).toUpperCase()}`;
+      sessionStorage.setItem("hca_tab_guest_id", finalId);
+      sessionStorage.setItem("hca_tab_guest_name", finalName);
+      setGuestId(finalId);
+      setGuestName(finalName);
+      return;
+    }
+
     let gid: string | null = localStorage.getItem("hca_guest_id");
     let gName: string | null = localStorage.getItem("hca_guest_name");
 
@@ -199,11 +262,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         if (data?.guestId && typeof data.guestId === "string") {
           gid = data.guestId;
           localStorage.setItem("hca_guest_id", data.guestId);
+          sessionStorage.setItem("hca_tab_guest_id", data.guestId);
           setGuestId(data.guestId);
         }
         if (data?.guestName && typeof data.guestName === "string") {
           gName = data.guestName;
           localStorage.setItem("hca_guest_name", data.guestName);
+          sessionStorage.setItem("hca_tab_guest_name", data.guestName);
           setGuestName(data.guestName);
         }
       })
@@ -211,13 +276,15 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       .finally(() => {
         const finalId = gid || `g_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         localStorage.setItem("hca_guest_id", finalId);
+        sessionStorage.setItem("hca_tab_guest_id", finalId);
         setGuestId(finalId);
 
         const finalName = gName || `Guest ${finalId.slice(-4).toUpperCase()}`;
         localStorage.setItem("hca_guest_name", finalName);
+        sessionStorage.setItem("hca_tab_guest_name", finalName);
         setGuestName(finalName);
       });
-  }, []);
+  }, [roomCode]);
 
   // REST & Ably Synchronizer for Serverless Deployments (Vercel)
   useEffect(() => {
@@ -250,7 +317,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
         if (res.ok && data.room) {
           setIsLoading(false);
-          setRoomState(data.room);
+          updateRoomState(data.room);
           const isHost = data.room.host.guestId === guestId;
           const myReady = isHost ? data.room.host.ready : data.room.guest?.ready || false;
           setIsReady(myReady);
@@ -275,7 +342,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           if (!isSubscribed || !msg.data) return;
           const data: FriendRoomState = msg.data;
           setIsLoading(false);
-          setRoomState(data);
+          updateRoomState(data);
 
           const isHost = data.host.guestId === guestId;
           const myReady = isHost ? data.host.ready : data.guest?.ready || false;
@@ -299,7 +366,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           const opp = isInitiator ? data.p2 : data.p1;
           setOpponent(opp);
           const myRole: PlayerId = isInitiator ? "p1" : "p2";
-          setMyPlayerId(myRole);
+          updateMyPlayerId(myRole);
 
           addToast(`Match starting against ${opp.name}!`, "success");
 
@@ -322,7 +389,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         if (res.ok) {
           const data = await res.json();
           if (data.room && isSubscribed) {
-            setRoomState(data.room);
+            updateRoomState(data.room);
             const isHost = data.room.host.guestId === guestId;
             setIsReady(isHost ? data.room.host.ready : data.room.guest?.ready || false);
           }
@@ -363,7 +430,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
     s.on("friend:state", (data: FriendRoomState) => {
       setIsLoading(false);
-      setRoomState(data);
+      updateRoomState(data);
 
       const isHost = data.host.guestId === guestId;
       const myReady = isHost ? data.host.ready : data.guest?.ready || false;
@@ -381,8 +448,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     });
 
     s.on("friend:error", (err: { message: string }) => {
-      // Only set error if we don't already have valid roomState from REST/Ably
-      if (!roomState) {
+      // Only set error if we don't already have valid roomState from REST/Ably/previous state
+      if (!roomStateRef.current) {
         setIsLoading(false);
         setErrorMessage(err.message);
         addToast(err.message, "error");
@@ -418,7 +485,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         setIsInitiator(data.isInitiator);
         setOpponent(data.opponent);
         const myRole: PlayerId = data.isInitiator ? "p1" : "p2";
-        setMyPlayerId(myRole);
+        updateMyPlayerId(myRole);
 
         addToast(`Match starting against ${data.opponent.name}!`, "success");
 
@@ -462,10 +529,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         setGestureHint(undefined);
         handDetector.resetForNextBall();
 
-        if (roomState) {
+        if (roomStateRef.current) {
           const p1Name = data.isInitiator ? "You" : opponent?.name || "Friend";
           const p2Name = data.isInitiator ? opponent?.name || "Friend" : "You";
-          const initialGame = createInitialGameState(roomState.format, p1Name, p2Name, "p1");
+          const initialGame = createInitialGameState(roomStateRef.current.format, p1Name, p2Name, "p1");
           setGameState(initialGame);
           addToast("Rematch started!", "success");
         }
@@ -473,7 +540,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     );
 
     s.on("game:series_update", (data: { seriesScore: { [guestId: string]: number } }) => {
-      setRoomState((prev) => (prev ? { ...prev, seriesScore: data.seriesScore } : prev));
+      updateRoomState((prev) => (prev ? { ...prev, seriesScore: data.seriesScore } : prev));
     });
 
     s.on("match:partner_disconnected", (data: { message: string }) => {
@@ -485,17 +552,27 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       setGameState((prev) => (prev ? submitTossCall(prev, payload.call) : prev));
     });
 
-    s.on("game:toss_pick", (payload: { pick: number }) => {
+    s.on("game:toss_pick", (payload: { pick: number; pickerId?: PlayerId }) => {
       setGameState((prev) => {
         if (!prev) return prev;
-        const otherRole: PlayerId = myPlayerId === "p1" ? "p2" : "p1";
-        return submitTossPick(prev, otherRole, payload.pick);
+        const picker: PlayerId =
+          payload.pickerId || (myPlayerIdRef.current === "p1" ? "p2" : "p1");
+        return submitTossPick(prev, picker, payload.pick);
       });
     });
 
-    s.on("game:toss_decision", (payload: { role: TossDecision }) => {
+    s.on("game:toss_decision", (payload: { role: TossDecision; winner?: PlayerId }) => {
       setGameState((prev) => {
         if (!prev) return prev;
+        if (prev.phase !== "toss_decision") {
+          console.warn("[toss_decision] Received toss_decision while in phase:", prev.phase);
+          const winner: PlayerId =
+            payload.winner || prev.tossWinner || (myPlayerIdRef.current === "p1" ? "p2" : "p1");
+          const stateWithWinner = { ...prev, tossWinner: winner, phase: "toss_decision" as const };
+          const next = submitTossDecision(stateWithWinner, payload.role);
+          startTurnCountdown();
+          return next;
+        }
         const next = submitTossDecision(prev, payload.role);
         startTurnCountdown();
         return next;
@@ -530,8 +607,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       setTurnStage("reveal");
       setRevealCountdown(null);
 
-      const myPick = myPlayerId === "p1" ? payload.p1Pick : payload.p2Pick;
-      const theirPick = myPlayerId === "p1" ? payload.p2Pick : payload.p1Pick;
+      const currentRole = myPlayerIdRef.current;
+      const myPick = currentRole === "p1" ? payload.p1Pick : payload.p2Pick;
+      const theirPick = currentRole === "p1" ? payload.p2Pick : payload.p1Pick;
 
       setUserPick(myPick);
       setOpponentPick(theirPick);
@@ -539,7 +617,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       setGameState((prev) => {
         if (!prev) return prev;
         const activeInnings = prev.currentInnings === 1 ? prev.innings1 : prev.innings2!;
-        const isUserBatting = activeInnings.battingPlayer === myPlayerId;
+        const isUserBatting = activeInnings.battingPlayer === currentRole;
 
         const batterNum = isUserBatting ? myPick : theirPick;
         const bowlerNum = isUserBatting ? theirPick : myPick;
@@ -575,7 +653,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           const winnerGuestId =
             nextState.winner === "tie"
               ? undefined
-              : nextState.winner === myPlayerId
+              : nextState.winner === currentRole
               ? guestId
               : opponent?.guestId;
           s.emit("game:match_complete", { winnerGuestId });
@@ -732,7 +810,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const handleToggleReady = () => {
     const next = !isReady;
     setIsReady(next);
-    socket?.emit("friend:ready", { ready: next });
+    socket?.emit("friend:ready", { ready: next, guestId });
     fetch(`/api/room/${roomCode}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -816,18 +894,20 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   };
 
   const handleTossPick = (num: number) => {
-    setGameState((prev) => (prev ? submitTossPick(prev, myPlayerId, num) : prev));
-    socket?.emit("game:toss_pick", { pick: num });
+    const currentRole = myPlayerIdRef.current;
+    setGameState((prev) => (prev ? submitTossPick(prev, currentRole, num) : prev));
+    socket?.emit("game:toss_pick", { pick: num, pickerId: currentRole });
   };
 
   const handleTossDecision = (role: TossDecision) => {
+    const currentRole = myPlayerIdRef.current;
     setGameState((prev) => {
       if (!prev) return prev;
       const next = submitTossDecision(prev, role);
       startTurnCountdown();
       return next;
     });
-    socket?.emit("game:toss_decision", { role });
+    socket?.emit("game:toss_decision", { role, winner: currentRole });
   };
 
   const handleStartInnings2 = () => {
@@ -1028,6 +1108,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         <div className="flex-1 flex items-center justify-center my-3 w-full">
           <TossScreen
             gameState={gameState}
+            userPlayerId={myPlayerId}
             onCall={handleTossCall}
             onPick={handleTossPick}
             onDecision={handleTossDecision}

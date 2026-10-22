@@ -92,6 +92,13 @@ export function PlayWithFriendModal({
         throw new Error(data.error || "Failed to create room.");
       }
 
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("hca_created_room", data.code);
+        localStorage.setItem("hca_last_created_room", data.code);
+        sessionStorage.setItem("hca_tab_guest_id", effectiveId);
+        sessionStorage.setItem("hca_tab_guest_name", effectiveName);
+      }
+
       setIsCreating(false);
       setCreatedRoomCode(data.code);
     } catch (err: any) {
@@ -110,6 +117,12 @@ export function PlayWithFriendModal({
 
       socket.on("friend:created", (data: { code: string }) => {
         socket.disconnect();
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("hca_created_room", data.code);
+          localStorage.setItem("hca_last_created_room", data.code);
+          sessionStorage.setItem("hca_tab_guest_id", effectiveId);
+          sessionStorage.setItem("hca_tab_guest_name", effectiveName);
+        }
         setIsCreating(false);
         setCreatedRoomCode(data.code);
       });

@@ -30,6 +30,7 @@ import {
   Trophy,
   ShieldCheck,
   Hand,
+  Check,
 } from "lucide-react";
 import { playClickSound, playBoundarySound } from "@/lib/client/audio";
 
@@ -367,53 +368,56 @@ export const LiveMatchScreen: React.FC = () => {
       >
         {/* Opponent Video Background / Primary Feed */}
         <div className="relative w-full h-full min-h-[220px] sm:min-h-[280px] bg-ink flex items-center justify-center overflow-hidden">
-          {isBotMatch ? (
-            /* Bot Match Animated Graphic Arena */
-            <div className="flex flex-col items-center justify-center p-6 text-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-turf/10 border border-turf/30 flex items-center justify-center text-3xl">
-                🤖
-              </div>
-              <span className="font-heading font-black text-sm uppercase text-turf tracking-wider">
-                Practice Bot Arena
-              </span>
-              <span className="text-xs text-muted max-w-xs">
-                Playing offline against server AI. Show fingers to camera or tap 1-6 below!
-              </span>
-            </div>
-          ) : (
-            /* Peer-to-Peer Opponent Video Element */
-            <>
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                className={`w-full h-full object-cover transition-filter duration-300 ${
-                  isOpponentBlurred && turnStage !== "reveal"
-                    ? "blur-2xl brightness-50"
-                    : ""
-                }`}
-              />
+          {!isBotMatch && (
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className={`w-full h-full object-cover transition-filter duration-300 ${
+                isOpponentBlurred && turnStage !== "reveal"
+                  ? "blur-2xl brightness-50"
+                  : ""
+              }`}
+            />
+          )}
 
-              {/* Opponent Label */}
-              <div className="absolute top-2 left-2 bg-ink/80 border border-line rounded px-2.5 py-1 text-[11px] text-chalk flex items-center gap-1.5 z-10">
+          {/* Opponent Info Badge (Top Left) */}
+          <div className="absolute top-2 left-2 bg-ink/85 backdrop-blur-sm border border-line rounded-lg px-2.5 py-1 text-[11px] text-chalk flex items-center gap-1.5 z-20 shadow-md">
+            {isBotMatch ? (
+              <>
+                <span className="text-xs">🤖</span>
+                <span className="font-bold text-turf">RoboCricket</span>
+                <span className="text-[10px] text-muted">({opponentRoleStr})</span>
+              </>
+            ) : (
+              <>
                 <span className="w-2 h-2 rounded-full bg-turf animate-pulse" />
                 <span className="font-bold">{opponentDisplayName}</span>
                 <span className="text-[10px] text-muted">({opponentRoleStr})</span>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
 
-          {/* TURN FLOW OVERLAYS (Center) */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+          {/* CENTER: UNIFIED TURN / OUTCOME / BOT DISPLAY (No Overlaps) */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20 px-4">
             {outcomeText ? (
-              <div
-                className={`px-6 py-3 rounded-2xl border font-heading font-black text-2xl sm:text-4xl uppercase tracking-wider tabular-nums shadow-2xl ${
-                  isOutcomeWicket
-                    ? "bg-ball text-white border-ball animate-shake"
-                    : "bg-amber text-ink border-amber"
-                }`}
-              >
-                {outcomeText}
+              <div className="flex flex-col items-center gap-2 animate-scale-in">
+                <div
+                  className={`px-6 py-2.5 rounded-2xl border font-heading font-black text-2xl sm:text-4xl uppercase tracking-wider tabular-nums shadow-2xl ${
+                    isOutcomeWicket
+                      ? "bg-ball text-white border-ball animate-shake"
+                      : "bg-amber text-ink border-amber"
+                  }`}
+                >
+                  {outcomeText}
+                </div>
+                {opponentPick !== null && (
+                  <div className="flex items-center gap-2 bg-ink/90 border border-line px-3.5 py-1 rounded-full text-xs font-mono shadow-lg">
+                    <span className="text-muted">You: <strong className="text-chalk">{userPick}</strong></span>
+                    <span className="text-muted">•</span>
+                    <span className="text-muted">{isBotMatch ? "Bot" : opponentDisplayName}: <strong className="text-chalk">{opponentPick}</strong></span>
+                  </div>
+                )}
               </div>
             ) : revealCountdown !== null ? (
               <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-amber bg-surface-2 flex items-center justify-center shadow-2xl">
@@ -421,15 +425,56 @@ export const LiveMatchScreen: React.FC = () => {
                   {revealCountdown}
                 </span>
               </div>
+            ) : isBotMatch ? (
+              /* Bot Mode Center: Clean Avatar + Single Contextual Prompt */
+              <div className="flex flex-col items-center justify-center gap-2.5">
+                <div className="relative">
+                  <div
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg border transition-all ${
+                      isUserLocked
+                        ? "bg-turf/15 border-turf/40 shadow-turf/10"
+                        : "bg-surface-2 border-line"
+                    }`}
+                  >
+                    🤖
+                  </div>
+                  <span
+                    className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-turf border-2 border-ink"
+                    title="Bot Ready"
+                  />
+                </div>
+
+                {isUserLocked ? (
+                  <div className="bg-turf/15 border border-turf/40 px-3.5 py-1 rounded-full text-center shadow flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-turf" />
+                    <span className="text-xs font-bold text-turf uppercase tracking-wider">
+                      Locked: {userPick} • Waiting
+                    </span>
+                  </div>
+                ) : (
+                  <div className="bg-ink/90 border border-amber/40 px-3.5 py-1 rounded-full text-center shadow">
+                    <span className="text-xs font-heading font-black uppercase text-amber tracking-wider">
+                      Pick Your Number (1–6)
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : turnStage === "get_ready" ? (
-              <div className="bg-ink/85 border border-turf/40 px-4 py-2 rounded-xl text-center shadow-lg">
+              <div className="bg-ink/85 border border-turf/40 px-4 py-2 rounded-xl text-center shadow-lg backdrop-blur-sm">
                 <span className="text-xs font-heading font-black uppercase text-turf tracking-wider block">
                   GET READY...
                 </span>
-                <span className="text-[11px] text-muted">Prepare your finger gesture</span>
+                <span className="text-[11px] text-muted">Prepare your finger gesture or tap</span>
+              </div>
+            ) : isUserLocked ? (
+              <div className="bg-turf/20 backdrop-blur-md border border-turf/40 px-4 py-1.5 rounded-full text-center shadow-lg flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-turf" />
+                <span className="text-xs font-bold text-turf uppercase tracking-wide">
+                  Locked: {userPick}
+                </span>
               </div>
             ) : (
-              <div className="bg-ink/85 border border-amber/40 px-4 py-2 rounded-xl text-center shadow-lg animate-pulse">
+              <div className="bg-ink/85 backdrop-blur-md border border-amber/40 px-4 py-2 rounded-xl text-center shadow-lg animate-pulse">
                 <span className="text-xs font-heading font-black uppercase text-amber tracking-wider block">
                   SHOW YOUR NUMBER!
                 </span>
@@ -438,60 +483,62 @@ export const LiveMatchScreen: React.FC = () => {
             )}
           </div>
 
-          {/* Self Video Picture-in-Picture (PiP) with Hand Skeleton Canvas */}
-          <div className="absolute bottom-2 right-2 w-28 h-20 sm:w-36 sm:h-28 bg-surface border border-line rounded-xl overflow-hidden shadow-2xl z-20">
-            {isCameraOn ? (
-              <div className="relative w-full h-full">
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover transform -scale-x-100"
-                />
+          {/* Self Video Picture-in-Picture (PiP) - Only show if camera is enabled (or in human match) */}
+          {(isCameraOn || !isBotMatch) && (
+            <div className="absolute bottom-2 right-2 w-28 h-20 sm:w-36 sm:h-28 bg-surface border border-line rounded-xl overflow-hidden shadow-2xl z-20">
+              {isCameraOn ? (
+                <div className="relative w-full h-full">
+                  <video
+                    ref={localVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform -scale-x-100"
+                  />
 
-                {/* AR Hand Skeleton Overlay */}
-                <canvas
-                  ref={skeletonCanvasRef}
-                  width={320}
-                  height={240}
-                  className="absolute inset-0 w-full h-full pointer-events-none transform -scale-x-100"
-                />
+                  {/* AR Hand Skeleton Overlay */}
+                  <canvas
+                    ref={skeletonCanvasRef}
+                    width={320}
+                    height={240}
+                    className="absolute inset-0 w-full h-full pointer-events-none transform -scale-x-100"
+                  />
 
-                {/* Hand Detection Badge */}
-                <div className="absolute top-1 left-1 z-10">
-                  {isLoadingModel ? (
-                    <span className="px-1.5 py-0.5 rounded bg-ink/80 text-[8px] font-mono text-muted">
-                      Loading tracker...
-                    </span>
-                  ) : isUserLocked ? (
-                    <span className="px-1.5 py-0.5 rounded bg-turf text-ink text-[9px] font-bold font-mono uppercase shadow">
-                      LOCKED: {userPick}
-                    </span>
-                  ) : detectedGesture !== null ? (
-                    <span className="px-1.5 py-0.5 rounded bg-amber text-ink text-[9px] font-bold font-mono uppercase shadow">
-                      PICK: {detectedGesture} ({Math.round(gestureProgress * 100)}%)
-                    </span>
-                  ) : (
-                    <span className="px-1.5 py-0.5 rounded bg-ink/80 text-[8px] font-mono text-muted">
-                      Looking for hand
-                    </span>
-                  )}
+                  {/* Hand Detection Badge */}
+                  <div className="absolute top-1 left-1 z-10">
+                    {isLoadingModel ? (
+                      <span className="px-1.5 py-0.5 rounded bg-ink/80 text-[8px] font-mono text-muted">
+                        Loading tracker...
+                      </span>
+                    ) : isUserLocked ? (
+                      <span className="px-1.5 py-0.5 rounded bg-turf text-ink text-[9px] font-bold font-mono uppercase shadow">
+                        LOCKED: {userPick}
+                      </span>
+                    ) : detectedGesture !== null ? (
+                      <span className="px-1.5 py-0.5 rounded bg-amber text-ink text-[9px] font-bold font-mono uppercase shadow">
+                        PICK: {detectedGesture} ({Math.round(gestureProgress * 100)}%)
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded bg-ink/80 text-[8px] font-mono text-muted">
+                        Looking for hand
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="w-full h-full bg-surface-2 flex items-center justify-center text-[10px] text-muted">
-                Camera Off
-              </div>
-            )}
+              ) : (
+                <div className="w-full h-full bg-surface-2 flex items-center justify-center text-[10px] text-muted">
+                  Camera Off
+                </div>
+              )}
 
-            <div className="absolute bottom-0.5 left-0.5 text-[8px] bg-ink/80 px-1 rounded text-turf font-mono">
-              YOU
+              <div className="absolute bottom-0.5 left-0.5 text-[8px] bg-ink/80 px-1 rounded text-turf font-mono">
+                YOU
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Video Controls Bar (Bottom Left Overlay) */}
-          <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-20 bg-ink/80 border border-line rounded-lg p-1">
+          <div className="absolute bottom-2 left-2 flex items-center gap-1.5 z-20 bg-ink/80 border border-line rounded-lg p-1 backdrop-blur-sm">
             {/* Camera Toggle */}
             <button
               type="button"
@@ -500,35 +547,39 @@ export const LiveMatchScreen: React.FC = () => {
               className={`p-1.5 rounded transition-colors ${
                 isCameraOn
                   ? "bg-surface-2 text-chalk hover:text-turf"
-                  : "bg-ball text-white"
+                  : "bg-surface text-muted hover:text-chalk"
               }`}
             >
               {isCameraOn ? <Camera className="w-3.5 h-3.5" /> : <CameraOff className="w-3.5 h-3.5" />}
             </button>
 
-            {/* Mic Toggle */}
-            <button
-              type="button"
-              onClick={handleToggleMic}
-              title={isMicOn ? "Mute microphone" : "Unmute microphone"}
-              className={`p-1.5 rounded transition-colors ${
-                isMicOn
-                  ? "bg-turf text-ink"
-                  : "bg-surface-2 text-muted hover:text-chalk"
-              }`}
-            >
-              {isMicOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-            </button>
+            {/* Mic Toggle - only for real opponent */}
+            {!isBotMatch && (
+              <button
+                type="button"
+                onClick={handleToggleMic}
+                title={isMicOn ? "Mute microphone" : "Unmute microphone"}
+                className={`p-1.5 rounded transition-colors ${
+                  isMicOn
+                    ? "bg-turf text-ink"
+                    : "bg-surface-2 text-muted hover:text-chalk"
+                }`}
+              >
+                {isMicOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+              </button>
+            )}
 
-            {/* Flip Camera */}
-            <button
-              type="button"
-              onClick={handleFlipCamera}
-              title="Flip Camera (Front/Back)"
-              className="p-1.5 rounded bg-surface-2 text-chalk hover:text-turf transition-colors"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-            </button>
+            {/* Flip Camera - only when camera is on */}
+            {isCameraOn && (
+              <button
+                type="button"
+                onClick={handleFlipCamera}
+                title="Flip Camera (Front/Back)"
+                className="p-1.5 rounded bg-surface-2 text-chalk hover:text-turf transition-colors"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
+            )}
 
             {/* Switch Mode: Hand Gesture vs Tap Mode */}
             <button
@@ -548,28 +599,31 @@ export const LiveMatchScreen: React.FC = () => {
               <span>{useTapMode ? "Tap Mode" : "Gesture"}</span>
             </button>
 
-            {/* Blur Opponent Video */}
-            <button
-              type="button"
-              onClick={() => setIsOpponentBlurred(!isOpponentBlurred)}
-              title={isOpponentBlurred ? "Unblur opponent video" : "Blur opponent video"}
-              className={`p-1.5 rounded transition-colors ${
-                isOpponentBlurred
-                  ? "bg-turf text-ink"
-                  : "bg-surface-2 text-muted hover:text-chalk"
-              }`}
-            >
-              {isOpponentBlurred ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            </button>
+            {/* Blur Opponent Video - only for real opponent */}
+            {!isBotMatch && (
+              <button
+                type="button"
+                onClick={() => setIsOpponentBlurred(!isOpponentBlurred)}
+                title={isOpponentBlurred ? "Unblur opponent video" : "Blur opponent video"}
+                className={`p-1.5 rounded transition-colors ${
+                  isOpponentBlurred
+                    ? "bg-turf text-ink"
+                    : "bg-surface-2 text-muted hover:text-chalk"
+                }`}
+              >
+                {isOpponentBlurred ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            )}
           </div>
 
           {/* Turn Timer Dial (Top Right Overlay) */}
-          <div className="absolute top-2 right-2 flex items-center gap-2 z-20 bg-ink/80 border border-line rounded-lg px-2.5 py-1">
+          <div className="absolute top-2 right-2 flex items-center gap-2 z-20 bg-ink/80 border border-line rounded-lg px-2.5 py-1 backdrop-blur-sm">
             <TimerRing
               remainingSeconds={timerSeconds}
               totalSeconds={10}
-              size={34}
+              size={32}
               strokeWidth={3}
+              showText={false}
             />
             <div className="flex flex-col text-right">
               <span className="text-[10px] font-mono text-muted uppercase">Timer</span>

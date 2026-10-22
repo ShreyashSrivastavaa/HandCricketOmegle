@@ -17,13 +17,17 @@ const config: Config = {
         line: "var(--color-line)",
         chalk: "var(--color-chalk)",
         muted: "var(--color-muted)",
-        turf: "var(--color-turf)",
+        turf: {
+          DEFAULT: "var(--color-turf)",
+          hover: "var(--color-turf-hover)",
+        },
         ball: "var(--color-ball)",
         amber: {
           DEFAULT: "var(--color-amber)",
           highlight: "var(--color-amber)",
         },
         sky: "var(--color-sky)",
+        indigo: "var(--color-indigo)",
       },
       fontFamily: {
         heading: ["var(--font-barlow-condensed)", "sans-serif"],

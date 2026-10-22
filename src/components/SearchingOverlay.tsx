@@ -18,20 +18,25 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
 }) => {
   const [elapsed, setElapsed] = useState<number>(0);
   const [showBotFallback, setShowBotFallback] = useState<boolean>(false);
+  const botFallbackCalled = React.useRef<boolean>(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setElapsed((prev) => {
-        const next = prev + 1;
-        if (next >= 12) {
-          setShowBotFallback(true);
-        }
-        return next;
-      });
+      setElapsed((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (elapsed >= 5) {
+      setShowBotFallback(true);
+    }
+    if (elapsed >= 9 && !botFallbackCalled.current) {
+      botFallbackCalled.current = true;
+      onPlayVsBot();
+    }
+  }, [elapsed, onPlayVsBot]);
 
   // Keyboard accessibility: Escape key cancels search
   useEffect(() => {
@@ -105,7 +110,7 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-muted leading-relaxed">
-              No human matched in 12s. You can jump in instantly against our intelligent server-side bot!
+              No live player in queue. Jump in against our intelligent bot, or wait a few seconds!
             </p>
             <button
               type="button"

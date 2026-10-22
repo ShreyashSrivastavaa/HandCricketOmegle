@@ -1,18 +1,14 @@
 import React, { useState } from "react";
 import { useLiveMatchStore } from "@/lib/store/liveMatchStore";
 import {
-  Play,
-  Bot,
   Shuffle,
-  HelpCircle,
-  Flame,
-  Shield,
-  Swords,
-  Sparkles,
-  Trophy,
   Users,
-  Infinity as InfinityIcon,
-  Camera,
+  Bot,
+  Play,
+  HelpCircle,
+  Dices,
+  Edit2,
+  Check,
 } from "lucide-react";
 import { generateGuestName } from "@/lib/server/session";
 import { playClickSound } from "@/lib/client/audio";
@@ -37,16 +33,22 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
     setMode,
     endlessVariant,
     setEndlessVariant,
-    personalBest,
   } = useLiveMatchStore();
+
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [nameInput, setNameInput] = useState<string>(guestName);
 
   const handleRandomizeName = () => {
     playClickSound();
     const newName = generateGuestName();
+    const newId = `guest_${Math.random().toString(36).substring(2, 10)}${Date.now().toString(36).substring(4)}`;
     setGuestName(newName);
     setNameInput(newName);
+    useLiveMatchStore.setState({ guestId: newId });
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("hca_tab_guest_id", newId);
+      sessionStorage.setItem("hca_tab_guest_name", newName);
+    }
   };
 
   const handleSaveName = (e: React.FormEvent) => {
@@ -58,247 +60,108 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   };
 
   return (
-    <main className="w-full max-w-xl mx-auto flex flex-col items-center gap-6 px-4 py-6 sm:py-10 select-none">
-      {/* Hero Badge & Headline */}
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-turf/10 border border-turf/30 text-xs font-heading font-black tracking-wider uppercase text-turf shadow-sm">
-          <Sparkles className="w-3.5 h-3.5 text-turf" />
-          <span>Real-time Stranger Matchmaking</span>
-        </div>
-
-        <h1 className="font-heading font-black text-4xl sm:text-5xl uppercase tracking-tight text-chalk leading-none">
-          OUTSMART STRANGERS IN <span className="text-turf">HAND CRICKET</span>
+    <main className="w-full max-w-lg mx-auto flex flex-col items-center gap-6 px-4 py-8 select-none">
+      {/* 1. Clean Title */}
+      <div className="flex flex-col items-center gap-2 text-center">
+        <h1 className="font-heading font-black text-4xl sm:text-5xl uppercase tracking-tight text-chalk">
+          HAND <span className="text-turf">CRICKET</span>
         </h1>
-
-        <p className="text-xs sm:text-sm text-muted max-w-md leading-relaxed">
-          The nostalgic Indian schoolyard game, now online! Anonymous 1v1 duels, instant reveal animations, and zero servers to configure.
+        <p className="text-sm text-muted">
+          Classic schoolyard hand cricket, played live in browser.
         </p>
       </div>
 
-      {/* Guest Identity Card */}
-      <div className="w-full bg-surface border border-line rounded-[16px] p-4 sm:p-5 flex flex-col gap-3 shadow-lg">
-        <div className="flex items-center justify-between border-b border-line pb-2.5">
-          <span className="text-[11px] font-heading font-bold text-muted uppercase tracking-wider">
-            Your Anonymous Identity
-          </span>
-          <button
-            type="button"
-            onClick={handleRandomizeName}
-            className="flex items-center gap-1 text-[11px] font-medium text-turf hover:text-turf/80 uppercase transition-colors"
-          >
-            <Shuffle className="w-3 h-3" />
-            <span>Randomize</span>
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
+      {/* 2. Compact Anonymous Identity */}
+      <div className="w-full bg-surface border border-line rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="text-xl shrink-0">🏏</span>
           {isEditing ? (
-            <form onSubmit={handleSaveName} className="flex-1 flex items-center gap-2">
+            <form onSubmit={handleSaveName} className="flex items-center gap-2">
               <input
                 type="text"
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 maxLength={16}
                 autoFocus
-                className="w-full px-3 py-1.5 rounded-lg bg-surface-2 border border-turf text-chalk text-sm font-semibold focus:outline-none"
+                className="px-2.5 py-1 rounded-lg bg-surface-2 border border-turf text-chalk text-sm font-semibold focus:outline-none w-36"
               />
               <button
                 type="submit"
-                className="px-3 py-1.5 rounded-lg bg-turf text-ink font-heading font-black text-xs uppercase"
+                className="px-2.5 py-1 rounded-lg bg-turf text-ink font-heading font-bold text-xs uppercase"
               >
-                Save
+                <Check className="w-3.5 h-3.5" />
               </button>
             </form>
           ) : (
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-surface-2 border border-line flex items-center justify-center text-lg">
-                🏏
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-bold text-chalk">{guestName}</span>
-                <span className="text-[10px] text-muted">Ready to play</span>
-              </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-sm font-bold text-chalk truncate">
+                {guestName}
+              </span>
+              <span className="text-[11px] text-muted">
+                Your Anonymous Identity • Ready to play
+              </span>
             </div>
           )}
+        </div>
 
-          {!isEditing && (
+        {!isEditing && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={handleRandomizeName}
+              title="Randomize Moniker"
+              aria-label="Randomize"
+              className="p-1.5 rounded-lg text-muted hover:text-chalk hover:bg-surface-2 transition-colors"
+            >
+              <Dices className="w-4 h-4" />
+            </button>
             <button
               type="button"
               onClick={() => {
                 playClickSound();
                 setIsEditing(true);
               }}
-              className="px-3 py-1.5 rounded-lg border border-line bg-surface-2 text-xs font-semibold text-muted hover:text-chalk transition-colors"
+              title="Edit Name"
+              aria-label="Edit"
+              className="p-1.5 rounded-lg text-muted hover:text-chalk hover:bg-surface-2 transition-colors"
             >
-              Edit
+              <Edit2 className="w-3.5 h-3.5" />
             </button>
-          )}
-        </div>
-      </div>
-
-      {/* Mode Selector */}
-      <div className="w-full flex flex-col gap-2">
-        <label className="text-xs font-heading font-bold text-muted uppercase tracking-wider px-1">
-          Select Match Mode
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 w-full">
-          {/* Sudden Death Card */}
-          <button
-            type="button"
-            onClick={() => {
-              playClickSound();
-              setMode("sudden_death");
-            }}
-            aria-pressed={mode === "sudden_death"}
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col justify-between gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
-              mode === "sudden_death"
-                ? "bg-surface-2 border-turf shadow-[0_0_16px_rgba(61,220,132,0.15)] ring-1 ring-turf"
-                : "bg-surface/50 border-line hover:border-line/80 opacity-70"
-            }`}
-          >
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-heading font-black uppercase tracking-wider text-turf flex items-center gap-1">
-                  <Flame className="w-3.5 h-3.5 fill-current" /> Sudden Death
-                </span>
-                <span className="text-[10px] font-bold text-muted bg-surface px-1.5 py-0.5 rounded border border-line">
-                  DEFAULT
-                </span>
-              </div>
-              <span className="text-sm font-black font-heading text-chalk">1 WICKET</span>
-              <span className="text-[11px] text-muted leading-tight">
-                Instant knockout. Innings ends on the very first wicket!
-              </span>
-            </div>
-          </button>
-
-          {/* Classic Mode Card */}
-          <button
-            type="button"
-            onClick={() => {
-              playClickSound();
-              setMode("classic");
-            }}
-            aria-pressed={mode === "classic"}
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col justify-between gap-1.5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf ${
-              mode === "classic"
-                ? "bg-surface-2 border-turf shadow-[0_0_16px_rgba(61,220,132,0.15)] ring-1 ring-turf"
-                : "bg-surface/50 border-line hover:border-line/80 opacity-70"
-            }`}
-          >
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-heading font-black uppercase tracking-wider text-sky flex items-center gap-1">
-                  <Trophy className="w-3.5 h-3.5" /> Classic Match
-                </span>
-              </div>
-              <span className="text-sm font-black font-heading text-chalk">2 WKTS • 2 OVERS</span>
-              <span className="text-[11px] text-muted leading-tight">
-                12 balls total with 2 wickets. Strategic chase pacing.
-              </span>
-            </div>
-          </button>
-
-          {/* Endless Mode Card */}
-          <div
-            className={`p-3.5 rounded-[14px] border text-left flex flex-col justify-between gap-1.5 transition-all ${
-              mode === "endless"
-                ? "bg-surface-2 border-amber shadow-[0_0_16px_rgba(245,158,11,0.18)] ring-1 ring-amber"
-                : "bg-surface/50 border-line hover:border-line/80 opacity-70"
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                playClickSound();
-                setMode("endless");
-              }}
-              aria-pressed={mode === "endless"}
-              className="w-full text-left flex flex-col gap-1 focus:outline-none"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-heading font-black uppercase tracking-wider text-amber flex items-center gap-1">
-                  <InfinityIcon className="w-3.5 h-3.5" /> Endless
-                </span>
-                <span className="text-[10px] font-bold text-amber bg-amber/10 border border-amber/30 px-1.5 py-0.5 rounded">
-                  NEW
-                </span>
-              </div>
-              <span className="text-sm font-black font-heading text-chalk">
-                {endlessVariant === "pro" ? "3 WKTS • NO LIMIT" : "1 WKT • NO LIMIT"}
-              </span>
-              <span className="text-[11px] text-muted leading-tight">
-                Bat until out! Higher total wins; tie triggers Super-Over.
-              </span>
-            </button>
-
-            {/* Config: 1 Wicket vs 3 Wickets (Endless Pro) */}
-            <div className="pt-2 border-t border-line/60 flex items-center justify-between gap-1 mt-1">
-              <span className="text-[10px] font-bold text-muted uppercase">Wickets:</span>
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    playClickSound();
-                    setMode("endless");
-                    setEndlessVariant("standard");
-                  }}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                    endlessVariant === "standard"
-                      ? "bg-amber text-ink"
-                      : "bg-surface border border-line text-muted hover:text-chalk"
-                  }`}
-                >
-                  1 (Def)
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    playClickSound();
-                    setMode("endless");
-                    setEndlessVariant("pro");
-                  }}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                    endlessVariant === "pro"
-                      ? "bg-amber text-ink"
-                      : "bg-surface border border-line text-muted hover:text-chalk"
-                  }`}
-                >
-                  3 (Pro)
-                </button>
-              </div>
-            </div>
-
-            {/* Personal Best Pill */}
-            {personalBest > 0 && (
-              <div className="mt-1 flex items-center justify-between text-[10px] bg-ink/70 px-2 py-0.5 rounded border border-line text-muted">
-                <span>Personal Best:</span>
-                <span className="text-amber font-mono font-bold">{personalBest} runs</span>
-              </div>
-            )}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Main CTAs */}
-      <div className="w-full flex flex-col gap-2.5 sm:gap-3 pt-2">
-        {/* 1. Find Stranger Match */}
+      {/* 3. The 3 Game Modes (Clean, Distinct Action Cards) */}
+      <div className="w-full flex flex-col gap-3">
+        {/* OPTION 1: PLAY RANDOM */}
         <button
           type="button"
           onClick={() => {
             playClickSound();
             onFindMatch();
           }}
-          aria-label="Find stranger match"
-          className="w-full min-h-[52px] py-3.5 sm:py-4 px-4 sm:px-6 rounded-2xl bg-turf text-ink font-heading font-black text-lg sm:text-2xl uppercase tracking-wider flex items-center justify-center gap-2.5 sm:gap-3 shadow-[0_0_24px_rgba(61,220,132,0.35)] hover:bg-turf-hover active:scale-[0.99] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+          aria-label="FIND STRANGER MATCH"
+          className="group w-full p-4 rounded-xl bg-surface border border-line hover:border-turf hover:bg-surface-2 transition-all flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
         >
-          <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current shrink-0" />
-          <span className="truncate">FIND STRANGER MATCH</span>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-turf/15 text-turf flex items-center justify-center shrink-0 group-hover:bg-turf group-hover:text-ink transition-colors">
+              <Shuffle className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-heading font-black text-lg text-chalk group-hover:text-turf transition-colors">
+                Play Random
+              </span>
+              <span className="text-xs text-muted">
+                Match 1v1 with an online opponent
+              </span>
+            </div>
+          </div>
+          <span className="hidden sm:inline-block text-xs font-heading font-bold uppercase text-turf bg-turf/10 px-3 py-1.5 rounded-lg border border-turf/20 group-hover:bg-turf group-hover:text-ink transition-colors">
+            FIND STRANGER MATCH
+          </span>
         </button>
 
-        {/* 2. Play with Friend */}
+        {/* OPTION 2: PLAY WITH FRIEND */}
         <button
           type="button"
           onClick={() => {
@@ -306,13 +169,27 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             onPlayWithFriend();
           }}
           aria-label="Play with friend in a private room"
-          className="w-full min-h-[48px] py-3 px-4 sm:px-5 rounded-xl bg-surface border border-turf/40 text-turf font-heading font-bold text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-turf/10 hover:border-turf transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf shadow-[0_0_12px_rgba(61,220,132,0.1)]"
+          className="group w-full p-4 rounded-xl bg-surface border border-line hover:border-sky hover:bg-surface-2 transition-all flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky"
         >
-          <Users className="w-4 h-4 text-turf shrink-0" />
-          <span>Play with Friend (Private Room)</span>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-sky/15 text-sky flex items-center justify-center shrink-0 group-hover:bg-sky group-hover:text-ink transition-colors">
+              <Users className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-heading font-black text-lg text-chalk group-hover:text-sky transition-colors">
+                Play with Friend
+              </span>
+              <span className="text-xs text-muted">
+                Private room with invite code or link
+              </span>
+            </div>
+          </div>
+          <span className="hidden sm:inline-block text-xs font-heading font-bold uppercase text-sky bg-sky/10 px-3 py-1.5 rounded-lg border border-sky/20 group-hover:bg-sky group-hover:text-ink transition-colors">
+            Play with Friend
+          </span>
         </button>
 
-        {/* 3. Practice vs Server Bot */}
+        {/* OPTION 3: PLAY WITH COMPUTER */}
         <button
           type="button"
           onClick={() => {
@@ -320,42 +197,103 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             onPlayVsBot();
           }}
           aria-label="Practice vs Server Bot"
-          className="w-full min-h-[46px] py-3 px-4 sm:px-5 rounded-xl bg-surface border border-line text-chalk font-heading font-bold text-sm sm:text-base uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-surface-2 hover:border-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+          className="group w-full p-4 rounded-xl bg-surface border border-line hover:border-amber hover:bg-surface-2 transition-all flex items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber"
         >
-          <Bot className="w-4 h-4 text-turf shrink-0" />
-          <span>Practice vs Server Bot</span>
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-lg bg-amber/15 text-amber flex items-center justify-center shrink-0 group-hover:bg-amber group-hover:text-ink transition-colors">
+              <Bot className="w-5 h-5" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-heading font-black text-lg text-chalk group-hover:text-amber transition-colors">
+                Play with Computer
+              </span>
+              <span className="text-xs text-muted">
+                Instant match vs smart bot, zero wait
+              </span>
+            </div>
+          </div>
+          <span className="hidden sm:inline-block text-xs font-heading font-bold uppercase text-amber bg-amber/10 px-3 py-1.5 rounded-lg border border-amber/20 group-hover:bg-amber group-hover:text-ink transition-colors">
+            Practice vs Server Bot
+          </span>
         </button>
       </div>
 
-      {/* Quick Rules Link */}
+      {/* 4. Compact Format Selector */}
+      <div className="w-full flex flex-col gap-2 pt-2 border-t border-line">
+        <span className="text-[11px] font-heading font-bold text-muted uppercase tracking-wider text-center">
+          Match Format
+        </span>
+
+        <div className="grid grid-cols-3 gap-2 w-full">
+          {/* Sudden Death */}
+          <button
+            type="button"
+            onClick={() => {
+              playClickSound();
+              setMode("sudden_death");
+            }}
+            aria-pressed={mode === "sudden_death"}
+            className={`py-2 px-3 rounded-lg text-center transition-all ${
+              mode === "sudden_death"
+                ? "bg-surface-2 border border-turf text-turf font-bold text-xs"
+                : "bg-surface border border-line text-muted hover:text-chalk text-xs"
+            }`}
+          >
+            <div className="font-heading font-bold">Sudden Death</div>
+            <div className="text-[10px] text-muted font-normal">1 WICKET</div>
+          </button>
+
+          {/* Classic */}
+          <button
+            type="button"
+            onClick={() => {
+              playClickSound();
+              setMode("classic");
+            }}
+            aria-pressed={mode === "classic"}
+            className={`py-2 px-3 rounded-lg text-center transition-all ${
+              mode === "classic"
+                ? "bg-surface-2 border border-turf text-turf font-bold text-xs"
+                : "bg-surface border border-line text-muted hover:text-chalk text-xs"
+            }`}
+          >
+            <div className="font-heading font-bold">Classic Match</div>
+            <div className="text-[10px] text-muted font-normal">2 WKTS • 2 OVERS</div>
+          </button>
+
+          {/* Endless */}
+          <button
+            type="button"
+            onClick={() => {
+              playClickSound();
+              setMode("endless");
+            }}
+            aria-pressed={mode === "endless"}
+            className={`py-2 px-3 rounded-lg text-center transition-all ${
+              mode === "endless"
+                ? "bg-surface-2 border border-amber text-amber font-bold text-xs"
+                : "bg-surface border border-line text-muted hover:text-chalk text-xs"
+            }`}
+          >
+            <div className="font-heading font-bold">Endless</div>
+            <div className="text-[10px] text-muted font-normal">NO LIMIT</div>
+          </button>
+        </div>
+      </div>
+
+      {/* 5. Simple Rules Link */}
       <button
         type="button"
         onClick={() => {
           playClickSound();
           onOpenRules();
         }}
-        aria-label="How does Hand Cricket work? View rules"
+        aria-label="View Hand Cricket rules"
         className="flex items-center gap-1.5 text-xs text-muted hover:text-chalk transition-colors py-1 focus-visible:outline-none focus-visible:underline"
       >
-        <HelpCircle className="w-4 h-4 text-turf shrink-0" />
-        <span>How does Hand Cricket work? View rules</span>
+        <HelpCircle className="w-3.5 h-3.5 text-turf" />
+        <span>View rules &amp; how to play</span>
       </button>
-
-      {/* Feature Footnotes */}
-      <div className="w-full grid grid-cols-3 gap-1 sm:gap-2 pt-4 border-t border-line text-center text-[9px] sm:text-[10px] text-muted uppercase font-semibold">
-        <div className="flex flex-col items-center gap-1">
-          <Shield className="w-4 h-4 text-turf shrink-0" />
-          <span className="truncate w-full">Server Authoritative</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Flame className="w-4 h-4 text-amber shrink-0" />
-          <span className="truncate w-full">10s Turn Clock</span>
-        </div>
-        <div className="flex flex-col items-center gap-1">
-          <Swords className="w-4 h-4 text-sky shrink-0" />
-          <span className="truncate w-full">Zero-Text Safe</span>
-        </div>
-      </div>
     </main>
   );
 };

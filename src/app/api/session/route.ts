@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getOrCreateGuestSession, attachSessionCookies } from "@/lib/server/session";
 import { rateLimit } from "@/lib/server/ratelimit";
+import { getAblyRest } from "@/lib/server/ably";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,7 @@ export async function GET(req: NextRequest) {
     guestName: session.guestName,
     ageVerified: Boolean(session.ageVerified),
     isNew,
+    isMockRealtime: !getAblyRest(),
   });
 
   attachSessionCookies(res, session);
