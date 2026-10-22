@@ -345,3 +345,4 @@ HandCricketOmegle is specifically engineered for zero-server deployment on Verce
 ## 📄 License
 
 MIT License. Built with ❤️ for cricket fans around the world.
+<!-- updated: production deployment trigger -->
