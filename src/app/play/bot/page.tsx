@@ -14,8 +14,31 @@ import { ResultBanner } from "@/components/ResultBanner";
 import { Button } from "@/components/Button";
 import { Toast } from "@/components/Toast";
 import { WicketsOption, OversOption } from "@/lib/game-core/types";
-import { ArrowLeft, Play, ArrowRight } from "lucide-react";
+import { ArrowLeft, Play, ArrowRight, Volume2, VolumeX } from "lucide-react";
 import { Footer } from "@/components/Footer";
+import { isSoundMuted, toggleSoundMute, playClickSound } from "@/lib/client/audio";
+
+function BotSoundToggle() {
+  const [muted, setMuted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setMuted(isSoundMuted());
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        playClickSound();
+        setMuted(toggleSoundMute());
+      }}
+      aria-label={muted ? "Unmute game audio" : "Mute game audio"}
+      className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface text-muted transition-colors hover:text-chalk"
+    >
+      {muted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+    </button>
+  );
+}
 
 export default function PlayBotPage() {
   const router = useRouter();
@@ -78,7 +101,7 @@ export default function PlayBotPage() {
   if (inSetup || !gameState) {
     return (
       <main className="min-h-screen bg-ink text-chalk flex flex-col justify-center items-center p-4 select-none">
-        <div className="w-full max-w-sm bg-surface border border-line rounded-[12px] p-6 flex flex-col gap-6">
+        <div className="w-full max-w-sm bg-surface border border-line rounded-[24px] p-6 flex flex-col gap-6 shadow-panel">
           <div className="flex items-center justify-between border-b border-line pb-3">
             <button
               type="button"
@@ -88,9 +111,12 @@ export default function PlayBotPage() {
               <ArrowLeft className="w-4 h-4" />
               <span>Lobby</span>
             </button>
-            <span className="text-xs font-heading font-black text-turf uppercase tracking-wider">
-              VS Bot Mode
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-heading font-black text-turf uppercase tracking-wider">
+                VS Bot Mode
+              </span>
+              <BotSoundToggle />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1 text-center">
@@ -113,7 +139,7 @@ export default function PlayBotPage() {
                   key={w}
                   type="button"
                   onClick={() => setWickets(w)}
-                  className={`py-2 rounded-[12px] border text-sm font-heading font-bold tabular-nums transition-all ${
+                  className={`py-2 rounded-full border text-sm font-heading font-bold tabular-nums transition-all ${
                     format.maxWickets === w
                       ? "bg-surface-2 border-turf text-turf"
                       : "bg-surface-2/40 border-line text-muted hover:text-chalk"
@@ -136,7 +162,7 @@ export default function PlayBotPage() {
                   key={o}
                   type="button"
                   onClick={() => setOvers(o)}
-                  className={`py-2 rounded-[12px] border text-sm font-heading font-bold tabular-nums transition-all ${
+                  className={`py-2 rounded-full border text-sm font-heading font-bold tabular-nums transition-all ${
                     format.maxOvers === o
                       ? "bg-surface-2 border-turf text-turf"
                       : "bg-surface-2/40 border-line text-muted hover:text-chalk"
@@ -316,8 +342,11 @@ export default function PlayBotPage() {
             <span>{isUserBatting ? "YOU ARE BATTING" : "YOU ARE BOWLING"}</span>
           </div>
 
-          <div className="text-[11px] text-muted font-heading uppercase tracking-wider">
-            VS BOT
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted font-heading uppercase tracking-wider">
+              VS BOT
+            </span>
+            <BotSoundToggle />
           </div>
         </div>
 

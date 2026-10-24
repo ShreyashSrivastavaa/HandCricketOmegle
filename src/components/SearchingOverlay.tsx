@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Bot, X, Loader2, Sparkles, ShieldCheck } from "lucide-react";
+import { Bot, X, Loader2, Radar, Camera, ShieldCheck, Timer } from "lucide-react";
 import { motion } from "framer-motion";
 import { playClickSound } from "@/lib/client/audio";
+import { Hand } from "./Hand";
 
 import type { MatchMode } from "@/lib/game/types";
 
@@ -38,7 +39,6 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
     }
   }, [elapsed, onPlayVsBot]);
 
-  // Keyboard accessibility: Escape key cancels search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
@@ -47,70 +47,100 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onCancel]);
 
+  const modeLabel =
+    mode === "endless"
+      ? "Endless mode · no over limit"
+      : mode === "classic"
+      ? "Classic mode · 2 wickets, 2 overs"
+      : "Fast format · 1 wicket";
+
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center p-4 bg-ink/95 backdrop-blur-md"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink/92 p-4 backdrop-blur-xl"
       role="dialog"
       aria-modal="true"
       aria-label="Searching for opponent"
     >
-      <div className="w-full max-w-md bg-surface border border-line rounded-[20px] p-6 sm:p-8 flex flex-col items-center text-center gap-6 shadow-2xl relative overflow-hidden">
-        {/* Subtle background glow */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-turf/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-sky/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="pitch-grid pointer-events-none absolute inset-0 opacity-35" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute left-1/2 top-1/3 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-turf/10 blur-[110px]"
+        aria-hidden="true"
+      />
 
-        {/* Radar Pulse Animation */}
-        <div className="relative flex items-center justify-center my-4">
-          <motion.div
-            className="absolute w-36 h-36 rounded-full border border-turf/20 bg-turf/5"
-            animate={{ scale: [1, 1.4, 1.8], opacity: [0.6, 0.3, 0] }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: "easeOut" }}
-          />
-          <motion.div
-            className="absolute w-24 h-24 rounded-full border border-turf/40 bg-turf/10"
-            animate={{ scale: [1, 1.3, 1.6], opacity: [0.8, 0.4, 0] }}
-            transition={{ duration: 2.2, repeat: Infinity, delay: 0.6, ease: "easeOut" }}
-          />
-          <div className="w-20 h-20 rounded-full bg-surface-2 border-2 border-turf flex items-center justify-center text-3xl shadow-[0_0_24px_rgba(61,220,132,0.3)] z-10">
-            🏏
-          </div>
-        </div>
+      <div className="animate-fade-up relative w-full max-w-lg overflow-hidden rounded-[28px] border border-line bg-surface/90 p-5 shadow-panel backdrop-blur-xl sm:p-7">
+        <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-sky/10 blur-3xl" aria-hidden="true" />
 
-        {/* Status text */}
-        <div className="flex flex-col gap-1.5 z-10">
-          <span className="font-heading font-black text-2xl sm:text-3xl uppercase tracking-wider text-chalk">
-            Searching for Opponent...
-          </span>
-          <p className="text-xs text-muted">
-            Pairing with a live player for{" "}
-            <span className="text-turf font-bold uppercase">
-              {mode === "endless"
-                ? "Endless Mode (No Over Limit)"
-                : mode === "classic"
-                ? "Classic Mode (2 Wkts)"
-                : "Sudden Death (1 Wkt)"}
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-2 rounded-full border border-turf/25 bg-turf/[0.06] px-3 py-1.5">
+            <Radar className="h-3.5 w-3.5 text-turf" />
+            <span className="font-heading text-[10px] font-black uppercase tracking-[0.18em] text-turf">
+              Matchmaking live
             </span>
-          </p>
-          <span className="font-tabular text-sm font-semibold text-muted/80 mt-1">
-            Elapsed: {elapsed}s
+          </div>
+          <span className="font-heading text-[11px] font-bold tabular-nums text-muted">
+            {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, "0")}
           </span>
         </div>
 
-        {/* 12-second Bot Fallback Offer */}
+        <div className="relative z-10 mt-6 flex flex-col items-center text-center">
+          <div className="relative flex h-40 w-40 items-center justify-center">
+            <motion.div
+              className="absolute h-40 w-40 rounded-full border border-turf/20 bg-turf/[0.04]"
+              animate={{ scale: [1, 1.45, 1.9], opacity: [0.6, 0.25, 0] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: "easeOut" }}
+            />
+            <motion.div
+              className="absolute h-28 w-28 rounded-full border border-turf/40 bg-turf/[0.07]"
+              animate={{ scale: [1, 1.3, 1.6], opacity: [0.8, 0.35, 0] }}
+              transition={{ duration: 2.4, repeat: Infinity, delay: 0.55, ease: "easeOut" }}
+            />
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-full border border-turf/40 bg-surface-2 text-turf shadow-glow">
+              <Hand value={6} size={38} />
+              <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-turf text-surface">
+                <Camera className="h-3 w-3" />
+              </span>
+            </div>
+          </div>
+
+          <h2 className="mt-5 font-heading text-2xl font-black uppercase tracking-tight text-chalk sm:text-3xl">
+            Searching for an opponent
+          </h2>
+          <p className="mt-1.5 text-xs text-muted">
+            Pairing you for <span className="font-semibold text-turf">{modeLabel}</span>
+          </p>
+        </div>
+
+        <div className="relative z-10 mt-5 grid grid-cols-3 gap-2">
+          {[
+            { icon: Camera, label: "Camera check", value: "Ready" },
+            { icon: ShieldCheck, label: "Privacy", value: "P2P" },
+            { icon: Timer, label: "Queue time", value: `${elapsed}s` },
+          ].map(({ icon: Icon, label, value }) => (
+            <div
+              key={label}
+              className="rounded-xl border border-line/70 bg-surface-2/40 px-2 py-2.5 text-center"
+            >
+              <Icon className="mx-auto h-3.5 w-3.5 text-turf" />
+              <p className="mt-1 text-[8px] uppercase tracking-[0.12em] text-muted">{label}</p>
+              <p className="font-heading text-[11px] font-black uppercase text-chalk">{value}</p>
+            </div>
+          ))}
+        </div>
+
         {showBotFallback ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full p-4 rounded-xl bg-surface-2 border border-turf/40 flex flex-col gap-2.5 z-10 text-left"
+            className="relative z-10 mt-4 rounded-2xl border border-turf/30 bg-turf/[0.06] p-4"
           >
             <div className="flex items-center gap-2 text-turf">
-              <Bot className="w-4 h-4" />
-              <span className="text-xs font-heading font-bold uppercase tracking-wider">
-                Taking longer than usual?
+              <Bot className="h-4 w-4" />
+              <span className="font-heading text-[11px] font-black uppercase tracking-[0.14em]">
+                No live player yet
               </span>
             </div>
-            <p className="text-[11px] text-muted leading-relaxed">
-              No live player in queue. Jump in against our intelligent bot, or wait a few seconds!
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+              The queue is quiet. Warm up against the house bot or hold on for a few more seconds.
             </p>
             <button
               type="button"
@@ -118,31 +148,30 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
                 playClickSound();
                 onPlayVsBot();
               }}
-              className="w-full py-2.5 px-4 rounded-xl bg-turf text-ink font-heading font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-md"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-turf px-4 py-3 font-heading text-xs font-black uppercase tracking-wider text-ink transition-colors hover:bg-turf-hover"
             >
-              <Bot className="w-4 h-4 fill-current" />
-              <span>PLAY VS BOT ARENA</span>
+              <Bot className="h-4 w-4 fill-current" />
+              <span>Play vs Bot Arena</span>
             </button>
           </motion.div>
         ) : (
-          <div className="flex items-center gap-2 text-xs text-muted/70 z-10">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-turf" />
-            <span>Authoritative matching in progress...</span>
+          <div className="relative z-10 mt-4 flex items-center justify-center gap-2 rounded-2xl border border-line/60 bg-ink/30 px-4 py-3 text-[11px] text-muted">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-turf" />
+            <span>Scanning the queue for a live stranger...</span>
           </div>
         )}
 
-        {/* Action button */}
-        <div className="w-full pt-2 border-t border-line flex items-center justify-between z-10">
+        <div className="relative z-10 mt-4 flex items-center justify-between border-t border-line/60 pt-3">
           <button
             type="button"
             onClick={() => {
               playClickSound();
               onCancel();
             }}
-            className="flex items-center gap-1.5 text-xs text-muted hover:text-chalk uppercase font-medium transition-colors py-2 px-3 rounded-lg hover:bg-surface-2"
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted transition-colors hover:bg-surface-2 hover:text-chalk"
           >
-            <X className="w-4 h-4" />
-            <span>Cancel Search</span>
+            <X className="h-4 w-4" />
+            <span>Cancel search</span>
           </button>
 
           {!showBotFallback && (
@@ -152,10 +181,10 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
                 playClickSound();
                 onPlayVsBot();
               }}
-              className="flex items-center gap-1.5 text-xs text-turf hover:text-turf/80 uppercase font-semibold transition-colors py-2 px-3 rounded-lg hover:bg-turf/10"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-turf transition-colors hover:bg-turf/10"
             >
-              <Bot className="w-3.5 h-3.5" />
-              <span>Play vs Bot</span>
+              <Bot className="h-3.5 w-3.5" />
+              <span>Play vs bot</span>
             </button>
           )}
         </div>

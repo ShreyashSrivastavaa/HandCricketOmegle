@@ -41,7 +41,7 @@ export const ReadyCheckModal: React.FC<ReadyCheckModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fadeIn"
       role="dialog"
       aria-modal="true"
       aria-label="Match Ready Check"

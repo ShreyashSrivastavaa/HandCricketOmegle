@@ -275,7 +275,7 @@ export default function AdminReportsPage() {
                     <button
                       onClick={() => handleAction(report.id, "banPermanent")}
                       disabled={report.status !== "pending"}
-                      className="px-3 py-1.5 text-xs bg-ball text-chalk font-bold rounded-lg hover:brightness-110 disabled:opacity-40"
+                      className="px-3 py-1.5 text-xs bg-ball text-white font-bold rounded-lg hover:brightness-110 disabled:opacity-40"
                     >
                       Permanent Lockout
                     </button>

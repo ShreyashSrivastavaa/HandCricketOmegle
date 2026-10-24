@@ -1,5 +1,6 @@
 import React from "react";
 import type { BallOutcome } from "@/lib/game/types";
+import { CircleDot } from "lucide-react";
 
 interface BallStripProps {
   currentOver: BallOutcome[];
@@ -14,21 +15,21 @@ export const BallStrip: React.FC<BallStripProps> = ({
   maxOvers,
   className = "",
 }) => {
-  // Cricket over has 6 legal deliveries
   const totalSlots = 6;
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-3 py-2 bg-surface rounded-[12px] border border-line ${className}`}
+      className={`flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface/70 px-2.5 py-1.5 backdrop-blur-sm ${className}`}
       aria-label={`Over ${overIndex + 1} of ${maxOvers} deliveries`}
     >
-      <div className="flex items-center gap-1.5">
-        <span className="text-[11px] font-bold tracking-wider text-muted uppercase font-heading">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <CircleDot className="h-3 w-3 text-turf/70" />
+        <span className="font-heading text-[9px] font-bold uppercase tracking-[0.14em] text-muted">
           Over {overIndex + 1}/{maxOvers}
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1 sm:gap-1.5">
         {Array.from({ length: totalSlots }).map((_, idx) => {
           const ball = currentOver[idx];
           const isCurrentPending = idx === currentOver.length;
@@ -37,44 +38,43 @@ export const BallStrip: React.FC<BallStripProps> = ({
             return (
               <div
                 key={idx}
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs transition-all ${
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] transition-all sm:h-7 sm:w-7 ${
                   isCurrentPending
-                    ? "border-2 border-turf/80 bg-surface-2 text-turf animate-pulse"
-                    : "border border-line/60 bg-surface-2/30 text-muted/30"
+                    ? "border border-turf/60 bg-turf/10 text-turf"
+                    : "border border-line/50 bg-surface-2/30 text-muted/30"
                 }`}
                 aria-label={isCurrentPending ? "Current delivery pending" : "Upcoming delivery"}
               >
                 {isCurrentPending ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-turf" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-turf" />
                 ) : (
-                  <span className="w-1 h-1 rounded-full bg-line" />
+                  <span className="h-1 w-1 rounded-full bg-line" />
                 )}
               </div>
             );
           }
 
-          // Render finished ball chip
-          let chipStyle = "bg-surface-2 text-chalk border border-line";
+          let chipStyle = "border-line bg-surface-2 text-chalk";
           let label = `${ball.runsScored}`;
 
           if (ball.isWicket) {
-            chipStyle = "bg-ball text-white font-black border border-ball shadow-sm";
+            chipStyle = "border-ball bg-ball text-white font-black shadow-glow-ball";
             label = "W";
           } else if (ball.runsScored === 6) {
-            chipStyle = "bg-amber text-ink font-black border border-amber shadow-sm";
+            chipStyle = "border-amber bg-amber text-ink font-black shadow-[0_0_14px_-2px_rgba(247,181,0,0.45)]";
             label = "6";
           } else if (ball.runsScored === 4) {
-            chipStyle = "bg-amber/15 text-amber font-bold border border-amber/50";
+            chipStyle = "border-amber/40 bg-amber/10 text-amber font-bold";
             label = "4";
           } else if (ball.runsScored === 0) {
-            chipStyle = "bg-surface text-muted border border-line";
+            chipStyle = "border-line bg-surface text-muted";
             label = "•";
           }
 
           return (
             <div
               key={idx}
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs font-heading font-bold tabular-nums transition-transform ${chipStyle}`}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-heading font-bold tabular-nums sm:h-7 sm:w-7 ${chipStyle}`}
               aria-label={ball.isWicket ? "Wicket" : `${ball.runsScored} runs`}
             >
               {label}

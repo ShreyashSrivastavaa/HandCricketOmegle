@@ -2,7 +2,17 @@ import React, { useEffect } from "react";
 import { formatOvers } from "@/lib/game/engine";
 import type { GameState, PlayerId } from "@/lib/game/types";
 import { Button } from "./Button";
-import { Trophy, AlertCircle, RotateCcw, Home, Sparkles, UserPlus } from "lucide-react";
+import {
+  Trophy,
+  AlertCircle,
+  RotateCcw,
+  Home,
+  Sparkles,
+  UserPlus,
+  Swords,
+  Medal,
+  ShieldCheck,
+} from "lucide-react";
 import { fireVictoryConfetti } from "@/lib/client/confetti";
 import { playVictorySound, playClickSound } from "@/lib/client/audio";
 
@@ -15,7 +25,6 @@ export interface ResultBannerProps {
   onFindNewOpponent?: () => void;
   onBackToLobby?: () => void;
   className?: string;
-  // Legacy / Friend room props
   onRematch?: () => void;
   isFriendRoom?: boolean;
   seriesScoreText?: string;
@@ -57,7 +66,6 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
   const isWin = resolvedResult === "win";
   const isTie = resolvedResult === "tie";
 
-  // Trigger celebration on mount if win
   useEffect(() => {
     if (isWin) {
       fireVictoryConfetti();
@@ -66,16 +74,12 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
   }, [isWin]);
 
   const badgeStyle = isTie
-    ? "text-amber border-amber/40 bg-amber/10"
+    ? "text-amber border-amber/30 bg-amber/10"
     : isWin
-    ? "text-turf border-turf/40 bg-turf/10"
-    : "text-ball border-ball/40 bg-ball/10";
+    ? "text-turf border-turf/30 bg-turf/10"
+    : "text-ball border-ball/30 bg-ball/10";
 
-  const badgeTitle = isTie
-    ? "MATCH TIED"
-    : isWin
-    ? "VICTORY!"
-    : "DEFEAT";
+  const badgeTitle = isTie ? "MATCH TIED" : isWin ? "VICTORY!" : "DEFEAT";
 
   const summary =
     summaryText ??
@@ -90,79 +94,91 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
   const inn1BattingName = inn1 ? (inn1.battingPlayer === "p1" ? p1Name : p2Name) : p1Name;
   const inn2BattingName = inn2 ? (inn2.battingPlayer === "p1" ? p1Name : p2Name) : p2Name;
 
+  const heroTone = isTie
+    ? "from-amber/20 via-surface to-surface"
+    : isWin
+    ? "from-turf/20 via-surface to-surface"
+    : "from-ball/15 via-surface to-surface";
+
   return (
     <div
-      className={`w-full max-w-lg mx-auto bg-surface border border-line rounded-[16px] p-5 sm:p-7 flex flex-col items-center gap-5 text-chalk select-none shadow-2xl relative overflow-hidden ${className}`}
+      className={`relative w-full max-w-lg overflow-hidden rounded-[28px] border border-line bg-gradient-to-br ${heroTone} p-5 text-chalk shadow-panel sm:p-7 ${className}`}
       role="dialog"
       aria-label={`Match Result: ${badgeTitle}`}
     >
-      {/* Glow for win */}
-      {isWin && (
-        <div className="absolute -top-20 inset-x-0 h-40 bg-turf/15 rounded-full blur-3xl pointer-events-none" />
-      )}
+      <div className="pitch-grid pointer-events-none absolute inset-0 opacity-25" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute -top-24 left-1/2 h-52 w-72 -translate-x-1/2 rounded-full bg-current opacity-[0.08] blur-3xl"
+        aria-hidden="true"
+      />
 
-      {/* Result Badge & Big Title */}
-      <div className="flex flex-col items-center gap-2 text-center z-10">
-        <div
-          className={`inline-flex items-center gap-2 px-3.5 py-1 rounded-full border text-xs font-bold uppercase tracking-wider ${badgeStyle}`}
-        >
-          {isWin ? (
-            <Trophy className="w-4 h-4 stroke-[2.5]" />
-          ) : (
-            <AlertCircle className="w-4 h-4 stroke-[2.5]" />
-          )}
+      <div className="relative z-10 flex flex-col items-center gap-2 text-center">
+        <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${badgeStyle}`}>
+          {isWin ? <Trophy className="h-3.5 w-3.5" /> : isTie ? <Swords className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
           <span>{badgeTitle}</span>
         </div>
 
-        <h2 className="font-heading font-black text-3xl sm:text-4xl uppercase tracking-tight text-chalk">
+        <div className="my-1 flex h-20 w-20 items-center justify-center rounded-2xl border border-line/60 bg-surface/70">
+          {isWin ? (
+            <Trophy className="h-10 w-10 text-turf drop-shadow-[0_10px_20px_rgba(247,181,0,0.35)]" />
+          ) : isTie ? (
+            <Medal className="h-10 w-10 text-amber" />
+          ) : (
+            <ShieldCheck className="h-10 w-10 text-ball" />
+          )}
+        </div>
+
+        <h2 className="font-heading text-3xl font-black uppercase tracking-tight text-chalk sm:text-4xl">
           {summary}
         </h2>
+        {!isTie && (
+          <p className="text-[11px] text-muted">
+            {isWin ? "A clinical performance. The arena approves." : "Shake it off and go again. The pitch is still open."}
+          </p>
+        )}
       </div>
 
-      {/* Endless Series Scoreboard */}
       {seriesScoreText && (
-        <div className="w-full bg-turf/10 border-2 border-turf/40 rounded-[14px] p-3.5 flex flex-col items-center gap-1 text-center z-10 animate-fadeIn">
-          <div className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-turf font-heading">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Endless Series Scoreboard</span>
+        <div className="relative z-10 mt-4 flex flex-col items-center gap-1 rounded-2xl border border-turf/25 bg-turf/[0.06] p-3 text-center">
+          <div className="inline-flex items-center gap-1.5 font-heading text-[9px] font-black uppercase tracking-[0.16em] text-turf">
+            <Sparkles className="h-3 w-3" />
+            <span>Endless series</span>
           </div>
-          <div className="font-heading font-black text-lg sm:text-xl text-chalk tracking-wide">
-            {seriesScoreText}
-          </div>
+          <div className="font-heading text-base font-black tracking-wide text-chalk">{seriesScoreText}</div>
         </div>
       )}
 
-      {/* Match Scorecard Breakdown */}
       {inn1 && (
-        <div className="w-full bg-surface-2/60 border border-line rounded-[14px] p-4 flex flex-col gap-2.5 z-10">
-          <span className="text-[11px] font-bold tracking-wider text-muted uppercase font-heading">
-            Official Scorecard
-          </span>
+        <div className="relative z-10 mt-4 overflow-hidden rounded-2xl border border-line/70 bg-surface/60">
+          <div className="flex items-center justify-between border-b border-line/60 px-4 py-2.5">
+            <span className="font-heading text-[9px] font-black uppercase tracking-[0.18em] text-muted">
+              Official scorecard
+            </span>
+            <Trophy className="h-3.5 w-3.5 text-amber/70" />
+          </div>
 
-          {/* Innings 1 Card */}
-          <div className="flex items-center justify-between py-2 border-b border-line text-sm">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted uppercase font-semibold">1st Innings:</span>
-              <span className="font-semibold text-chalk">{inn1BattingName}</span>
+          <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="font-mono text-[9px] uppercase text-muted">1st</span>
+              <span className="truncate font-semibold text-chalk">{inn1BattingName}</span>
             </div>
-            <div className="font-heading font-black text-lg tabular-nums text-chalk">
-              {inn1.score}/{inn1.wickets}{" "}
-              <span className="text-xs text-muted font-normal font-sans">
+            <div className="shrink-0 font-heading text-lg font-black tabular-nums text-chalk">
+              {inn1.score}/{inn1.wickets}
+              <span className="ml-1 font-sans text-[10px] font-normal text-muted">
                 ({formatOvers(inn1.balls)} ov)
               </span>
             </div>
           </div>
 
-          {/* Innings 2 Card */}
           {inn2 && (
-            <div className="flex items-center justify-between py-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted uppercase font-semibold">2nd Innings:</span>
-                <span className="font-semibold text-chalk">{inn2BattingName}</span>
+            <div className="flex items-center justify-between border-t border-line/50 px-4 py-2.5 text-sm">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="font-mono text-[9px] uppercase text-muted">2nd</span>
+                <span className="truncate font-semibold text-chalk">{inn2BattingName}</span>
               </div>
-              <div className="font-heading font-black text-lg tabular-nums text-chalk">
-                {inn2.score}/{inn2.wickets}{" "}
-                <span className="text-xs text-muted font-normal font-sans">
+              <div className="shrink-0 font-heading text-lg font-black tabular-nums text-chalk">
+                {inn2.score}/{inn2.wickets}
+                <span className="ml-1 font-sans text-[10px] font-normal text-muted">
                   ({formatOvers(inn2.balls)} ov)
                 </span>
               </div>
@@ -171,9 +187,8 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
         </div>
       )}
 
-      {/* Action Buttons: Play Again & Find New Opponent */}
-      <div className="w-full flex flex-col gap-2.5 z-10 pt-1">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full">
+      <div className="relative z-10 mt-4 flex w-full flex-col gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
           {effectivePlayAgain && (
             <Button
               variant="primary"
@@ -182,14 +197,14 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
                 playClickSound();
                 effectivePlayAgain();
               }}
-              className="flex items-center justify-center gap-2 font-heading font-black text-base uppercase"
+              className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl font-heading text-sm font-black uppercase tracking-wider"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span>PLAY AGAIN</span>
+              <RotateCcw className="h-4 w-4" />
+              <span>{playAgainWaiting || rematchWaiting ? "Waiting..." : "Play Again"}</span>
             </Button>
           )}
 
-          {effectiveFindNew && (
+          {effectiveFindNew && !isFriendRoom && (
             <Button
               variant="secondary"
               size="lg"
@@ -197,25 +212,41 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
                 playClickSound();
                 effectiveFindNew();
               }}
-              className="flex items-center justify-center gap-2 font-heading font-black text-base uppercase hover:border-turf"
+              className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border-line font-heading text-sm font-black uppercase tracking-wider hover:border-turf/40"
             >
-              <UserPlus className="w-4 h-4" />
-              <span>NEW OPPONENT</span>
+              <UserPlus className="h-4 w-4" />
+              <span>New Opponent</span>
+            </Button>
+          )}
+
+          {isFriendRoom && onChangeFormat && (
+            <Button
+              variant="secondary"
+              size="lg"
+              onClick={() => {
+                playClickSound();
+                onChangeFormat();
+              }}
+              className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border-line font-heading text-sm font-black uppercase tracking-wider hover:border-sky/40"
+            >
+              <Swords className="h-4 w-4" />
+              <span>Change Format</span>
             </Button>
           )}
         </div>
 
-        {onBackToLobby && (
+        {(onBackToLobby || onLeaveRoom) && (
           <button
             type="button"
             onClick={() => {
               playClickSound();
-              onBackToLobby();
+              if (onBackToLobby) onBackToLobby();
+              else if (onLeaveRoom) onLeaveRoom();
             }}
-            className="w-full py-2 text-xs text-muted hover:text-chalk uppercase font-medium flex items-center justify-center gap-1.5 transition-colors"
+            className="flex w-full items-center justify-center gap-1.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted transition-colors hover:text-chalk"
           >
-            <Home className="w-3.5 h-3.5" />
-            <span>Return to Lobby</span>
+            <Home className="h-3.5 w-3.5" />
+            <span>Return to lobby</span>
           </button>
         )}
       </div>

@@ -7,6 +7,7 @@ import {
   getCurrentRunRate,
 } from "@/lib/game/engine";
 import type { GameState, PlayerId } from "@/lib/game/types";
+import { Target, TrendingUp, Activity } from "lucide-react";
 
 interface ScoreBarProps {
   state: GameState;
@@ -37,7 +38,6 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
 
   const crr = getCurrentRunRate(state);
 
-  // Chase info
   const target = isInnings2 && activeInnings.target ? activeInnings.target : null;
   const runsNeeded = isInnings2 ? getRequiredRuns(state) : null;
   const ballsLeft = isInnings2 ? getRemainingBalls(state) : null;
@@ -45,90 +45,98 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
 
   return (
     <div
-      className={`bg-bone-white border-2 border-pure-black rounded-[6px] p-3.5 sm:p-4 text-ink-black shadow-none select-none ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-line bg-surface/85 text-chalk shadow-panel backdrop-blur-sm select-none ${className}`}
       role="region"
       aria-label="Match Scoreboard"
     >
-      {/* Top Meta Line: Innings and Format */}
-      <div className="flex flex-wrap items-center justify-between gap-1 pb-2 border-b-2 border-pure-black text-[10px] sm:text-[11px] font-mono font-bold tracking-wider text-pure-black uppercase">
-        <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-firecracker-red border border-pure-black animate-pulse" />
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-turf/[0.06] to-transparent"
+        aria-hidden="true"
+      />
+
+      <div className="relative flex flex-wrap items-center justify-between gap-1 border-b border-line/60 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-muted sm:px-4">
+        <div className="flex items-center gap-1.5">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-turf opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-turf" />
+          </span>
           <span>
-            {isInnings2 ? "2nd Innings • The Chase" : "1st Innings • Setting Target"}
+            {isInnings2 ? "2nd Innings · The Chase" : "1st Innings · Setting Target"}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-pure-black font-black bg-hi-vis-yellow px-2 py-0.5 rounded-[100px] border border-pure-black">
-            {state.format.mode === "classic" ? "CLASSIC" : "SUDDEN DEATH"}
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full border border-line/70 bg-surface-2/60 px-1.5 py-0.5 text-chalk">
+            {state.format.mode === "classic" ? "Classic" : state.format.mode === "endless" ? "Endless" : "Sudden Death"}
           </span>
-          <span>•</span>
-          <span>{maxOvers} Overs</span>
-          <span>•</span>
-          <span>{maxWickets} {maxWickets === 1 ? "Wkt" : "Wkts"}</span>
+          <span>{maxOvers} ov</span>
+          <span className="h-1 w-1 rotate-45 bg-line" />
+          <span>{maxWickets} {maxWickets === 1 ? "wkt" : "wkts"}</span>
         </div>
       </div>
 
-      {/* Main Score Centerpiece */}
-      <div className="flex items-center justify-between py-2 sm:py-3">
-        {/* Batting Team and Big Score */}
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold text-pure-black/80 tracking-wide uppercase">
+      <div className="relative flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
               {battingPlayerName}
             </span>
-            <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded-[100px] bg-hi-vis-yellow text-pure-black border border-pure-black">
-              BAT
+            <span className="rounded-full border border-turf/25 bg-turf/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-turf">
+              Bat
             </span>
           </div>
 
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="font-heading font-black text-5xl sm:text-6xl tracking-tight tabular-nums text-pure-black">
+          <div className="mt-0.5 flex items-baseline gap-1">
+            <span className="font-heading text-4xl font-black leading-none tracking-tight tabular-nums text-chalk sm:text-5xl">
               {runs}
             </span>
-            <span className="font-heading font-black text-3xl sm:text-4xl text-firecracker-red tabular-nums">
+            <span className="font-heading text-xl font-black leading-none tabular-nums text-ball/90 sm:text-2xl">
               /{wickets}
             </span>
-            <span className="text-xs text-pure-black/70 font-mono ml-1 uppercase font-bold">
-              ({maxWickets} MAX)
+            <span className="ml-1 hidden text-[9px] uppercase tracking-wider text-muted sm:inline">
+              of {maxWickets}
             </span>
           </div>
         </div>
 
-        {/* Overs & Run Rate Display */}
-        <div className="flex flex-col items-end">
-          <span className="text-xs font-mono font-bold text-pure-black/80 tracking-wide uppercase">
-            Overs
-          </span>
-          <div className="flex items-baseline gap-1 mt-0.5">
-            <span className="font-heading font-black text-4xl sm:text-5xl tabular-nums text-pure-black">
-              {oversFormatted}
-            </span>
-            <span className="text-xs text-pure-black/70 font-mono font-bold">
-              /{maxOvers}.0
-            </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="hidden items-center gap-1.5 rounded-xl border border-line/60 bg-surface-2/40 px-2.5 py-1.5 sm:flex">
+            <Activity className="h-3.5 w-3.5 text-turf" />
+            <div>
+              <p className="text-[8px] uppercase tracking-[0.14em] text-muted">CRR</p>
+              <p className="font-mono text-xs font-bold text-chalk">{crr}</p>
+            </div>
           </div>
-          <span className="text-[10px] font-mono font-bold text-pure-black uppercase mt-0.5">
-            CRR: <strong className="text-pure-black">{crr}</strong>
-          </span>
+
+          <div className="text-right">
+            <p className="text-[9px] uppercase tracking-[0.14em] text-muted">Overs</p>
+            <div className="flex items-baseline justify-end gap-0.5">
+              <span className="font-heading text-2xl font-black leading-none tabular-nums text-chalk sm:text-3xl">
+                {oversFormatted}
+              </span>
+              <span className="text-[10px] font-medium text-muted">/{maxOvers}.0</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Target Equation Bar (Only in Innings 2 Chase) */}
       {isInnings2 && target !== null && (
-        <div className="mt-2 pt-2 border-t-2 border-pure-black flex flex-wrap items-center justify-between gap-1.5 text-xs bg-hi-vis-yellow px-3 py-2 rounded-[6px] border border-pure-black text-pure-black">
-          <div className="flex items-center gap-1.5 flex-wrap font-mono font-bold">
-            <span className="uppercase">Target:</span>
-            <strong className="text-pure-black font-black text-base tabular-nums">{target}</strong>
-            <span className="text-[11px] uppercase">
-              (Need <strong className="underline">{runsNeeded}</strong> from{" "}
-              <strong>{ballsLeft}b</strong>)
+        <div className="relative flex flex-wrap items-center justify-between gap-2 border-t border-line/60 bg-surface-2/40 px-3 py-1.5 text-[10px] sm:px-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="flex items-center gap-1 rounded-full border border-amber/20 bg-amber/[0.06] px-1.5 py-0.5 font-bold uppercase tracking-wider text-amber">
+              <Target className="h-2.5 w-2.5" />
+              Target {target}
+            </span>
+            <span className="text-muted">
+              Need <strong className="text-chalk">{runsNeeded}</strong> from{" "}
+              <strong className="text-chalk">{ballsLeft}</strong> balls
             </span>
           </div>
 
           {rrr !== null && (
-            <div className="flex items-center gap-1 text-[11px] font-mono font-bold ml-auto">
-              <span>RRR:</span>
-              <strong className="text-pure-black">{rrr}</strong>
+            <div className="ml-auto flex items-center gap-1 rounded-full border border-line/60 bg-surface/50 px-2 py-0.5 text-muted">
+              <TrendingUp className="h-2.5 w-2.5 text-amber" />
+              <span>RRR</span>
+              <strong className="font-mono text-amber">{rrr}</strong>
             </div>
           )}
         </div>
