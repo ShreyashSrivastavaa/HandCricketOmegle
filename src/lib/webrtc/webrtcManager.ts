@@ -26,6 +26,7 @@ export class WebRTCManager {
   private remoteStream: MediaStream | null = null;
   private isInitiator: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private acquiringPromise: Promise<MediaStream> | null = null;
 
   // State callbacks
   public onConnectionStateChange?: (state: WebRTCConnectionState) => void;
@@ -56,6 +57,52 @@ export class WebRTCManager {
 
   public getState(): WebRTCConnectionState {
     return this.connectionState;
+  }
+
+  /**
+   * Diagnostic helper reporting camera support and permission state (Phase 5)
+   */
+  public async getCameraDiagnostics(): Promise<{
+    isApiSupported: boolean;
+    isSecureContext: boolean;
+    permissionState: "prompt" | "granted" | "denied" | "unsupported";
+    hasLocalStream: boolean;
+    videoTrackCount: number;
+    videoTrackLabel?: string;
+  }> {
+    const isApiSupported =
+      typeof navigator !== "undefined" &&
+      !!navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia === "function";
+
+    const isSecureContext =
+      typeof window !== "undefined"
+        ? !!window.isSecureContext ||
+          window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1"
+        : false;
+
+    let permissionState: "prompt" | "granted" | "denied" | "unsupported" = "unsupported";
+    if (typeof navigator !== "undefined" && navigator.permissions?.query) {
+      try {
+        const status = await navigator.permissions.query({ name: "camera" as any });
+        permissionState = status.state as any;
+      } catch {
+        permissionState = "unsupported";
+      }
+    }
+
+    const hasLocalStream = !!this.localStream;
+    const videoTracks = this.localStream ? this.localStream.getVideoTracks() : [];
+
+    return {
+      isApiSupported,
+      isSecureContext,
+      permissionState,
+      hasLocalStream,
+      videoTrackCount: videoTracks.length,
+      videoTrackLabel: videoTracks[0]?.label,
+    };
   }
 
   private setConnectionState(state: WebRTCConnectionState) {
@@ -108,75 +155,131 @@ export class WebRTCManager {
   /**
    * Request camera & mic permission and initialize local preview
    */
+  /**
+   * Request camera permission and initialize local preview.
+   * Only requests camera (audio: false) per requirements.
+   * Supports device fallback on OverconstrainedError.
+   * Guards against duplicate concurrent prompts.
+   */
   public async initLocalMedia(
     videoDeviceId?: string,
-    audioDeviceId?: string,
-    facingMode: "user" | "environment" = this.facingMode
+    facingMode: "user" | "environment" = this.facingMode,
+    fallbackToDefault: boolean = true
   ): Promise<MediaStream> {
-    this.facingMode = facingMode;
-    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      throw new Error("MediaDevices API not supported in this environment");
+    // 1. Return active live stream if already running
+    if (this.localStream) {
+      const activeVideoTrack = this.localStream.getVideoTracks().find((t) => t.readyState === "live");
+      if (activeVideoTrack) {
+        return this.localStream;
+      }
+      this.stopLocalStream();
     }
 
-    // Determine if mobile device to cap resolution & framerate (cap 480p / 15fps)
-    const isMobile =
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      ) || (typeof window !== "undefined" && window.innerWidth <= 768);
+    // 2. Prevent duplicate concurrent requests (Strict Mode / re-renders)
+    if (this.acquiringPromise) {
+      return this.acquiringPromise;
+    }
 
-    const videoConstraints: MediaTrackConstraints = isMobile
-      ? {
-          width: { ideal: 640, max: 640 },
-          height: { ideal: 480, max: 480 },
-          frameRate: { ideal: 15, max: 15 },
-          deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
-          facingMode: videoDeviceId ? undefined : facingMode,
+    this.acquiringPromise = (async () => {
+      // 3. Verify secure context
+      if (typeof window !== "undefined") {
+        const isLocalhost =
+          window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        if (!window.isSecureContext && !isLocalhost) {
+          const secErr = new Error("Camera access requires a secure context (HTTPS).");
+          secErr.name = "SecurityError";
+          this.onMediaError?.(secErr);
+          throw secErr;
         }
-      : {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          frameRate: { ideal: 24, max: 30 },
-          deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
-          facingMode: videoDeviceId ? undefined : facingMode,
-        };
-
-    const audioConstraints: MediaTrackConstraints = {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-      deviceId: audioDeviceId ? { exact: audioDeviceId } : undefined,
-    };
-
-    // Stop existing stream if any
-    this.stopLocalStream();
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: audioConstraints,
-      });
-
-      this.localStream = stream;
-
-      // Enforce default state: Camera on, Mic MUTED
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = this.isMicEnabled; // false by default
       }
 
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = this.isCameraEnabled; // true
+      // 4. Verify browser support
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        const notSuppErr = new Error(
+          "Camera API (navigator.mediaDevices.getUserMedia) is not supported by your browser."
+        );
+        notSuppErr.name = "NotSupportedError";
+        this.onMediaError?.(notSuppErr);
+        throw notSuppErr;
       }
 
-      // Prefetch ephemeral ICE credentials asynchronously
-      this.getOrFetchIceServers().catch(() => {});
+      this.facingMode = facingMode;
 
-      return stream;
-    } catch (err: any) {
-      this.onMediaError?.(err);
-      throw err;
-    }
+      // 5. Constraints: Initial constraint uses video only, audio: false
+      const isMobile =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+          navigator.userAgent
+        ) || (typeof window !== "undefined" && window.innerWidth <= 768);
+
+      const videoConstraints: MediaTrackConstraints = videoDeviceId
+        ? { deviceId: { exact: videoDeviceId } }
+        : isMobile
+        ? {
+            width: { ideal: 640, max: 640 },
+            height: { ideal: 480, max: 480 },
+            frameRate: { ideal: 15, max: 15 },
+            facingMode,
+          }
+        : {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 24, max: 30 },
+            facingMode,
+          };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false,
+        });
+
+        this.localStream = stream;
+        this.isCameraEnabled = true;
+
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          videoTrack.enabled = true;
+        }
+
+        // Prefetch ephemeral ICE credentials asynchronously
+        this.getOrFetchIceServers().catch(() => {});
+
+        return stream;
+      } catch (err: any) {
+        // Fall back to simpler video: true on OverconstrainedError
+        if (
+          fallbackToDefault &&
+          (err.name === "OverconstrainedError" || err.name === "ConstraintNotSatisfiedError")
+        ) {
+          console.warn("[WebRTC] OverconstrainedError, falling back to video: true", err);
+          try {
+            const fallbackStream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false,
+            });
+            this.localStream = fallbackStream;
+            this.isCameraEnabled = true;
+            return fallbackStream;
+          } catch (fallbackErr: any) {
+            console.error("[WebRTC] Fallback getUserMedia also failed:", fallbackErr.name, fallbackErr.message);
+            this.onMediaError?.(fallbackErr);
+            throw fallbackErr;
+          }
+        }
+
+        console.error("[WebRTC] Camera access failed:", err.name, err.message);
+        this.onMediaError?.(err);
+        throw err;
+      } finally {
+        this.acquiringPromise = null;
+      }
+    })();
+
+    return this.acquiringPromise;
   }
 
 

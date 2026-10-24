@@ -11,6 +11,7 @@ import {
   Menu,
   X,
   Bot,
+  Camera,
   ShieldCheck,
   Shield,
   FileText,
@@ -25,9 +26,10 @@ import { Hand } from "@/components/Hand";
 interface NavbarProps {
   guestName?: string;
   onOpenRules?: () => void;
+  onTestCamera?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
+export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCamera }) => {
   const pathname = usePathname();
   const [muted, setMuted] = useState<boolean>(false);
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -111,6 +113,18 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
             {onOpenRules && (
               <button type="button" onClick={handleRulesClick} className={desktopLink}>
                 How to Play
+              </button>
+            )}
+            {onTestCamera && (
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  onTestCamera();
+                }}
+                className={desktopLink}
+              >
+                Camera Umpire
               </button>
             )}
             <Link href="/#features" className={desktopLink}>
@@ -247,6 +261,20 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
                 <Play className="h-4 w-4 text-turf" />
                 <span>Features</span>
               </Link>
+              {onTestCamera && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setIsMobileMenuOpen(false);
+                    onTestCamera();
+                  }}
+                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left font-heading text-xs font-bold uppercase tracking-[0.1em] text-white transition-colors hover:border-turf/30 hover:bg-white/[0.06] hover:text-turf sm:col-span-2"
+                >
+                  <Camera className="h-4 w-4 text-turf" />
+                  <span>Test Camera Umpire</span>
+                </button>
+              )}
             </div>
 
             <div className="mt-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] text-slate-400">

@@ -53,17 +53,22 @@ export default function HomePage() {
     >
       {/* Navigation Bar (visible during landing, result, and toss) */}
       {screen !== "match" && (
-        <Navbar guestName={guestName} onOpenRules={() => setIsRulesOpen(true)} />
+        <Navbar
+          guestName={guestName}
+          onOpenRules={() => setIsRulesOpen(true)}
+          onTestCamera={() => setIsCameraCheckOpen(true)}
+        />
       )}
 
       {/* Main Dynamic Viewport */}
       <div className="flex w-full flex-1 flex-col justify-center">
         {screen === "landing" && (
           <LandingScreen
-            onFindMatch={() => startMatchmaking(false)}
+            onFindMatch={() => setIsCameraCheckOpen(true)}
             onPlayVsBot={() => startMatchmaking(true)}
             onPlayWithFriend={() => setIsFriendModalOpen(true)}
             onOpenRules={() => setIsRulesOpen(true)}
+            onTestCamera={() => setIsCameraCheckOpen(true)}
           />
         )}
 
@@ -143,7 +148,7 @@ export default function HomePage() {
       <CameraCheckModal
         isOpen={isCameraCheckOpen}
         initialMode="video"
-        onReady={() => {
+        onReady={(selectedMode) => {
           setIsCameraCheckOpen(false);
           startMatchmaking(false);
         }}
