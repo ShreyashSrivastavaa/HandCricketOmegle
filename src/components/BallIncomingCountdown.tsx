@@ -40,7 +40,7 @@ export function BallIncomingCountdownBadge({
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
+      className="pointer-events-none relative z-30 flex items-center justify-center"
       aria-live="assertive"
       aria-label={`Ball countdown: ${countdownNumber}`}
     >

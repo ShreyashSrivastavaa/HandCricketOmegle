@@ -694,16 +694,6 @@ export const LiveMatchScreen: React.FC = () => {
                           userPick={userPick}
                         />
                       </div>
-
-                      {/* Prominent Circular Pink Countdown Badge in center of camera feed */}
-                      {ballCountdownNumber !== null && (
-                        <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none scale-75 sm:scale-90">
-                          <BallIncomingCountdownBadge
-                            countdownNumber={ballCountdownNumber}
-                            stage={roundStage}
-                          />
-                        </div>
-                      )}
                     </div>
                   ) : (
                     <div className="flex aspect-[4/3] items-center justify-center bg-[#050b16] text-[9px] text-white/45">
