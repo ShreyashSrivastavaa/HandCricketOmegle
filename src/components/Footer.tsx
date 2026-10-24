@@ -1,6 +1,5 @@
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Shield,
   ShieldCheck,
@@ -45,14 +44,8 @@ export const Footer: React.FC<FooterProps> = ({
             className="group flex w-fit items-center gap-2.5 focus-visible:outline-none focus-visible:underline"
             aria-label="HandCricketOmegle Home"
           >
-            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-[#0F172A] shadow-sm transition-transform group-hover:scale-105">
-              <Image
-                src="/logo.jpg"
-                alt="Hand Cricket Omegle Logo"
-                width={32}
-                height={32}
-                className="h-full w-full object-cover"
-              />
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-turf text-ink">
+              <Hand value={6} size={18} />
             </span>
             <span className="font-heading text-base font-black leading-none tracking-[-0.03em] text-chalk">
               Hand Cricket <span className="text-turf">Omegle</span>
@@ -112,14 +105,8 @@ export const Footer: React.FC<FooterProps> = ({
               className="group flex w-fit items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
               aria-label="HandCricketOmegle Home"
             >
-              <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/20 bg-[#0F172A] shadow-[0_0_20px_-4px_rgba(255,95,178,0.5)] transition-transform group-hover:scale-105">
-                <Image
-                  src="/logo.jpg"
-                  alt="Hand Cricket Omegle Logo"
-                  width={40}
-                  height={40}
-                  className="h-full w-full object-cover"
-                />
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-turf/30 bg-gradient-to-br from-turf/20 to-sky/10 text-turf shadow-glow transition-transform group-hover:scale-105">
+                <Hand value={6} size={22} />
               </span>
               <span className="font-heading text-lg font-black uppercase tracking-[0.04em] text-chalk">
                 HAND CRICKET <span className="text-turf">OMEGLE</span>

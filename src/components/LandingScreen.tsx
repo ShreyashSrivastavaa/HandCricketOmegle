@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import Image from "next/image";
 import {
   AnimatePresence,
   MotionConfig,
@@ -153,20 +152,6 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               animate="show"
               className="mx-auto max-w-3xl text-center"
             >
-              <motion.div variants={fadeUp} className="mb-4 flex justify-center">
-                <div className="group relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border-2 border-white/20 bg-[#0F172A] shadow-[0_12px_36px_-8px_rgba(255,95,178,0.6)] transition-all hover:scale-105 hover:shadow-[0_16px_44px_-8px_rgba(255,95,178,0.8)] sm:h-24 sm:w-24">
-                  <Image
-                    src="/logo.jpg"
-                    alt="Hand Cricket Omegle Logo"
-                    width={96}
-                    height={96}
-                    className="h-full w-full object-cover"
-                    priority
-                  />
-                  <div className="pointer-events-none absolute inset-0 rounded-3xl ring-1 ring-inset ring-white/10" />
-                </div>
-              </motion.div>
-
               <motion.div variants={fadeUp}>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-turf/40 bg-turf/[0.08] px-3 py-1 font-heading text-[8px] font-bold uppercase tracking-[0.14em] text-turf shadow-[0_0_30px_-12px_rgba(247,181,0,0.55)] sm:gap-2 sm:px-4 sm:py-1.5 sm:text-[10px] sm:tracking-[0.18em] xl:text-[11px]">
                   <Zap className="h-3 w-3 fill-current sm:h-3.5 sm:w-3.5" />
