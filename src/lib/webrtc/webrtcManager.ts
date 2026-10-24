@@ -190,6 +190,20 @@ export class WebRTCManager {
 
     this.setConnectionState("connecting");
 
+    // Ensure local stream is initialized if camera is enabled in browser
+    if (
+      !this.localStream &&
+      this.isCameraEnabled &&
+      typeof window !== "undefined" &&
+      typeof navigator?.mediaDevices?.getUserMedia === "function"
+    ) {
+      try {
+        await this.initLocalMedia();
+      } catch (err) {
+        console.warn("[WebRTC] startPeerSession auto-init media failed:", err);
+      }
+    }
+
     const iceServers = await this.getOrFetchIceServers();
 
     const configuration: RTCConfiguration = {
@@ -354,18 +368,31 @@ export class WebRTCManager {
   /**
    * Toggle camera stream on/off
    */
-  public toggleCamera(enabled?: boolean): boolean {
+  public async toggleCamera(enabled?: boolean): Promise<boolean> {
     const newState = enabled !== undefined ? enabled : !this.isCameraEnabled;
     this.isCameraEnabled = newState;
 
-    if (this.localStream) {
+    if (
+      newState &&
+      !this.localStream &&
+      typeof window !== "undefined" &&
+      typeof navigator?.mediaDevices?.getUserMedia === "function"
+    ) {
+      try {
+        await this.initLocalMedia();
+      } catch (err) {
+        console.warn("[WebRTC] toggleCamera auto-init media failed:", err);
+        this.isCameraEnabled = false;
+        return false;
+      }
+    } else if (this.localStream) {
       for (const track of this.localStream.getVideoTracks()) {
         track.enabled = newState;
       }
     }
 
     this.socket?.emit("rtc:camera_toggle", { enabled: newState });
-    return newState;
+    return this.isCameraEnabled;
   }
 
   /**

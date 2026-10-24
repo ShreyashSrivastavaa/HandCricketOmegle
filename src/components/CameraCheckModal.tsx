@@ -54,7 +54,6 @@ export function CameraCheckModal({
   useEffect(() => {
     if (!isOpen) {
       stopAudioAnalysis();
-      webrtcManager.stopLocalStream();
       return;
     }
 
@@ -67,7 +66,6 @@ export function CameraCheckModal({
 
     return () => {
       stopAudioAnalysis();
-      webrtcManager.stopLocalStream();
     };
   }, [isOpen, mode]);
 

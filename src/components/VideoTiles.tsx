@@ -138,8 +138,8 @@ export function VideoTiles({
     };
   }, []);
 
-  const handleToggleCamera = () => {
-    const newState = webrtcManager.toggleCamera();
+  const handleToggleCamera = async () => {
+    const newState = await webrtcManager.toggleCamera();
     setIsLocalCameraOn(newState);
   };
 

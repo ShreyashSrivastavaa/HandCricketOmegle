@@ -17,6 +17,7 @@ import {
 } from "../client/audio";
 import type { HandTileState } from "@/components/HandTile";
 import type { FloatingReaction } from "@/components/EmojiReactions";
+import { webrtcManager } from "../webrtc/webrtcManager";
 
 export type AppScreen = "landing" | "searching" | "toss" | "match" | "innings_break" | "result";
 
@@ -329,6 +330,12 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
             set({ opponentPresent: true });
             clearDisconnectTimer();
           }
+        });
+
+        // Set up WebRTC peer session over Ably for multiplayer video
+        const isInitiator = get().userRole === "p1";
+        webrtcManager.startAblyPeerSession(channel, guestId, isInitiator).catch((err) => {
+          console.warn("[LiveMatchStore] Failed to start Ably WebRTC peer session:", err);
         });
       }
 
@@ -895,6 +902,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       clearDisconnectTimer();
       clearQueuePoll();
       clearMatchSync();
+      webrtcManager.cleanup();
 
       const { matchId } = get();
       if (matchId) {
@@ -914,6 +922,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       clearDisconnectTimer();
       clearQueuePoll();
       clearMatchSync();
+      webrtcManager.cleanup();
       if (activeAblyChannel) {
         try {
           activeAblyChannel.unsubscribe();

@@ -101,23 +101,79 @@ export const LiveMatchScreen: React.FC = () => {
     }
   }, [gameState?.currentInnings, gameState?.innings1?.score, gameState?.innings2?.score]);
 
+  const attachLocalStream = (videoEl: HTMLVideoElement | null) => {
+    (localVideoRef as React.MutableRefObject<HTMLVideoElement | null>).current = videoEl;
+    if (videoEl) {
+      const stream = webrtcManager.getLocalStream();
+      if (stream && videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => {});
+      }
+    }
+  };
+
+  const attachRemoteStream = (videoEl: HTMLVideoElement | null) => {
+    (remoteVideoRef as React.MutableRefObject<HTMLVideoElement | null>).current = videoEl;
+    if (videoEl) {
+      const stream = webrtcManager.getRemoteStream();
+      if (stream && videoEl.srcObject !== stream) {
+        videoEl.srcObject = stream;
+        videoEl.play().catch(() => {});
+      }
+    }
+  };
+
+  // Video Streams Attachment & Camera Initialization
   useEffect(() => {
+    let isCancelled = false;
+
+    const setupCamera = async () => {
+      try {
+        let stream = webrtcManager.getLocalStream();
+        if (!stream && isCameraOn) {
+          stream = await webrtcManager.initLocalMedia();
+        }
+        if (!isCancelled && localVideoRef.current && stream) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(() => {});
+        }
+      } catch (err) {
+        console.warn("[LiveMatchScreen] Camera initialization error:", err);
+        if (!isCancelled) {
+          setIsCameraOn(false);
+        }
+      }
+    };
+
+    if (isCameraOn) {
+      setupCamera();
+    } else if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+
     if (!isBotMatch) {
-      const localStream = webrtcManager.getLocalStream();
-      if (localVideoRef.current && localStream) {
-        localVideoRef.current.srcObject = localStream;
+      const remoteStream = webrtcManager.getRemoteStream();
+      if (remoteVideoRef.current && remoteStream) {
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteVideoRef.current.play().catch(() => {});
       }
 
       webrtcManager.onRemoteStream = (stream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = stream;
+          remoteVideoRef.current.play().catch(() => {});
         }
       };
     }
-  }, [isBotMatch]);
 
+    return () => {
+      isCancelled = true;
+    };
+  }, [isBotMatch, isCameraOn]);
+
+  // Hand Tracker Lifecycle
   useEffect(() => {
-    if (useTapMode || isUserLocked || !gameState) {
+    if (useTapMode || isUserLocked || !gameState || !isCameraOn) {
       handDetector.stop();
       return;
     }
@@ -149,7 +205,7 @@ export const LiveMatchScreen: React.FC = () => {
     return () => {
       handDetector.stop();
     };
-  }, [useTapMode, isUserLocked, gameState?.innings1?.balls, gameState?.innings2?.balls]);
+  }, [useTapMode, isUserLocked, isCameraOn, gameState?.innings1?.balls, gameState?.innings2?.balls]);
 
   useEffect(() => {
     if (timerSeconds === 1 && !isUserLocked && !useTapMode) {
@@ -190,13 +246,22 @@ export const LiveMatchScreen: React.FC = () => {
   const handleSkipOrLeave = () => {
     playClickSound();
     if (window.confirm("Are you sure you want to forfeit this match?")) {
+      webrtcManager.cleanup();
       forfeitCurrentMatch("Forfeited by player");
     }
   };
 
-  const handleToggleCamera = () => {
-    const nextState = webrtcManager.toggleCamera();
+  const handleToggleCamera = async () => {
+    playClickSound();
+    const nextState = await webrtcManager.toggleCamera();
     setIsCameraOn(nextState);
+    if (nextState && localVideoRef.current) {
+      const stream = webrtcManager.getLocalStream();
+      if (stream) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(() => {});
+      }
+    }
   };
 
   const handleToggleMic = () => {
@@ -206,7 +271,16 @@ export const LiveMatchScreen: React.FC = () => {
 
   const handleFlipCamera = async () => {
     playClickSound();
-    await webrtcManager.flipCamera();
+    try {
+      await webrtcManager.flipCamera();
+      const stream = webrtcManager.getLocalStream();
+      if (localVideoRef.current && stream) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[LiveMatchScreen] Flip camera error:", err);
+    }
   };
 
   return (
@@ -354,7 +428,7 @@ export const LiveMatchScreen: React.FC = () => {
             <div className="relative flex-1 overflow-hidden">
               {!isBotMatch ? (
                 <video
-                  ref={remoteVideoRef}
+                  ref={attachRemoteStream}
                   autoPlay
                   playsInline
                   className={`h-full w-full object-cover transition-all duration-300 ${
@@ -505,7 +579,7 @@ export const LiveMatchScreen: React.FC = () => {
                   {isCameraOn ? (
                     <div className="relative aspect-[4/3] w-full">
                       <video
-                        ref={localVideoRef}
+                        ref={attachLocalStream}
                         autoPlay
                         playsInline
                         muted
