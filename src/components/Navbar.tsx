@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Volume2,
@@ -92,9 +93,16 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCa
             className="group flex min-w-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf sm:gap-3"
             aria-label="HandCricketOmegle Home"
           >
-            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-turf text-ink shadow-[0_10px_28px_-10px_rgba(247,181,0,0.7)] transition-transform group-hover:-rotate-6 group-hover:scale-105 sm:h-11 sm:w-11">
-              <Hand value={6} size={24} />
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#050b16] bg-sky" />
+            <span className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-[#0F172A] shadow-[0_10px_28px_-10px_rgba(255,95,178,0.5)] transition-transform group-hover:-rotate-6 group-hover:scale-105 sm:h-11 sm:w-11">
+              <Image
+                src="/logo.jpg"
+                alt="Hand Cricket Omegle Logo"
+                width={44}
+                height={44}
+                className="h-full w-full object-cover"
+                priority
+              />
+              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#050b16] bg-[#FF5FB2]" />
             </span>
             <span className="flex min-w-0 flex-col">
               <span className="truncate font-heading text-xl font-black leading-none tracking-[-0.04em] text-white sm:text-2xl">

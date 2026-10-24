@@ -49,10 +49,10 @@ export const metadata: Metadata = {
     siteName: "HandCricketOmegle",
     images: [
       {
-        url: "/og-image.png",
+        url: "/sharing-banner.jpg",
         width: 1200,
         height: 630,
-        alt: "HandCricketOmegle Arena Duel",
+        alt: "Hand Cricket Omegle — Real-Time 1v1 Video Duels",
       },
     ],
     locale: "en_US",
@@ -63,15 +63,16 @@ export const metadata: Metadata = {
     title: "HandCricketOmegle | 1v1 Stranger Matchmaking",
     description:
       "Real-time online Hand Cricket. Secret picks, sudden death wickets, and instant reveals.",
-    images: ["/og-image.png"],
+    images: ["/sharing-banner.jpg"],
   },
   manifest: "/manifest.json",
   icons: {
     icon: [
+      { url: "/logo.jpg", type: "image/jpeg" },
       { url: "/icon.svg", type: "image/svg+xml" },
       { url: "/favicon.ico", sizes: "32x32" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: "/logo.jpg",
   },
   alternates: {
     canonical: process.env.NEXT_PUBLIC_APP_URL || "https://handcricketomegle.vercel.app",
