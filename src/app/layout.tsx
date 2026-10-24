@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow_Condensed, Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, Poppins } from "next/font/google";
 import "@/styles/tokens.css";
 import "./globals.css";
 
-const barlowCondensed = Barlow_Condensed({
-  weight: ["400", "500", "600", "700", "800"],
+const poppins = Poppins({
+  weight: ["400", "500", "600", "700", "800", "900"],
   subsets: ["latin"],
-  variable: "--font-barlow-condensed",
+  variable: "--font-poppins",
   display: "swap",
 });
 
@@ -17,15 +17,8 @@ const inter = Inter({
   display: "swap",
 });
 
-const jetbrainsMono = JetBrains_Mono({
-  weight: ["400", "600"],
-  subsets: ["latin"],
-  variable: "--font-mono",
-  display: "swap",
-});
-
 export const viewport: Viewport = {
-  themeColor: "#8584bd",
+  themeColor: "#050b16",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -94,14 +87,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${barlowCondensed.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+    <html
+      lang="en"
+      className={`${poppins.variable} ${inter.variable}`}
+    >
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <script src="/ably.min.js" async></script>
       </head>
-      <body className="min-h-screen bg-dusk-violet text-bone-white antialiased selection:bg-hi-vis-yellow selection:text-pure-black">
+      <body className="theme-arena min-h-screen bg-ink text-chalk antialiased selection:bg-turf selection:text-ink">
         {children}
         <Analytics />
         <SpeedInsights />

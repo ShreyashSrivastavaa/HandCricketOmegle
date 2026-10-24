@@ -1,7 +1,7 @@
 import React from "react";
 import { Loader2 } from "lucide-react";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "yellow";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -25,30 +25,23 @@ export const Button: React.FC<ButtonProps> = ({
   const isDisabled = disabled || loading;
 
   const baseClasses =
-    "inline-flex items-center justify-center font-bold tracking-[0.05em] transition-all duration-150 rounded-[100px] border-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow focus-visible:ring-offset-2 focus-visible:ring-offset-dusk-violet disabled:opacity-40 disabled:cursor-not-allowed select-none active:scale-[0.98]";
+    "inline-flex items-center justify-center font-heading font-bold uppercase tracking-[0.06em] transition-all duration-150 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:opacity-40 disabled:cursor-not-allowed select-none active:scale-[0.98]";
 
   const variantClasses: Record<ButtonVariant, string> = {
-    // Gate Pill Button: Cream fill, Pure Black text & border, 100px pill
     primary:
-      "bg-bone-white text-pure-black border-pure-black hover:bg-bone-white/90 active:bg-bone-white/80 font-bold",
-    // Outlined Display Button: Transparent fill, 2px Hi-Vis Yellow border & text
+      "bg-turf text-ink shadow-[0_14px_34px_-16px_rgba(247,181,0,0.65)] hover:bg-turf-hover hover:shadow-glow-strong border border-transparent",
     secondary:
-      "bg-transparent text-hi-vis-yellow border-hi-vis-yellow hover:bg-hi-vis-yellow/15 active:bg-hi-vis-yellow/25 font-bold",
-    // Underline / Ghost
+      "bg-surface-2/70 text-chalk border border-line hover:border-turf/40 hover:bg-surface-2",
     ghost:
-      "bg-transparent text-bone-white hover:text-hi-vis-yellow border-transparent hover:border-bone-white/40",
-    // Firecracker Red hard action
+      "bg-transparent text-muted hover:text-chalk hover:bg-surface/50 border border-transparent hover:border-line",
     danger:
-      "bg-firecracker-red text-bone-white border-pure-black font-bold hover:brightness-110 active:brightness-95",
-    // Hi-Vis Yellow filled
-    yellow:
-      "bg-hi-vis-yellow text-pure-black border-pure-black font-bold hover:bg-buttery-yellow active:brightness-95",
+      "bg-ball text-white hover:brightness-110 active:brightness-95 border border-transparent",
   };
 
   const sizeClasses: Record<ButtonSize, string> = {
-    sm: "px-3.5 py-1.5 text-xs gap-1.5",
-    md: "px-[17px] py-2.5 text-sm gap-2",
-    lg: "px-[22px] py-3 text-base gap-2.5 tracking-[0.05em]",
+    sm: "px-3 py-1.5 text-xs gap-1.5",
+    md: "px-4 py-2.5 text-sm gap-2",
+    lg: "px-6 py-3.5 text-base gap-2.5 tracking-wide",
   };
 
   return (

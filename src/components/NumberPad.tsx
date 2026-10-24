@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
-import { Hand } from "./Hand.tsx";
-import { Button } from "./Button.tsx";
-import { Lock, Zap } from "lucide-react";
+import { Hand } from "./Hand";
+import { Button } from "./Button";
+import { Lock, Zap, Keyboard } from "lucide-react";
 
 export interface NumberPadProps {
   selectedNumber: number | null;
@@ -24,7 +24,6 @@ export const NumberPad: React.FC<NumberPadProps> = ({
   onToggleTapToLock,
   className = "",
 }) => {
-  // Listen to keyboard keys 1 to 6
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (disabled || isLocked) return;
@@ -62,38 +61,53 @@ export const NumberPad: React.FC<NumberPadProps> = ({
 
   return (
     <div
-      className={`w-full flex flex-col items-center gap-2.5 select-none pb-[calc(env(safe-area-inset-bottom,0px)+4px)] ${className}`}
+      className={`flex w-full select-none flex-col items-center gap-2.5 pb-[calc(env(safe-area-inset-bottom,0px)+4px)] ${className}`}
       role="group"
       aria-label="Hand cricket number picker 1 to 6"
     >
-      {/* Controls & Quick Setting Bar */}
-      <div className="w-full flex items-center justify-between text-xs px-1">
-        <span className="font-mono uppercase tracking-wider text-pure-black font-bold text-[11px] bg-bone-white px-2.5 py-0.5 rounded-[100px] border border-pure-black">
-          {isLocked
-            ? "PICK LOCKED"
-            : disabled
-            ? "WAITING FOR BALL..."
-            : "SELECT 1 TO 6"}
-        </span>
-
-        <button
-          type="button"
-          onClick={onToggleTapToLock}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-[100px] border-2 border-pure-black bg-bone-white text-pure-black hover:bg-hi-vis-yellow transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pure-black"
-          title="Toggle Instant Lock Mode"
-          aria-label={`Toggle Tap to Lock. Currently ${tapToLock ? "Enabled" : "Disabled"}`}
-        >
-          <Zap
-            className={`w-3.5 h-3.5 stroke-[2.5] ${tapToLock ? "text-pure-black fill-hi-vis-yellow" : "text-pure-black/50"}`}
+      <div className="flex w-full items-center justify-between gap-2 px-0.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              isLocked ? "bg-turf" : disabled ? "bg-muted" : "animate-pulse bg-amber"
+            }`}
           />
-          <span className="text-[11px] font-mono font-bold uppercase">
-            Tap-to-lock: <strong>{tapToLock ? "ON" : "OFF"}</strong>
+          <span className="truncate font-heading text-[10px] font-bold uppercase tracking-[0.12em] text-muted">
+            {isLocked
+              ? "Pick locked · get ready"
+              : disabled
+              ? "Waiting for next delivery"
+              : tapToLock
+              ? "Tap a hand to lock instantly"
+              : "Select your hand (1–6)"}
           </span>
-        </button>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="hidden items-center gap-1 rounded-md border border-line/60 bg-surface-2/40 px-1.5 py-1 text-[9px] text-muted md:flex">
+            <Keyboard className="h-3 w-3" />
+            1–6
+          </span>
+          <button
+            type="button"
+            onClick={onToggleTapToLock}
+            aria-label={`Toggle Tap to Lock. Currently ${tapToLock ? "Enabled" : "Disabled"}`}
+            title="Toggle instant lock mode"
+            className={`flex items-center gap-1 rounded-full border px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-turf ${
+              tapToLock
+                ? "border-amber/30 bg-amber/[0.08] text-amber"
+                : "border-line bg-surface-2/50 text-muted hover:text-chalk"
+            }`}
+          >
+            <Zap className={`h-3 w-3 ${tapToLock ? "fill-current" : ""}`} />
+            <span className="text-[9px] font-bold uppercase tracking-wider">
+              {tapToLock ? "Quick lock" : "Confirm"}
+            </span>
+          </button>
+        </div>
       </div>
 
-      {/* Button Grid: 3x2 on mobile (min 64px tap target), 6-across on desktop */}
-      <div className="w-full grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+      <div className="grid w-full grid-cols-3 gap-2 sm:grid-cols-6 sm:gap-2.5">
         {numbers.map((num) => {
           const isSelected = selectedNumber === num;
           const isDisabled = disabled || isLocked;
@@ -106,57 +120,61 @@ export const NumberPad: React.FC<NumberPadProps> = ({
               onClick={() => handlePick(num)}
               aria-label={`Pick number ${num}`}
               aria-pressed={isSelected}
-              className={`group relative flex flex-col items-center justify-center min-h-[64px] sm:min-h-[76px] py-2 px-2 rounded-[6px] border-2 border-pure-black transition-all duration-150 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-hi-vis-yellow select-none ${
+              className={`group relative flex min-h-[70px] flex-col items-center justify-center overflow-hidden rounded-2xl border px-2 py-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink sm:min-h-[86px] ${
                 isDisabled
                   ? isSelected
-                    ? "bg-hi-vis-yellow text-pure-black opacity-80 cursor-not-allowed"
-                    : "bg-bone-white/60 text-pure-black/40 cursor-not-allowed"
+                    ? "cursor-not-allowed border-turf/50 bg-turf/10 opacity-80"
+                    : "cursor-not-allowed border-line/40 bg-surface/30 text-muted/30 opacity-50"
                   : isSelected
-                  ? "bg-hi-vis-yellow text-pure-black font-black scale-[1.03]"
-                  : "bg-bone-white text-pure-black hover:bg-buttery-yellow active:scale-95"
+                  ? "scale-[1.02] border-turf bg-turf/[0.12] text-turf shadow-glow"
+                  : "border-line bg-surface/80 text-chalk hover:-translate-y-0.5 hover:border-turf/45 hover:bg-surface-2 active:scale-95"
               }`}
             >
-              {/* Keyboard hint (desktop only) */}
-              <span className="hidden sm:inline-block absolute top-1.5 right-2 text-[10px] font-mono font-bold text-pure-black/60 bg-pure-black/10 px-1 rounded border border-pure-black/20">
+              <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded border border-line/50 bg-surface-2/70 px-0.5 font-mono text-[8px] text-muted/70">
                 {num}
               </span>
 
-              {/* Hand Icon */}
               <div
-                className={`transition-transform mb-1 ${
-                  isSelected ? "scale-110 text-pure-black" : "text-pure-black/80 group-hover:text-pure-black"
+                className={`mb-0.5 transition-all duration-150 ${
+                  isSelected
+                    ? "scale-110 text-turf"
+                    : isDisabled
+                    ? "text-muted/40"
+                    : "text-muted group-hover:text-chalk"
                 }`}
               >
-                <Hand value={num} size={28} />
+                <Hand value={num} size={26} className="sm:h-7 sm:w-7" />
               </div>
 
-              {/* Number Label */}
-              <span className="font-heading font-black text-2xl sm:text-3xl tabular-nums leading-none">
+              <span className="font-heading text-2xl font-black leading-none tabular-nums sm:text-3xl">
                 {num}
               </span>
+
+              {num === 6 && !isDisabled && (
+                <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-transparent via-amber/70 to-transparent" />
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Explicit "Lock In" Button if Tap-to-Lock is OFF */}
       {!tapToLock && (
-        <div className="w-full mt-0.5">
+        <div className="mt-0.5 w-full">
           <Button
             variant="primary"
             size="lg"
             fullWidth
             disabled={disabled || isLocked || !selectedNumber}
             onClick={onConfirmLock}
-            className="flex items-center justify-center gap-2 font-heading font-black tracking-wider text-lg"
+            className="flex min-h-[50px] items-center justify-center gap-2 rounded-xl font-heading text-sm font-black uppercase tracking-wider"
           >
-            <Lock className="w-4 h-4 stroke-[2.5]" />
+            <Lock className="h-4 w-4 stroke-[2.5]" />
             <span>
               {isLocked
-                ? `LOCKED IN: ${selectedNumber}`
+                ? `Locked in: ${selectedNumber}`
                 : selectedNumber
-                ? `CONFIRM & LOCK IN (${selectedNumber})`
-                : "SELECT A NUMBER TO LOCK"}
+                ? `Confirm & lock (${selectedNumber})`
+                : "Select a hand to lock"}
             </span>
           </Button>
         </div>

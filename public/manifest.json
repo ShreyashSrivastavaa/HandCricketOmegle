@@ -4,8 +4,8 @@
   "description": "Real-time Omegle-style 1v1 Hand Cricket matchmaking with live strangers.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0B1210",
-  "theme_color": "#0B1210",
+  "background_color": "#050b16",
+  "theme_color": "#050b16",
   "orientation": "portrait-primary",
   "icons": [
     {

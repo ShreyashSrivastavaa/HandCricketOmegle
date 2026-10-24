@@ -4,16 +4,17 @@
  */
 export const TOKENS = {
   colors: {
-    ink: "#0B1210",       // Primary background
-    surface: "#121C18",   // Surface 1 (panels, header)
-    surface2: "#1A2722",  // Surface 2 (active cards, hover)
-    line: "#2A3A33",      // 1px borders
-    chalk: "#F2EFE6",     // High contrast text
-    muted: "#8FA39A",     // Secondary text
-    turf: "#3DDC84",      // Primary / You / Safe / Boundary
-    ball: "#FF4D4D",      // Wicket / Danger / Out
-    amber: "#FFB020",     // Runs / Highlights / Count-up
-    sky: "#4DA3FF",       // Opponent / Bowling
+    ink: "#050b16",
+    surface: "#0b1628",
+    surface2: "#12213a",
+    line: "#23324a",
+    chalk: "#f8fafc",
+    muted: "#94a3b8",
+    turf: "#f7b500",
+    ball: "#ef4444",
+    amber: "#fbbf24",
+    sky: "#22c55e",
+    indigo: "#a855f7",
   },
   spacing: {
     4: "4px",
@@ -24,16 +25,17 @@ export const TOKENS = {
     32: "32px",
   },
   radius: {
-    card: "12px",
+    card: "20px",
     pill: "999px",
   },
   border: {
     width: "1px",
     style: "solid",
-    color: "#2A3A33",
+    color: "#23324a",
   },
   fonts: {
-    heading: "var(--font-barlow-condensed), sans-serif",
+    heading: "var(--font-poppins), sans-serif",
+    serif: "var(--font-poppins), sans-serif",
     ui: "var(--font-inter), sans-serif",
   },
 } as const;

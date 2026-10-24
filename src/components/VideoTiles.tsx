@@ -273,7 +273,7 @@ export function VideoTiles({
               </button>
               <button
                 onClick={onOpenReport}
-                className="px-2 py-0.5 bg-ball text-chalk text-[10px] font-bold rounded"
+                className="px-2 py-0.5 bg-ball text-white text-[10px] font-bold rounded"
               >
                 Report
               </button>
@@ -337,9 +337,9 @@ export function VideoTiles({
                   <div
                     className={`absolute inset-1 rounded border-2 border-dashed transition-all pointer-events-none flex flex-col items-center justify-between p-0.5 ${
                       isGestureLocked
-                        ? "border-turf bg-turf/15 shadow-[0_0_8px_rgba(0,230,118,0.5)]"
+                        ? "border-turf bg-turf/15 shadow-[0_0_8px_rgba(247,181,0,0.35)]"
                         : detectedGesture !== null
-                        ? "border-turf shadow-[0_0_6px_rgba(0,230,118,0.4)]"
+                        ? "border-turf shadow-[0_0_6px_rgba(247,181,0,0.3)]"
                         : "border-turf/60"
                     }`}
                   >
@@ -414,7 +414,7 @@ export function VideoTiles({
           <button
             onClick={onOpenReport}
             title="Report Opponent"
-            className="p-1.5 rounded border border-ball/40 bg-surface-2/90 text-ball hover:bg-ball hover:text-chalk transition-colors"
+            className="p-1.5 rounded border border-ball/40 bg-surface-2/90 text-ball hover:bg-ball hover:text-white transition-colors"
           >
             <Flag className="w-3.5 h-3.5" />
           </button>

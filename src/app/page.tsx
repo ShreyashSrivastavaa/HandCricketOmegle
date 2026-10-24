@@ -48,21 +48,16 @@ export default function HomePage() {
   }, [initGuestSession]);
 
   return (
-    <div className="min-h-screen bg-ink text-chalk flex flex-col justify-between selection:bg-turf selection:text-ink relative overflow-hidden">
-      {/* Gentle ambient background glow for eye comfort */}
-      <div
-        className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(ellipse_80%_50%_at_50%_-10%,rgba(16,185,129,0.07),rgba(56,189,248,0.03),transparent)]"
-        aria-hidden="true"
-      />
+    <div
+      className="relative flex min-h-screen flex-col justify-between overflow-hidden bg-ink text-chalk selection:bg-turf selection:text-ink"
+    >
       {/* Navigation Bar (visible during landing, result, and toss) */}
       {screen !== "match" && (
-        <header className="w-full px-2 pt-2">
-          <Navbar onOpenRules={() => setIsRulesOpen(true)} />
-        </header>
+        <Navbar guestName={guestName} onOpenRules={() => setIsRulesOpen(true)} />
       )}
 
       {/* Main Dynamic Viewport */}
-      <div className="flex-1 flex flex-col justify-center w-full">
+      <div className="flex w-full flex-1 flex-col justify-center">
         {screen === "landing" && (
           <LandingScreen
             onFindMatch={() => startMatchmaking(false)}
@@ -119,7 +114,7 @@ export default function HomePage() {
 
       {/* Responsive Branded Footer */}
       {screen === "landing" && (
-        <Footer onOpenRules={() => setIsRulesOpen(true)} />
+        <Footer variant="minimal" onOpenRules={() => setIsRulesOpen(true)} />
       )}
 
       {/* Modals */}

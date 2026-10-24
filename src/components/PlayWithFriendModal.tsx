@@ -228,28 +228,33 @@ export function PlayWithFriendModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="friend-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-pure-black/70 backdrop-blur-none animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-bone-white border-2 border-pure-black rounded-[6px] p-5 sm:p-6 text-ink-black shadow-none relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto select-none"
+        className="relative flex max-h-[92dvh] w-full max-w-lg flex-col gap-4 overflow-y-auto rounded-[26px] border border-line bg-surface p-5 text-chalk shadow-panel sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_75%_100%_at_50%_0%,rgba(178,59,42,0.12),transparent_72%)]"
+          aria-hidden="true"
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between border-b-2 border-pure-black pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-[6px] bg-bubblegum-pink border-2 border-pure-black flex items-center justify-center text-pure-black">
-              <Users className="w-5 h-5 stroke-[2.5]" />
+        <div className="relative z-10 flex items-center justify-between border-b border-line pb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-turf/10 border border-turf/40 flex items-center justify-center text-turf">
+              <Users className="w-4 h-4" />
             </div>
             <div>
               <h2
                 id="friend-modal-title"
-                className="font-heading font-black text-2xl uppercase tracking-tight text-pure-black leading-none"
+                className="font-heading font-black text-xl uppercase tracking-tight text-chalk leading-none"
               >
                 Play with Friend
               </h2>
-              <p className="text-[11px] font-mono text-pure-black/70 leading-tight mt-0.5 uppercase tracking-wide">
-                Private room • Custom rules &amp; instant sync
+              <p className="text-[11px] text-muted leading-tight mt-0.5">
+                Private 1v1 match with custom rules &amp; instant sync
               </p>
             </div>
           </div>
@@ -257,15 +262,15 @@ export function PlayWithFriendModal({
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="p-1.5 rounded-[100px] border-2 border-pure-black bg-bone-white text-pure-black hover:bg-hi-vis-yellow transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pure-black"
+            className="p-1.5 rounded-lg text-muted hover:text-chalk hover:bg-surface-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-turf"
           >
-            <X className="w-4 h-4 stroke-[2.5]" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Tab Switcher (Visible when not in Room Created screen) */}
         {!createdRoomCode && (
-          <div className="grid grid-cols-2 gap-2 p-1 bg-dusk-violet border-2 border-pure-black rounded-[100px]">
+          <div className="grid grid-cols-2 gap-1.5 p-1 bg-surface-2 border border-line rounded-xl">
             <button
               type="button"
               onClick={() => {
@@ -273,13 +278,13 @@ export function PlayWithFriendModal({
                 setActiveTab("create");
                 setCreateError(null);
               }}
-              className={`py-2 px-3 rounded-[100px] text-xs font-mono font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all border-2 ${
+              className={`py-2 px-3 rounded-lg text-xs font-heading font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all ${
                 activeTab === "create"
-                  ? "bg-hi-vis-yellow text-pure-black border-pure-black"
-                  : "bg-transparent text-bone-white border-transparent hover:text-hi-vis-yellow"
+                  ? "bg-turf text-ink shadow-sm"
+                  : "text-muted hover:text-chalk"
               }`}
             >
-              <PlusCircle className="w-3.5 h-3.5 stroke-[2.5]" />
+              <PlusCircle className="w-3.5 h-3.5" />
               <span>Create Room</span>
             </button>
             <button
@@ -289,13 +294,13 @@ export function PlayWithFriendModal({
                 setActiveTab("join");
                 setJoinError(null);
               }}
-              className={`py-2 px-3 rounded-[100px] text-xs font-mono font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all border-2 ${
+              className={`py-2 px-3 rounded-lg text-xs font-heading font-black tracking-wider uppercase flex items-center justify-center gap-1.5 transition-all ${
                 activeTab === "join"
-                  ? "bg-hi-vis-yellow text-pure-black border-pure-black"
-                  : "bg-transparent text-bone-white border-transparent hover:text-hi-vis-yellow"
+                  ? "bg-turf text-ink shadow-sm"
+                  : "text-muted hover:text-chalk"
               }`}
             >
-              <LogIn className="w-3.5 h-3.5 stroke-[2.5]" />
+              <LogIn className="w-3.5 h-3.5" />
               <span>Join Room</span>
             </button>
           </div>
@@ -320,7 +325,7 @@ export function PlayWithFriendModal({
                       }}
                       className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                         wickets === 1 && overs === 1
-                          ? "bg-surface-2 border-turf shadow-[0_0_12px_rgba(61,220,132,0.15)] ring-1 ring-turf text-chalk"
+                          ? "bg-surface-2 border-turf shadow-[0_0_12px_rgba(178,59,42,0.15)] ring-1 ring-turf text-chalk"
                           : "bg-surface-2/40 border-line text-muted hover:text-chalk"
                       }`}
                     >
@@ -338,7 +343,7 @@ export function PlayWithFriendModal({
                       }}
                       className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                         wickets === 2 && overs === 2
-                          ? "bg-surface-2 border-turf shadow-[0_0_12px_rgba(61,220,132,0.15)] ring-1 ring-turf text-chalk"
+                          ? "bg-surface-2 border-turf shadow-[0_0_12px_rgba(178,59,42,0.15)] ring-1 ring-turf text-chalk"
                           : "bg-surface-2/40 border-line text-muted hover:text-chalk"
                       }`}
                     >
@@ -444,7 +449,7 @@ export function PlayWithFriendModal({
                   fullWidth
                   disabled={isCreating}
                   onClick={handleCreateRoom}
-                  className="font-heading font-black text-sm uppercase tracking-wider min-h-[50px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(61,220,132,0.25)]"
+                  className="font-heading font-black text-sm uppercase tracking-wider min-h-[50px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(178,59,42,0.25)]"
                 >
                   {isCreating ? (
                     <>
@@ -585,7 +590,7 @@ export function PlayWithFriendModal({
               size="lg"
               fullWidth
               disabled={isJoining || inputCode.trim().length === 0}
-              className="font-heading font-black text-sm uppercase tracking-wider min-h-[50px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(61,220,132,0.25)]"
+              className="font-heading font-black text-sm uppercase tracking-wider min-h-[50px] flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(178,59,42,0.25)]"
             >
               {isJoining ? (
                 <>

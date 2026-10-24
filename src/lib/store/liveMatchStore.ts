@@ -103,6 +103,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
   let matchSyncInterval: NodeJS.Timeout | null = null;
   let activeAblyChannel: any = null;
   let userPrivateChannel: any = null;
+  let guestSessionPromise: Promise<void> | null = null;
 
   const clearQueuePoll = () => {
     if (queuePollInterval) {
@@ -213,7 +214,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         set({ screenShake: true });
         setTimeout(() => set({ screenShake: false }), 450);
       } else if (outcome.runsScored === 4 || outcome.runsScored === 6) {
-        playBoundarySound();
+        playBoundarySound(outcome.runsScored);
       } else {
         playBatHitSound();
       }
@@ -534,28 +535,38 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     setIsReportOpen: (isReportOpen) => set({ isReportOpen }),
 
     initGuestSession: async () => {
-      try {
-        let tabGuestId = typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_id") : null;
-        let tabGuestName = typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_name") : null;
+      if (guestSessionPromise) return guestSessionPromise;
 
-        const res = await fetch("/api/session");
-        if (res.ok) {
-          const data = await res.json();
-          if (!tabGuestId && typeof window !== "undefined" && data.guestId) {
-            tabGuestId = data.guestId;
-            sessionStorage.setItem("hca_tab_guest_id", data.guestId);
+      guestSessionPromise = (async () => {
+        try {
+          let tabGuestId = typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_id") : null;
+          let tabGuestName = typeof window !== "undefined" ? sessionStorage.getItem("hca_tab_guest_name") : null;
+
+          const res = await fetch("/api/session");
+          if (res.ok) {
+            const data = await res.json();
+            if (!tabGuestId && typeof window !== "undefined" && data.guestId) {
+              tabGuestId = data.guestId;
+              sessionStorage.setItem("hca_tab_guest_id", data.guestId);
+            }
+            if (!tabGuestName && typeof window !== "undefined" && data.guestName) {
+              tabGuestName = data.guestName;
+              sessionStorage.setItem("hca_tab_guest_name", data.guestName);
+            }
+            set({
+              guestId: tabGuestId || data.guestId || "guest",
+              guestName: tabGuestName || data.guestName || "Player",
+            });
           }
-          if (!tabGuestName && typeof window !== "undefined" && data.guestName) {
-            tabGuestName = data.guestName;
-            sessionStorage.setItem("hca_tab_guest_name", data.guestName);
-          }
-          set({
-            guestId: tabGuestId || data.guestId || "guest",
-            guestName: tabGuestName || data.guestName || "Player",
-          });
+        } catch (err) {
+          console.warn("[Session] Could not fetch session:", err);
         }
-      } catch (err) {
-        console.warn("[Session] Could not fetch session:", err);
+      })();
+
+      try {
+        await guestSessionPromise;
+      } finally {
+        guestSessionPromise = null;
       }
     },
 
@@ -565,7 +576,14 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       clearQueuePoll();
       clearMatchSync();
 
-      let { mode, guestName, guestId } = get();
+      const { mode } = get();
+      set({ screen: "searching" });
+
+      let { guestName, guestId } = get();
+      if (!guestId) {
+        await get().initGuestSession();
+        ({ guestName, guestId } = get());
+      }
       if (!guestId && typeof window !== "undefined") {
         guestId =
           sessionStorage.getItem("hca_tab_guest_id") ||
@@ -573,7 +591,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           "";
         if (guestId) set({ guestId });
       }
-      set({ screen: "searching" });
+      if (get().screen !== "searching") return;
 
       try {
         const res = await fetch("/api/queue/join", {

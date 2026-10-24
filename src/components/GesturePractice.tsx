@@ -107,17 +107,17 @@ export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, 
 
   return (
     <div className={`flex flex-col gap-3 bg-surface-2 p-3.5 rounded-[12px] border border-line ${className}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-turf flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5" />
-          Show to Camera Practice
+      <div className="flex flex-wrap items-center justify-between gap-1.5">
+        <span className="flex items-center gap-1.5 font-heading text-[11px] font-bold uppercase tracking-wider text-turf">
+          <Sparkles className="h-3.5 w-3.5" />
+          Gesture practice
         </span>
-        <span className="text-[10px] text-muted font-medium">Locks at 1s remaining • Change freely</span>
+        <span className="text-[10px] font-medium text-muted">Locks at 1s • Change freely</span>
       </div>
 
       {/* Live Detection Status Chip */}
-      <div className="flex items-center justify-between bg-ink border border-line rounded-lg p-2.5">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-line bg-ink p-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {/* Progress Ring */}
           <div className="relative w-8 h-8 flex items-center justify-center">
             <svg className="w-8 h-8 transform -rotate-90">
@@ -146,8 +146,8 @@ export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, 
             </span>
           </div>
 
-          <div className="flex flex-col">
-            <span className="text-xs font-heading font-bold uppercase text-chalk flex items-center gap-1.5">
+          <div className="flex min-w-0 flex-col">
+            <span className="flex flex-wrap items-center gap-1.5 font-heading text-xs font-bold uppercase text-chalk">
               {isLocked ? (
                 lockedNumber ? (
                   <>
@@ -178,14 +178,14 @@ export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, 
         <button
           type="button"
           onClick={startPracticeRound}
-          className="text-[11px] font-heading font-bold uppercase px-2.5 py-1 bg-turf text-ink rounded hover:bg-turf-hover transition-colors"
+          className="ml-auto rounded bg-turf px-2.5 py-1 font-heading text-[10px] font-bold uppercase text-ink transition-colors hover:bg-turf-hover"
         >
-          {isLocked ? "Practice Again" : "Restart Round"}
+          {isLocked ? "Again" : "Restart"}
         </button>
       </div>
 
       {/* 1-6 Gestures Legend */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 pt-1">
+      <div className="grid grid-cols-3 gap-1.5 pt-1">
         {GESTURE_LEGEND.map((g) => {
           const isSelected = currentDisplayNumber === g.num;
           return (

@@ -4,7 +4,17 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 import { webrtcManager, type MediaDeviceOption } from "@/lib/webrtc/webrtcManager";
 import { GesturePractice } from "./GesturePractice";
-import { Camera, Mic, MicOff, Video, VideoOff, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Camera,
+  Mic,
+  Video,
+  Gamepad2,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 
 interface CameraCheckModalProps {
   isOpen: boolean;
@@ -184,180 +194,249 @@ export function CameraCheckModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/90">
-      <div className="w-full max-w-lg bg-surface border border-line rounded-xl p-5 shadow-2xl space-y-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-md sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="camera-check-title"
+    >
+      <div className="relative flex max-h-[94dvh] w-full max-w-3xl flex-col overflow-hidden rounded-[26px] border border-line bg-surface shadow-panel">
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(ellipse_70%_100%_at_50%_0%,rgba(247,181,0,0.1),transparent_70%)]"
+          aria-hidden="true"
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-line pb-3">
-          <div>
-            <h2 className="text-lg font-bold font-heading uppercase tracking-wide text-chalk">
-              Match Setup & Camera Check
-            </h2>
-            <p className="text-xs text-muted">Test your audio and video before entering arena</p>
-          </div>
-          <div className="flex bg-surface-2 p-1 rounded-lg border border-line">
-            <button
-              onClick={() => setMode("video")}
-              className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                mode === "video" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
-              }`}
-            >
-              Video
-            </button>
-            <button
-              onClick={() => setMode("game_only")}
-              className={`px-3 py-1 text-xs font-semibold rounded transition-colors ${
-                mode === "game_only" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
-              }`}
-            >
-              Game Only
-            </button>
-          </div>
-        </div>
-
-        {/* Video Mode Content */}
-        {mode === "video" ? (
-          <div className="space-y-4">
-            {/* Camera Preview Box */}
-            <div className="relative w-full aspect-video bg-ink rounded-lg border border-line overflow-hidden flex items-center justify-center">
-              {permissionState === "granted" ? (
-                <>
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover transform -scale-x-100"
-                  />
-                  {/* Badge */}
-                  <div className="absolute top-2 left-2 px-2 py-0.5 bg-ink/80 border border-line rounded text-[11px] font-mono text-turf flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-turf animate-pulse" />
-                    LIVE PREVIEW
-                  </div>
-                  <div className="absolute bottom-2 left-2 text-[10px] text-muted bg-ink/80 px-2 py-0.5 rounded border border-line">
-                    Mic starts MUTED during match
-                  </div>
-                </>
-              ) : permissionState === "denied" ? (
-                <div className="p-4 text-center space-y-2">
-                  <AlertCircle className="w-8 h-8 text-ball mx-auto" />
-                  <p className="text-xs text-ball font-medium leading-relaxed">
-                    {errorMessage || "Camera or Microphone access was denied."}
-                  </p>
-                  <p className="text-[11px] text-muted">
-                    Enable camera permissions in your browser or switch to <strong>Game Only</strong> mode.
-                  </p>
-                </div>
-              ) : (
-                <div className="text-center space-y-2 p-4">
-                  <RefreshCw className="w-6 h-6 text-turf animate-spin mx-auto" />
-                  <p className="text-xs text-muted">Requesting camera and microphone access...</p>
-                </div>
-              )}
-            </div>
-
-            {/* Mic Meter and Diagnostics */}
-            {permissionState === "granted" && (
-              <div className="space-y-3 bg-surface-2 p-3 rounded-lg border border-line text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted flex items-center gap-1.5 font-medium">
-                    <Mic className="w-3.5 h-3.5 text-turf" />
-                    Mic Input Level:
-                  </span>
-                  <span className="font-mono text-[11px] text-turf">{micLevel}%</span>
-                </div>
-
-                {/* Level Bar */}
-                <div className="w-full h-2 bg-ink rounded-full overflow-hidden border border-line">
-                  <div
-                    className="h-full bg-turf transition-all duration-75"
-                    style={{ width: `${Math.min(100, micLevel * 1.5)}%` }}
-                  />
-                </div>
-
-                {/* Device Pickers */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <div>
-                    <label className="block text-[11px] text-muted mb-1">Camera Device</label>
-                    <select
-                      value={selectedVideoDevice}
-                      onChange={(e) => handleDeviceChange("video", e.target.value)}
-                      className="w-full bg-ink border border-line rounded px-2 py-1 text-xs text-chalk focus:outline-none focus:border-turf"
-                    >
-                      {videoDevices.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-muted mb-1">Microphone Device</label>
-                    <select
-                      value={selectedAudioDevice}
-                      onChange={(e) => handleDeviceChange("audio", e.target.value)}
-                      className="w-full bg-ink border border-line rounded px-2 py-1 text-xs text-chalk focus:outline-none focus:border-turf"
-                    >
-                      {audioDevices.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Gesture Legend & Live Practice Step */}
-                <GesturePractice videoElement={videoRef.current} />
-              </div>
-            )}
-          </div>
-        ) : (
-          /* Game Only Mode Content */
-          <div className="py-6 px-4 bg-surface-2 rounded-lg border border-line text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-turf/10 border border-turf/30 text-turf flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
+        <div className="relative z-10 flex flex-col gap-3 border-b border-line px-5 pb-4 pt-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div className="flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-turf/30 bg-turf/10 text-turf">
+              <Camera className="h-5 w-5" />
+            </span>
             <div>
-              <h3 className="font-bold text-chalk text-sm uppercase tracking-wide">
-                Game Only Mode Selected
-              </h3>
-              <p className="text-xs text-muted max-w-xs mx-auto mt-1">
-                You will only be paired with other Game Only players. No camera or microphone will be used.
+              <p className="eyebrow text-[10px]">Match setup</p>
+              <h2
+                id="camera-check-title"
+                className="font-heading text-xl font-black uppercase leading-none tracking-tight text-chalk sm:text-2xl"
+              >
+                Camera &amp; Mic Check
+              </h2>
+              <p className="mt-0.5 text-[11px] text-muted">
+                Test your hardware before stepping into the arena.
               </p>
             </div>
           </div>
-        )}
 
-        {/* Privacy & Safety Policies */}
-        <div className="bg-surface-2/60 border border-line rounded-lg p-3 text-[11px] text-muted space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="flex items-center gap-2 cursor-pointer text-chalk font-medium">
-              <input
-                type="checkbox"
-                defaultChecked={
-                  typeof window !== "undefined"
-                    ? localStorage.getItem("hc_blur_video_start") === "true"
-                    : false
-                }
-                onChange={(e) => {
-                  if (typeof window !== "undefined") {
-                    localStorage.setItem("hc_blur_video_start", String(e.target.checked));
-                  }
-                }}
-                className="rounded border-line text-turf focus:ring-turf"
-              />
-              <span>Blur my video until the match starts</span>
-            </label>
-            <span className="text-[10px] text-turf font-mono">OPTIONAL</span>
-          </div>
-          <div className="pt-1 border-t border-line/60 flex items-start gap-1.5 text-[10px]">
-            <span className="text-turf font-bold">🔒 Zero Video Storage:</span>
-            <span>Video & audio are strictly peer-to-peer (WebRTC). Video is never recorded or stored on any server. Finger detection runs 100% locally on your browser. 18+ only.</span>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-xl border border-line bg-surface-2 p-1">
+              <button
+                type="button"
+                onClick={() => setMode("video")}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-[10px] font-black uppercase tracking-wider transition-colors ${
+                  mode === "video" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
+                }`}
+              >
+                <Video className="h-3.5 w-3.5" />
+                <span>Video</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("game_only")}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-[10px] font-black uppercase tracking-wider transition-colors ${
+                  mode === "game_only" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
+                }`}
+              >
+                <Gamepad2 className="h-3.5 w-3.5" />
+                <span>Game Only</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="Close modal"
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface-2 text-muted transition-colors hover:text-chalk"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
+        <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
+          {mode === "video" ? (
+            <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+              <div className="flex flex-col gap-3">
+                {/* Camera Preview Box */}
+                <div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-2xl border border-line bg-ink">
+                  {permissionState === "granted" ? (
+                    <>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="h-full w-full -scale-x-100 object-cover"
+                      />
+                      <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full border border-turf/30 bg-ink/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-turf backdrop-blur-md">
+                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-turf" />
+                        Live preview
+                      </div>
+                      <div className="absolute bottom-2.5 left-2.5 rounded-lg border border-line bg-ink/80 px-2 py-1 text-[9px] text-muted backdrop-blur-md">
+                        Mic starts muted during the match
+                      </div>
+                    </>
+                  ) : permissionState === "denied" ? (
+                    <div className="space-y-2 p-5 text-center">
+                      <AlertCircle className="mx-auto h-8 w-8 text-ball" />
+                      <p className="text-xs font-medium leading-relaxed text-ball">
+                        {errorMessage || "Camera or Microphone access was denied."}
+                      </p>
+                      <p className="text-[11px] text-muted">
+                        Enable camera permissions in your browser or switch to{" "}
+                        <strong className="text-chalk">Game Only</strong> mode.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 p-5 text-center">
+                      <RefreshCw className="mx-auto h-6 w-6 animate-spin text-turf" />
+                      <p className="text-xs text-muted">Requesting camera and microphone access...</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Privacy & Safety Policies */}
+                <div className="space-y-2 rounded-2xl border border-line bg-surface-2/60 p-3.5 text-[11px] text-muted">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="flex cursor-pointer items-center gap-2 font-medium text-chalk">
+                      <input
+                        type="checkbox"
+                        defaultChecked={
+                          typeof window !== "undefined"
+                            ? localStorage.getItem("hc_blur_video_start") === "true"
+                            : false
+                        }
+                        onChange={(e) => {
+                          if (typeof window !== "undefined") {
+                            localStorage.setItem("hc_blur_video_start", String(e.target.checked));
+                          }
+                        }}
+                        className="rounded border-line text-turf focus:ring-turf"
+                      />
+                      <span>Blur my video until the match starts</span>
+                    </label>
+                    <span className="font-mono text-[9px] text-turf">OPTIONAL</span>
+                  </div>
+                  <div className="flex items-start gap-1.5 border-t border-line/60 pt-2 text-[10px] leading-relaxed">
+                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-turf" />
+                    <span>
+                      <strong className="text-turf">Zero video storage.</strong> Video and audio are
+                      strictly peer-to-peer (WebRTC). Gesture detection runs 100% locally in your
+                      browser. 18+ only.
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                {permissionState === "granted" ? (
+                  <>
+                    <div className="space-y-3 rounded-2xl border border-line bg-surface-2/60 p-3.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-medium text-muted">
+                          <Mic className="h-3.5 w-3.5 text-turf" />
+                          Mic input level
+                        </span>
+                        <span className="font-mono text-[11px] text-turf">{micLevel}%</span>
+                      </div>
+
+                      <div className="h-2 w-full overflow-hidden rounded-full border border-line bg-ink">
+                        <div
+                          className="h-full bg-gradient-to-r from-turf/70 to-turf transition-all duration-75"
+                          style={{ width: `${Math.min(100, micLevel * 1.5)}%` }}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2 lg:grid-cols-1">
+                        <div>
+                          <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
+                            Camera Device
+                          </label>
+                          <select
+                            value={selectedVideoDevice}
+                            onChange={(e) => handleDeviceChange("video", e.target.value)}
+                            className="w-full rounded-lg border border-line bg-ink px-2.5 py-1.5 text-xs text-chalk focus:border-turf focus:outline-none"
+                          >
+                            {videoDevices.map((d) => (
+                              <option key={d.deviceId} value={d.deviceId}>
+                                {d.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
+                            Microphone Device
+                          </label>
+                          <select
+                            value={selectedAudioDevice}
+                            onChange={(e) => handleDeviceChange("audio", e.target.value)}
+                            className="w-full rounded-lg border border-line bg-ink px-2.5 py-1.5 text-xs text-chalk focus:border-turf focus:outline-none"
+                          >
+                            {audioDevices.map((d) => (
+                              <option key={d.deviceId} value={d.deviceId}>
+                                {d.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <GesturePractice videoElement={videoRef.current} />
+                  </>
+                ) : (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface-2/40 p-6 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sky/25 bg-sky/10 text-sky">
+                      <ShieldCheck className="h-6 w-6" />
+                    </span>
+                    <div>
+                      <p className="font-heading text-sm font-black uppercase tracking-wide text-chalk">
+                        Privacy first
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                        Nothing is recorded or uploaded. Grant camera access to preview your feed,
+                        or jump straight in with Game Only mode.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-2 py-8 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-turf/30 bg-turf/10 text-turf">
+                <CheckCircle2 className="h-8 w-8" />
+              </div>
+              <div>
+                <h3 className="font-heading text-lg font-black uppercase tracking-wide text-chalk">
+                  Game Only Mode Selected
+                </h3>
+                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
+                  You will only be paired with other Game Only players. No camera or microphone will
+                  be used.
+                </p>
+              </div>
+              <div className="flex items-start gap-2 rounded-2xl border border-line bg-surface-2/60 p-3 text-left text-[10px] leading-relaxed text-muted">
+                <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-turf" />
+                <span>
+                  <strong className="text-turf">Zero video storage.</strong> Finger detection is
+                  disabled in this mode. 18+ only.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-2">
+        <div className="relative z-10 flex gap-3 border-t border-line px-5 py-4 sm:px-6">
           <Button variant="secondary" className="flex-1" onClick={handleClose}>
             Cancel
           </Button>

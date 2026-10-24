@@ -23,6 +23,7 @@ import {
 } from "../game-core/bot";
 import type { HandTileState } from "../../components/HandTile";
 import type { ToastMessage } from "../../components/Toast";
+import { playBatHitSound, playBoundarySound, playWicketSound } from "../client/audio";
 
 export type LobbyState = "idle" | "searching" | "matched" | "no-one-found-after-20s";
 
@@ -361,6 +362,14 @@ export const useGameStore = create<GameStore>((set, get) => {
               const bowlerPick = isUserBatting ? botNumber : userPick;
 
               const { nextState, outcome } = engineApplyBall(currentG, batterPick, bowlerPick);
+
+              if (outcome.isWicket) {
+                playWicketSound();
+              } else if (outcome.runsScored === 4 || outcome.runsScored === 6) {
+                playBoundarySound(outcome.runsScored);
+              } else {
+                playBatHitSound();
+              }
 
               let outcomeDisplay = "";
               if (outcome.isWicket) {

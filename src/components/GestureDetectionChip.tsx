@@ -34,7 +34,7 @@ export function GestureDetectionChip({
     <div
       className={`inline-flex items-center gap-2.5 px-3 py-1.5 rounded-full border shadow-md select-none transition-all duration-200 ${
         isLocked
-          ? "bg-turf/20 border-turf text-turf shadow-[0_0_12px_rgba(0,230,118,0.3)]"
+          ? "bg-turf/20 border-turf text-turf shadow-[0_0_12px_rgba(247,181,0,0.28)]"
           : detectedGesture !== null
           ? "bg-surface-2 border-turf/80 text-chalk"
           : isLowLight

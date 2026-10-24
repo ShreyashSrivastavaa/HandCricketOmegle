@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Hand } from "./Hand";
-import { Lock } from "lucide-react";
+import { Lock, Eye, Sparkles, XCircle } from "lucide-react";
 
 export type HandTileState =
   | "empty"
@@ -16,10 +16,10 @@ export interface HandTileProps {
   isUser: boolean;
   role: "batting" | "bowling";
   state: HandTileState;
-  pick: number | null; // null if hidden
-  showUserPreview?: boolean; // if true and isUser, preview secret pick
-  countdownNumber?: number | null; // 3, 2, 1
-  mirrored?: boolean; // for opponent facing player
+  pick: number | null;
+  showUserPreview?: boolean;
+  countdownNumber?: number | null;
+  mirrored?: boolean;
   className?: string;
 }
 
@@ -35,103 +35,108 @@ export const HandTile: React.FC<HandTileProps> = ({
   className = "",
 }) => {
   const isBatting = role === "batting";
-  const accentColor = isUser ? "var(--color-turf)" : "var(--color-sky)";
-  const tagBg = isBatting
-    ? "bg-turf/10 text-turf border-turf/30"
-    : "bg-sky/10 text-sky border-sky/30";
-
   const displayName = isUser ? "You" : playerName;
 
-  // Derive dynamic border and shadow for out / scored states
-  let cardBorder = "border-2 border-pure-black";
+  let cardStyle = "border-line bg-surface/80";
   if (state === "out") {
-    cardBorder = "border-2 border-pure-black bg-firecracker-red/15";
+    cardStyle = "border-ball/60 bg-gradient-to-b from-ball/[0.12] to-surface/90 shadow-glow-ball";
   } else if (state === "scored") {
-    cardBorder = "border-2 border-pure-black bg-hi-vis-yellow/20";
+    cardStyle = "border-amber/50 bg-gradient-to-b from-amber/[0.1] to-surface/90 shadow-[0_0_42px_-10px_rgba(247,181,0,0.35)]";
+  } else if (state === "locked") {
+    cardStyle = "border-turf/40 bg-gradient-to-b from-turf/[0.06] to-surface/90";
   }
+
+  const roleStyle = isBatting
+    ? "border-turf/25 bg-turf/10 text-turf"
+    : "border-sky/25 bg-sky/10 text-sky";
 
   return (
     <div
-      className={`relative flex flex-col items-center justify-between p-3 sm:p-5 rounded-[6px] bg-bone-white text-ink-black select-none transition-all duration-200 min-h-[160px] sm:min-h-[220px] flex-1 shadow-none ${cardBorder} ${className}`}
+      className={`relative flex min-h-[184px] flex-1 select-none flex-col justify-between overflow-hidden rounded-[22px] border p-3.5 shadow-panel backdrop-blur-sm transition-all duration-200 sm:min-h-[248px] sm:p-4 ${cardStyle} ${className}`}
       role="region"
       aria-label={`${displayName} arena hand tile (${state})`}
     >
-      {/* Header Info */}
-      <div className="w-full flex items-center justify-between gap-2 border-b-2 border-pure-black pb-2">
-        <div className="flex items-center gap-2">
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/[0.025] to-transparent"
+        aria-hidden="true"
+      />
+
+      <div className="relative z-10 flex items-center justify-between gap-2 border-b border-line/60 pb-2.5">
+        <div className="flex min-w-0 items-center gap-2">
           <span
-            className="w-3 h-3 rounded-full border border-pure-black"
-            style={{ backgroundColor: accentColor }}
+            className={`h-2 w-2 shrink-0 rounded-full ${
+              isUser ? "bg-turf shadow-[0_0_10px_rgba(247,181,0,0.5)]" : "bg-sky shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+            }`}
+            aria-hidden="true"
           />
-          <span className="text-xs sm:text-sm font-black tracking-wider uppercase text-pure-black font-heading">
+          <span
+            title={playerName}
+            className="truncate font-heading text-sm font-black uppercase tracking-wide text-chalk"
+          >
             {displayName}
           </span>
         </div>
 
         <span
-          className={`text-[10px] font-mono font-black tracking-wider px-2 py-0.5 rounded-[100px] border border-pure-black ${
-            isBatting ? "bg-hi-vis-yellow text-pure-black" : "bg-matcha-cream text-pure-black"
-          }`}
+          title={isBatting ? "Batting" : "Bowling"}
+          className={`shrink-0 rounded-full border px-2 py-0.5 font-heading text-[8px] font-black uppercase tracking-[0.14em] ${roleStyle}`}
         >
-          {isBatting ? "BATTING" : "BOWLING"}
+          {isBatting ? "Bat" : "Bowl"}
         </span>
       </div>
 
-      {/* Main Gesture Arena Body */}
-      <div className="flex-1 flex flex-col items-center justify-center my-2 sm:my-3 relative w-full">
+      <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center py-3">
         <AnimatePresence mode="wait">
-          {/* STATE 1: EMPTY / WAITING */}
           {state === "empty" && (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex flex-col items-center justify-center gap-1.5"
+              className="flex flex-col items-center justify-center gap-2.5"
             >
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border border-dashed border-line flex items-center justify-center text-muted/50">
-                <span className="font-heading font-black text-xl sm:text-2xl">?</span>
+              <div className="relative">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-dashed border-line bg-surface-2/30 text-muted/50 sm:h-20 sm:w-20">
+                  <span className="font-heading text-2xl font-black sm:text-3xl">?</span>
+                </div>
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-line bg-surface text-muted">
+                  <Eye className="h-2.5 w-2.5" />
+                </span>
               </div>
-              <span className="text-[11px] sm:text-xs font-medium text-muted uppercase tracking-wider">
-                {isUser ? "Choose a number" : "Opponent thinking..."}
+              <span className="text-center font-heading text-[10px] font-bold uppercase tracking-[0.14em] text-muted">
+                {isUser ? "Choose your hand" : "Reading opponent..."}
               </span>
             </motion.div>
           )}
 
-          {/* STATE 2: LOCKED IN (Hidden pick) */}
           {state === "locked" && (
             <motion.div
               key="locked"
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="flex flex-col items-center justify-center gap-1.5"
+              className="flex flex-col items-center justify-center gap-2.5"
             >
-              <div
-                className="w-12 h-12 sm:w-16 sm:h-16 rounded-full border border-line bg-surface-2 flex items-center justify-center shadow-inner"
-                style={{ borderColor: accentColor }}
-              >
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-turf/35 bg-turf/[0.07] shadow-glow sm:h-20 sm:w-20">
                 {isUser && showUserPreview && pick ? (
-                  <div className="flex flex-col items-center justify-center">
-                    <span className="font-heading font-black text-2xl sm:text-3xl tabular-nums text-chalk">
+                  <>
+                    <Hand value={pick} size={38} className="text-turf sm:hidden" />
+                    <Hand value={pick} size={48} className="hidden text-turf sm:block" />
+                    <span className="absolute -bottom-1.5 -right-1.5 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-surface bg-turf px-1 font-heading text-[10px] font-black text-ink">
                       {pick}
                     </span>
-                    <span className="text-[8px] text-turf uppercase font-bold tracking-wider">
-                      LOCKED
-                    </span>
-                  </div>
+                  </>
                 ) : (
-                  <Lock className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.2]" style={{ color: accentColor }} />
+                  <Lock className="h-6 w-6 text-turf sm:h-7 sm:w-7" strokeWidth={2.4} />
                 )}
               </div>
-              <span className="text-[11px] sm:text-xs font-semibold tracking-wider uppercase text-chalk flex items-center gap-1">
-                <Lock className="w-3 h-3" style={{ color: accentColor }} />
-                {isUser ? "Locked In" : "Opponent Locked In"}
+              <span className="flex items-center gap-1.5 rounded-full border border-turf/25 bg-turf/[0.06] px-2.5 py-1 font-heading text-[9px] font-black uppercase tracking-[0.14em] text-turf">
+                <Lock className="h-2.5 w-2.5" />
+                {isUser ? "Pick locked" : "Opponent locked"}
               </span>
             </motion.div>
           )}
 
-          {/* STATE 3: SYNC REVEAL COUNTDOWN */}
           {state === "revealing" && (
             <motion.div
               key={`revealing-${countdownNumber}`}
@@ -139,20 +144,20 @@ export const HandTile: React.FC<HandTileProps> = ({
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="flex flex-col items-center justify-center gap-1.5"
+              className="flex flex-col items-center justify-center gap-2.5"
             >
-              <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full border-2 border-amber bg-surface-2 flex items-center justify-center">
-                <span className="font-heading font-black text-3xl sm:text-4xl text-amber tabular-nums">
+              <div className="relative flex h-16 w-16 items-center justify-center rounded-full border-2 border-amber/60 bg-amber/[0.06] sm:h-20 sm:w-20">
+                <span className="absolute inset-0 animate-ping rounded-full border border-amber/20" />
+                <span className="font-heading text-3xl font-black tabular-nums text-amber sm:text-4xl">
                   {countdownNumber ?? "..."}
                 </span>
               </div>
-              <span className="text-[10px] sm:text-xs font-bold text-amber uppercase tracking-widest">
-                REVEALING
+              <span className="font-heading text-[9px] font-black uppercase tracking-[0.2em] text-amber">
+                Revealing
               </span>
             </motion.div>
           )}
 
-          {/* STATE 4: REVEALED / OUT / SCORED */}
           {(state === "revealed" || state === "out" || state === "scored") && pick !== null && (
             <motion.div
               key={`revealed-${state}-${pick}`}
@@ -161,31 +166,53 @@ export const HandTile: React.FC<HandTileProps> = ({
               transition={{ type: "spring", stiffness: 350, damping: 22 }}
               className="flex flex-col items-center justify-center gap-1.5"
             >
-              {/* Hand Icon with Mirrored Support */}
               <div
-                className={`p-1.5 sm:p-2.5 rounded-full bg-surface-2 border border-line flex items-center justify-center transition-transform hover:scale-105 ${
-                  state === "out" ? "text-ball border-ball/50" : state === "scored" ? "text-amber border-amber/50" : ""
+                className={`relative flex h-[72px] w-[72px] items-center justify-center rounded-2xl border sm:h-24 sm:w-24 ${
+                  state === "out"
+                    ? "border-ball/50 bg-ball/10 text-ball"
+                    : state === "scored"
+                    ? "border-amber/50 bg-amber/10 text-amber"
+                    : isUser
+                    ? "border-turf/35 bg-turf/[0.06] text-turf"
+                    : "border-sky/35 bg-sky/[0.06] text-sky"
                 }`}
-                style={{ color: state === "revealed" ? accentColor : undefined }}
               >
-                <Hand value={pick} size={48} mirrored={mirrored} className="sm:w-16 sm:h-16" />
+                <Hand value={pick} size={44} mirrored={mirrored} className="sm:hidden" />
+                <Hand value={pick} size={58} mirrored={mirrored} className="hidden sm:block" />
+                {state === "out" && (
+                  <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-ball text-white">
+                    <XCircle className="h-4 w-4" />
+                  </span>
+                )}
+                {state === "scored" && (
+                  <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-amber text-ink">
+                    <Sparkles className="h-3.5 w-3.5 fill-current" />
+                  </span>
+                )}
               </div>
 
-              {/* Number and Label Pill */}
               <div className="flex items-center gap-1.5">
                 <span
-                  className={`font-heading font-black text-2xl sm:text-3xl tabular-nums ${
+                  className={`font-heading text-2xl font-black tabular-nums sm:text-3xl ${
                     state === "out" ? "text-ball" : state === "scored" ? "text-amber" : "text-chalk"
                   }`}
                 >
                   {pick}
                 </span>
                 <span
-                  className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider ${
-                    state === "out" ? "text-ball font-bold" : state === "scored" ? "text-amber font-bold" : "text-muted"
+                  className={`font-heading text-[9px] font-black uppercase tracking-[0.14em] ${
+                    state === "out" ? "text-ball" : state === "scored" ? "text-amber" : "text-muted"
                   }`}
                 >
-                  {state === "out" ? "WICKET!" : state === "scored" ? (isBatting ? `+${pick} RUNS` : "DELIVERY") : isBatting ? "Runs" : "Delivery"}
+                  {state === "out"
+                    ? "Wicket!"
+                    : state === "scored"
+                    ? isBatting
+                      ? `+${pick} runs`
+                      : "Delivery"
+                    : isBatting
+                    ? "Runs"
+                    : "Delivery"}
                 </span>
               </div>
             </motion.div>
@@ -193,18 +220,31 @@ export const HandTile: React.FC<HandTileProps> = ({
         </AnimatePresence>
       </div>
 
-      {/* Footer Status Line */}
-      <div className="w-full text-center pt-2 border-t border-line text-[11px] text-muted uppercase tracking-wider font-heading">
+      <div className="relative z-10 border-t border-line/60 pt-2 text-center">
         {state === "out" ? (
-          <span className="text-ball font-bold">DISMISSED (OUT)</span>
+          <span className="font-heading text-[9px] font-black uppercase tracking-[0.16em] text-ball">
+            Dismissed
+          </span>
         ) : state === "scored" ? (
-          <span className="text-amber font-bold">SCORED +{pick}</span>
+          <span className="font-heading text-[9px] font-black uppercase tracking-[0.16em] text-amber">
+            Scored +{pick}
+          </span>
         ) : state === "revealed" && pick !== null ? (
-          <span className="text-chalk font-semibold">Played {pick}</span>
+          <span className="font-heading text-[9px] font-bold uppercase tracking-[0.16em] text-chalk/80">
+            Played {pick}
+          </span>
         ) : state === "locked" ? (
-          <span className="text-muted">Awaiting reveal</span>
+          <span className="font-heading text-[9px] font-bold uppercase tracking-[0.16em] text-muted">
+            Awaiting reveal
+          </span>
+        ) : state === "revealing" ? (
+          <span className="font-heading text-[9px] font-bold uppercase tracking-[0.16em] text-amber">
+            Balls in sync
+          </span>
         ) : (
-          <span>Turn in progress</span>
+          <span className="font-heading text-[9px] font-bold uppercase tracking-[0.16em] text-muted">
+            Turn in progress
+          </span>
         )}
       </div>
     </div>

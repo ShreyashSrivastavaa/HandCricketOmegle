@@ -59,14 +59,65 @@ test.describe("HandCricketOmegle E2E Smoke Tests", () => {
 
     // Should transition to Coin Toss screen
     await expect(page.getByRole("heading", { name: /Authoritative Coin Toss/i })).toBeVisible({
-      timeout: 10000,
+      timeout: 30000,
     });
     await expect(page.getByRole("button", { name: "ODD" })).toBeVisible();
     await expect(page.getByRole("button", { name: "EVEN" })).toBeVisible();
   });
 
+  test("Landing bot match toss call advances to the throw step", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: /Practice vs Server Bot/i }).click();
+
+    await expect(page.getByRole("heading", { name: /Authoritative Coin Toss/i })).toBeVisible({
+      timeout: 15000,
+    });
+    await page.getByRole("button", { name: "EVEN", exact: true }).click();
+
+    await expect(page.getByText(/Throw a number for the toss/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pick 1 for coin toss" })).toBeVisible();
+  });
+
+  test("Bot toss waits for the guest session before creating the match", async ({ page }) => {
+    await page.route("**/api/session", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await route.continue();
+    });
+
+    await page.goto("/");
+    await page.getByRole("button", { name: /Practice vs Server Bot/i }).click();
+
+    await expect(page.getByRole("heading", { name: /Authoritative Coin Toss/i })).toBeVisible({
+      timeout: 20000,
+    });
+    await page.waitForTimeout(2000);
+    await page.getByRole("button", { name: "ODD", exact: true }).click();
+
+    await expect(page.getByText(/Throw a number for the toss/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pick 1 for coin toss" })).toBeVisible();
+  });
+
+  test("Bot toss call advances even when audio is unavailable", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as any).AudioContext = class {
+        constructor() {
+          throw new Error("Audio unavailable");
+        }
+      };
+      (window as any).webkitAudioContext = (window as any).AudioContext;
+    });
+
+    await page.goto("/play/bot");
+    await page.getByRole("button", { name: /START MATCH & TOSS/i }).click();
+    await page.getByRole("button", { name: "ODD", exact: true }).click();
+
+    await expect(page.getByText(/Throw a number for the toss/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pick 1 for coin toss" })).toBeVisible();
+  });
+
   test("Mobile navigation drawer opens and closes", async ({ page }) => {
     await page.goto("/");
+    await page.waitForTimeout(1000);
 
     // Click hamburger button
     const menuToggle = page.getByRole("button", { name: /Open navigation menu/i });

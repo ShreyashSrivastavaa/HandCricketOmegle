@@ -42,7 +42,7 @@ export const PlayerChip: React.FC<PlayerChipProps> = ({
         className="w-7 h-7 rounded-[8px] flex items-center justify-center font-heading font-black text-xs tracking-wider border"
         style={{
           borderColor: sideColor,
-          backgroundColor: isUser ? "rgba(61, 220, 132, 0.12)" : "rgba(77, 163, 255, 0.12)",
+          backgroundColor: isUser ? "rgba(168, 60, 47, 0.1)" : "rgba(47, 95, 70, 0.1)",
           color: sideColor,
         }}
         aria-hidden="true"

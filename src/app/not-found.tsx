@@ -52,7 +52,7 @@ export default function NotFound() {
           <div className="w-full flex flex-col gap-2.5 pt-2">
             <Link
               href="/"
-              className="w-full py-3.5 px-5 rounded-xl bg-turf text-ink font-heading font-black text-base uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(61,220,132,0.3)] hover:bg-turf-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+              className="w-full py-3.5 px-5 rounded-full bg-turf text-ink font-heading font-black text-base uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_12px_30px_-18px_rgba(247,181,0,0.5)] hover:bg-turf-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
             >
               <Play className="w-4 h-4 fill-current" />
               <span>Enter 1v1 Arena</span>
@@ -60,7 +60,7 @@ export default function NotFound() {
 
             <Link
               href="/play/bot"
-              className="w-full py-3 px-5 rounded-xl bg-surface-2 border border-line text-chalk font-heading font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-surface-2/80 hover:border-turf/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
+              className="w-full py-3 px-5 rounded-full bg-surface-2 border border-line text-chalk font-heading font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-surface-2/80 hover:border-turf/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
             >
               <Bot className="w-4 h-4 text-sky" />
               <span>Practice vs Server Bot</span>
