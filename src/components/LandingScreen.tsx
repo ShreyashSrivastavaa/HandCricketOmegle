@@ -151,8 +151,8 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               className="mx-auto max-w-3xl text-center"
             >
               <motion.div variants={fadeUp}>
-                <span className="inline-flex items-center gap-2 rounded-full border border-turf/40 bg-turf/[0.08] px-4 py-1.5 font-heading text-[10px] font-bold uppercase tracking-[0.18em] text-turf shadow-[0_0_30px_-12px_rgba(247,181,0,0.55)] sm:text-[11px]">
-                  <Zap className="h-3.5 w-3.5 fill-current" />
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-turf/40 bg-turf/[0.08] px-3 py-1 font-heading text-[8px] font-bold uppercase tracking-[0.14em] text-turf shadow-[0_0_30px_-12px_rgba(247,181,0,0.55)] sm:gap-2 sm:px-4 sm:py-1.5 sm:text-[10px] sm:tracking-[0.18em] xl:text-[11px]">
+                  <Zap className="h-3 w-3 fill-current sm:h-3.5 sm:w-3.5" />
                   The Classic Game, Now Online
                 </span>
               </motion.div>

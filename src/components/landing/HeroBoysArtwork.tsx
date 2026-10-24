@@ -13,7 +13,7 @@ export function HeroBoysArtwork() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 z-0"
+      className="pointer-events-none absolute inset-0 z-20"
     >
       <div className="hero-art-mask-y absolute -left-[8%] top-0 aspect-[764/871] w-[clamp(120px,34vw,190px)] overflow-hidden opacity-60 sm:-left-[8%] sm:w-[clamp(180px,26vw,260px)] sm:opacity-75 lg:-left-[6%] lg:w-[clamp(240px,28vw,420px)] lg:opacity-100">
         <div className="hero-art-mask-right h-full w-full">
