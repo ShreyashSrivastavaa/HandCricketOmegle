@@ -39,7 +39,7 @@ interface LandingScreenProps {
   onPlayVsBot: () => void;
   onPlayWithFriend: () => void;
   onOpenRules: () => void;
-  onTestCamera?: () => void;
+  onOpenHardwareCheck?: () => void;
 }
 
 const GESTURES = [
@@ -79,9 +79,9 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onPlayVsBot,
   onPlayWithFriend,
   onOpenRules,
-  onTestCamera,
+  onOpenHardwareCheck,
 }) => {
-  const { guestName, setGuestName, mode, setMode } = useLiveMatchStore();
+  const { guestName, setGuestName, mode, setMode, isGestureMode, setIsGestureMode } = useLiveMatchStore();
 
   const fadeUp: Variants = {
     hidden: { opacity: 0, y: 18 },
@@ -191,29 +191,82 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </button>
                 <span className="h-1 w-1 shrink-0 rounded-full bg-white/20" />
-                {onTestCamera ? (
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-slate-400">
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-sky" />
+                  Camera-umpired. No signup.
+                </span>
+              </motion.div>
+            </motion.div>
+
+            {/* Play Style Distinction: Gesture Mode vs Tap Mode */}
+            <motion.div
+              variants={fadeUp}
+              className="mx-auto mt-6 max-w-xl rounded-2xl border border-line/80 bg-surface/80 p-3 sm:p-3.5 backdrop-blur-md shadow-panel"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/60 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-turf/30 bg-turf/10 text-turf">
+                    <Swords className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="font-heading text-xs font-black uppercase tracking-wider text-chalk">
+                    Choose Play Mode
+                  </span>
+                </div>
+
+                <div className="flex items-center rounded-xl border border-line bg-surface-2 p-1">
                   <button
                     type="button"
                     onClick={() => {
                       playClickSound();
-                      onTestCamera();
+                      setIsGestureMode(true);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-sky/30 bg-sky/10 px-2.5 py-1 whitespace-nowrap text-xs text-sky transition-all hover:border-turf/50 hover:bg-turf/10 hover:text-turf focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf"
-                    title="Test camera permission and hand gestures"
+                    aria-pressed={isGestureMode}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 font-heading text-[10px] font-black uppercase tracking-wider transition-all ${
+                      isGestureMode
+                        ? "bg-turf text-ink shadow-sm"
+                        : "text-muted hover:text-chalk"
+                    }`}
                   >
-                    <Camera className="h-3.5 w-3.5 shrink-0 text-turf" />
-                    <span>Camera-umpired. No signup.</span>
-                    <span className="rounded bg-turf/20 px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase text-turf">
-                      Test Camera
-                    </span>
+                    <HandIcon className="h-3.5 w-3.5" />
+                    <span>Gesture Mode</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      setIsGestureMode(false);
+                    }}
+                    aria-pressed={!isGestureMode}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 font-heading text-[10px] font-black uppercase tracking-wider transition-all ${
+                      !isGestureMode
+                        ? "bg-sky text-ink shadow-sm"
+                        : "text-muted hover:text-chalk"
+                    }`}
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Tap Mode</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Small description below the modes explaining each mode */}
+              <div className="pt-2">
+                {isGestureMode ? (
+                  <p className="flex items-center gap-1.5 text-xs text-slate-300">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-turf animate-pulse" />
+                    <span>
+                      <strong className="text-turf">Gesture Mode:</strong> Show 1–6 fingers to your webcam. Real-time AI detects your hand and locks your pick.
+                    </span>
+                  </p>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-slate-400">
-                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-sky" />
-                    Camera-umpired. No signup.
-                  </span>
+                  <p className="flex items-center gap-1.5 text-xs text-slate-300">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky" />
+                    <span>
+                      <strong className="text-sky">Tap Mode:</strong> Play by clicking 1–6 buttons on-screen or using keyboard keys 1–6. Fast, quiet, no camera required.
+                    </span>
+                  </p>
                 )}
-              </motion.div>
+              </div>
             </motion.div>
 
             <motion.div
@@ -414,18 +467,18 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               </div>
 
               <div className="relative mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-[10px] text-slate-400">
-                {onTestCamera ? (
+                {onOpenHardwareCheck ? (
                   <button
                     type="button"
                     onClick={() => {
                       playClickSound();
-                      onTestCamera();
+                      onOpenHardwareCheck();
                     }}
-                    className="flex items-center gap-1.5 text-left transition-colors hover:text-turf focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-turf"
-                    title="Test camera hardware & gestures"
+                    title="Test your webcam & hand gesture detection"
+                    className="flex items-center gap-1.5 text-slate-300 transition-colors hover:text-turf text-left"
                   >
-                    <Camera className="h-3.5 w-3.5 text-turf" />
-                    <span className="underline decoration-turf/30 underline-offset-2">Camera-umpired</span>
+                    <Camera className="h-3.5 w-3.5 text-turf shrink-0" />
+                    <span>Camera Check</span>
                   </button>
                 ) : (
                   <span className="flex items-center gap-1.5">
@@ -509,39 +562,23 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
             <div className="mt-10 grid gap-4 md:grid-cols-3">
               {[
-                { number: "01", icon: Dices, title: "Call the toss", text: "Choose odd or even, then reveal your number.", isCamera: false },
-                { number: "02", icon: Camera, title: "Show your hand", text: "The camera reads your gesture in real time.", isCamera: true },
-                { number: "03", icon: Trophy, title: "Chase the score", text: "Match the number to take a wicket.", isCamera: false },
+                { number: "01", icon: Dices, title: "Call the toss", text: "Choose odd or even, then reveal your number." },
+                { number: "02", icon: Camera, title: "Show your hand", text: "The camera reads your gesture in real time." },
+                { number: "03", icon: Trophy, title: "Chase the score", text: "Match the number to take a wicket." },
               ].map((step) => {
                 const Icon = step.icon;
                 return (
-                  <div key={step.number} className="relative flex flex-col justify-between overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
-                    <div>
-                      <div className="flex items-start justify-between">
-                        <span className="font-heading text-4xl font-black tracking-[-0.06em] text-turf/80">
-                          {step.number}
-                        </span>
-                        <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-turf/10 text-turf">
-                          <Icon className="h-5 w-5" />
-                        </span>
-                      </div>
-                      <h3 className="mt-6 font-heading text-lg font-extrabold text-white">{step.title}</h3>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">{step.text}</p>
+                  <div key={step.number} className="relative overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+                    <div className="flex items-start justify-between">
+                      <span className="font-heading text-4xl font-black tracking-[-0.06em] text-turf/80">
+                        {step.number}
+                      </span>
+                      <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-turf/10 text-turf">
+                        <Icon className="h-5 w-5" />
+                      </span>
                     </div>
-                    {step.isCamera && onTestCamera && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          playClickSound();
-                          onTestCamera();
-                        }}
-                        className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-turf transition-colors hover:text-turf-hover"
-                      >
-                        <Camera className="h-3.5 w-3.5" />
-                        <span>Test Camera Umpire</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                    <h3 className="mt-6 font-heading text-lg font-extrabold text-white">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">{step.text}</p>
                   </div>
                 );
               })}

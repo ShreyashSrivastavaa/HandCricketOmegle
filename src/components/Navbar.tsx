@@ -11,13 +11,13 @@ import {
   Menu,
   X,
   Bot,
-  Camera,
   ShieldCheck,
   Shield,
   FileText,
   Play,
   ArrowRight,
   ArrowUpRight,
+  Camera,
 } from "lucide-react";
 import { isSoundMuted, toggleSoundMute, playClickSound } from "@/lib/client/audio";
 import { subscribeToLobbyPresence } from "@/lib/client/ablyClient";
@@ -26,10 +26,14 @@ import { Hand } from "@/components/Hand";
 interface NavbarProps {
   guestName?: string;
   onOpenRules?: () => void;
-  onTestCamera?: () => void;
+  onOpenHardwareCheck?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCamera }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  guestName,
+  onOpenRules,
+  onOpenHardwareCheck,
+}) => {
   const pathname = usePathname();
   const [muted, setMuted] = useState<boolean>(false);
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -115,18 +119,6 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCa
                 How to Play
               </button>
             )}
-            {onTestCamera && (
-              <button
-                type="button"
-                onClick={() => {
-                  playClickSound();
-                  onTestCamera();
-                }}
-                className={desktopLink}
-              >
-                Camera Umpire
-              </button>
-            )}
             <Link href="/#features" className={desktopLink}>
               Features
             </Link>
@@ -151,6 +143,21 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCa
               <span className="font-heading font-black tabular-nums text-sky">{onlineCount}</span>
               <span className="hidden text-[9px] uppercase tracking-[0.14em] text-slate-400 md:inline">online</span>
             </div>
+
+            {onOpenHardwareCheck && (
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  onOpenHardwareCheck();
+                }}
+                aria-label="Camera and Gesture Check"
+                title="Camera and gesture test"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-turf/40 hover:text-turf"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+            )}
 
             <button
               type="button"
@@ -253,6 +260,20 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCa
                   <span>How To Play</span>
                 </button>
               )}
+              {onOpenHardwareCheck && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setIsMobileMenuOpen(false);
+                    onOpenHardwareCheck();
+                  }}
+                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left font-heading text-xs font-bold uppercase tracking-[0.1em] text-white transition-colors hover:border-turf/30 hover:bg-white/[0.06] hover:text-turf"
+                >
+                  <Camera className="h-4 w-4 text-turf" />
+                  <span>Camera &amp; Gestures</span>
+                </button>
+              )}
               <Link
                 href="/#features"
                 onClick={() => setIsMobileMenuOpen(false)}
@@ -261,20 +282,6 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules, onTestCa
                 <Play className="h-4 w-4 text-turf" />
                 <span>Features</span>
               </Link>
-              {onTestCamera && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    playClickSound();
-                    setIsMobileMenuOpen(false);
-                    onTestCamera();
-                  }}
-                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left font-heading text-xs font-bold uppercase tracking-[0.1em] text-white transition-colors hover:border-turf/30 hover:bg-white/[0.06] hover:text-turf sm:col-span-2"
-                >
-                  <Camera className="h-4 w-4 text-turf" />
-                  <span>Test Camera Umpire</span>
-                </button>
-              )}
             </div>
 
             <div className="mt-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] text-slate-400">

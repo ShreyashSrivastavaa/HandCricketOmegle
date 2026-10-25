@@ -25,14 +25,20 @@ export default function HomePage() {
     opponentName,
     userRole,
     isBotMatch,
+    isGestureMode,
+    setIsGestureMode,
     gameState,
     isRulesOpen,
     setIsRulesOpen,
     isReportOpen,
     setIsReportOpen,
+    playAgainWaiting,
+    seriesScore,
+    gameNumber,
     initGuestSession,
     startMatchmaking,
     cancelMatchmaking,
+    requestPlayAgain,
     submitTossCall,
     submitTossPick,
     submitTossDecision,
@@ -49,26 +55,28 @@ export default function HomePage() {
 
   return (
     <div
-      className="relative flex min-h-screen flex-col justify-between overflow-hidden bg-ink text-chalk selection:bg-turf selection:text-ink"
+      className={`relative flex flex-col justify-between overflow-hidden bg-ink text-chalk selection:bg-turf selection:text-ink ${
+        screen === "match" ? "h-[100dvh] max-h-[100dvh]" : "min-h-screen"
+      }`}
     >
       {/* Navigation Bar (visible during landing, result, and toss) */}
       {screen !== "match" && (
         <Navbar
           guestName={guestName}
           onOpenRules={() => setIsRulesOpen(true)}
-          onTestCamera={() => setIsCameraCheckOpen(true)}
+          onOpenHardwareCheck={() => setIsCameraCheckOpen(true)}
         />
       )}
 
       {/* Main Dynamic Viewport */}
-      <div className="flex w-full flex-1 flex-col justify-center">
+      <div className={`flex w-full flex-1 flex-col justify-center ${screen === "match" ? "h-full min-h-0 overflow-hidden" : ""}`}>
         {screen === "landing" && (
           <LandingScreen
-            onFindMatch={() => setIsCameraCheckOpen(true)}
+            onFindMatch={() => startMatchmaking(false)}
             onPlayVsBot={() => startMatchmaking(true)}
             onPlayWithFriend={() => setIsFriendModalOpen(true)}
             onOpenRules={() => setIsRulesOpen(true)}
-            onTestCamera={() => setIsCameraCheckOpen(true)}
+            onOpenHardwareCheck={() => setIsCameraCheckOpen(true)}
           />
         )}
 
@@ -109,9 +117,20 @@ export default function HomePage() {
             <ResultBanner
               state={gameState}
               userPlayerId={userRole}
-              onPlayAgain={() => startMatchmaking(isBotMatch)}
-              onFindNewOpponent={() => startMatchmaking(false)}
+              onPlayAgain={requestPlayAgain}
+              onFindNewOpponent={() => {
+                resetToLanding();
+                startMatchmaking(false);
+              }}
               onBackToLobby={resetToLanding}
+              playAgainWaiting={playAgainWaiting}
+              seriesScoreText={
+                gameNumber > 1 || Object.keys(seriesScore || {}).length > 0
+                  ? `Series: You ${guestId ? seriesScore[guestId] || 0 : 0} – ${
+                      Object.entries(seriesScore || {}).find(([id]) => id !== guestId)?.[1] || 0
+                    } ${opponentName || "Opponent"} (Game ${gameNumber})`
+                  : undefined
+              }
             />
           </main>
         )}
@@ -147,9 +166,10 @@ export default function HomePage() {
 
       <CameraCheckModal
         isOpen={isCameraCheckOpen}
-        initialMode="video"
+        initialMode={isGestureMode ? "video" : "game_only"}
         onReady={(selectedMode) => {
           setIsCameraCheckOpen(false);
+          setIsGestureMode(selectedMode === "video");
           startMatchmaking(false);
         }}
         onCancel={() => setIsCameraCheckOpen(false)}

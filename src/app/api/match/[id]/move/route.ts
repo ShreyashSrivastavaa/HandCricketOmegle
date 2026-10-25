@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { getOrCreateGuestSession } from "@/lib/server/session";
+import { getOrCreateGuestSession, attachSessionCookies } from "@/lib/server/session";
 import {
   handleBallMove,
   handleTossAction,
@@ -17,6 +17,7 @@ const moveSchema = z.discriminatedUnion("kind", [
     ballIndex: z.number().int().nonnegative(),
     pick: z.number().int().min(1).max(6),
     seq: z.number().int().nonnegative().optional(),
+    guestId: z.string().optional(),
   }),
   z.object({
     kind: z.literal("toss"),
@@ -35,10 +36,12 @@ const moveSchema = z.discriminatedUnion("kind", [
       }),
     ]),
     seq: z.number().int().nonnegative().optional(),
+    guestId: z.string().optional(),
   }),
   z.object({
     kind: z.literal("start_innings_2"),
     seq: z.number().int().nonnegative().optional(),
+    guestId: z.string().optional(),
   }),
 ]);
 
@@ -47,6 +50,7 @@ const simpleBallSchema = z.object({
   ballIndex: z.number().int().nonnegative(),
   pick: z.number().int().min(1).max(6),
   seq: z.number().int().nonnegative().optional(),
+  guestId: z.string().optional(),
 });
 
 export async function POST(
@@ -89,34 +93,35 @@ export async function POST(
 
   try {
     const data = parsedMove.data;
+    if (data.guestId && typeof data.guestId === "string" && data.guestId.trim().length > 3) {
+      session.guestId = data.guestId.trim();
+    }
 
+    let result: any;
     if (data.kind === "ball") {
-      const result = await handleBallMove(
+      result = await handleBallMove(
         matchId,
         session.guestId,
         data.ballIndex,
         data.pick,
         data.seq
       );
-      return NextResponse.json(result);
-    }
-
-    if (data.kind === "toss") {
-      const result = await handleTossAction(
+    } else if (data.kind === "toss") {
+      result = await handleTossAction(
         matchId,
         session.guestId,
         data.action,
         data.seq
       );
-      return NextResponse.json(result);
+    } else if (data.kind === "start_innings_2") {
+      result = await handleStartSecondInnings(matchId, session.guestId);
+    } else {
+      return NextResponse.json({ error: "Unknown action kind" }, { status: 400 });
     }
 
-    if (data.kind === "start_innings_2") {
-      const result = await handleStartSecondInnings(matchId, session.guestId);
-      return NextResponse.json(result);
-    }
-
-    return NextResponse.json({ error: "Unknown action kind" }, { status: 400 });
+    const res = NextResponse.json(result);
+    attachSessionCookies(res, session);
+    return res;
   } catch (err: any) {
     console.error(`[Match Move API] Match ${matchId} error:`, err);
     return NextResponse.json(

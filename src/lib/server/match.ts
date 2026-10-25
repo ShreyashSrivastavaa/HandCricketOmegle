@@ -755,7 +755,7 @@ export async function handleRematch(
 
     // Role alternation: in even games, p2 is toss caller; in odd games, p1 is toss caller
     const tossCallerRole = match.gameNumber % 2 !== 0 ? "p1" : "p2";
-    const nextGame = createInitialGameState(
+    let nextGame = createInitialGameState(
       match.format,
       match.player1.name,
       match.player2.name,
@@ -766,6 +766,16 @@ export async function handleRematch(
     match.currentBallMoves = {};
     match.currentBallIndex = 0;
     match.tossPicks = {};
+
+    // If bot opponent is caller in rematch, bot automatically makes its toss call and secret pick
+    if (match.isBot && tossCallerRole === "p2") {
+      const botCall = getBotTossCall();
+      nextGame = submitTossCall(nextGame, botCall);
+      const botPick = getBotTossPick();
+      match.tossPicks[match.player2.guestId] = botPick;
+      nextGame = submitTossPick(nextGame, "p2", botPick);
+      match.gameState = nextGame;
+    }
 
     await saveMatch(match);
 

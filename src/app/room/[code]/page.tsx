@@ -657,6 +657,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
               ? guestId
               : opponent?.guestId;
           s.emit("game:match_complete", { winnerGuestId });
+          webrtcManager.stopLocalStream();
+          handDetector.stop();
         }
 
         // Advance to next ball after 1.5s

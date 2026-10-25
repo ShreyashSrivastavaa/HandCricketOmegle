@@ -13,12 +13,6 @@ import { NumberPad } from "./NumberPad";
 import { TimerRing } from "./TimerRing";
 import { EmojiReactions } from "./EmojiReactions";
 import {
-  BallIncomingCountdownBadge,
-  CameraDetectionPill,
-  BallIncomingStatusPanel,
-  type CountdownStage,
-} from "./BallIncomingCountdown";
-import {
   Flag,
   LogOut,
   AlertTriangle,
@@ -36,10 +30,12 @@ import {
   Sparkles,
   ShieldCheck,
   Hand,
+  Lock,
   Check,
   Wifi,
   Radio,
   Swords,
+  Zap,
 } from "lucide-react";
 import { playClickSound, playBoundarySound } from "@/lib/client/audio";
 
@@ -49,6 +45,8 @@ export const LiveMatchScreen: React.FC = () => {
     userRole,
     opponentName,
     isBotMatch,
+    isGestureMode,
+    setIsGestureMode,
     userPick,
     isUserLocked,
     opponentPick,
@@ -69,11 +67,12 @@ export const LiveMatchScreen: React.FC = () => {
     setIsReportOpen,
   } = useLiveMatchStore();
 
-  const [useTapMode, setUseTapMode] = useState<boolean>(false);
+  const useTapMode = !isGestureMode;
+  const setUseTapMode = (tap: boolean) => setIsGestureMode(!tap);
   const [tapToLock, setTapToLock] = useState<boolean>(true);
   const [selectedNum, setSelectedNum] = useState<number | null>(null);
 
-  const [isCameraOn, setIsCameraOn] = useState<boolean>(webrtcManager.isCameraEnabled);
+  const [isCameraOn, setIsCameraOn] = useState<boolean>(() => isGestureMode && webrtcManager.isCameraEnabled);
   const [isMicOn, setIsMicOn] = useState<boolean>(webrtcManager.isMicEnabled);
   const [isOpponentBlurred, setIsOpponentBlurred] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -90,11 +89,12 @@ export const LiveMatchScreen: React.FC = () => {
 
   const [milestoneText, setMilestoneText] = useState<string | null>(null);
 
-  // Ball incoming countdown state machine (3 -> 2 -> 1 -> throw)
-  const [roundStage, setRoundStage] = useState<CountdownStage>("countdown");
-  const [ballCountdownNumber, setBallCountdownNumber] = useState<number | null>(3);
-  const hasSubmittedThisBallRef = useRef<boolean>(false);
-  const roundStartTimeRef = useRef<number>(Date.now());
+  // Automatically reset manual number selection when a delivery finishes or pick is cleared
+  useEffect(() => {
+    if (!isUserLocked && userPick === null) {
+      setSelectedNum(null);
+    }
+  }, [isUserLocked, userPick, gameState?.innings1?.balls, gameState?.innings2?.balls, gameState?.phase]);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -113,79 +113,71 @@ export const LiveMatchScreen: React.FC = () => {
     }
   }, [gameState?.currentInnings, gameState?.innings1?.score, gameState?.innings2?.score]);
 
-  const attachLocalStream = (videoEl: HTMLVideoElement | null) => {
-    (localVideoRef as React.MutableRefObject<HTMLVideoElement | null>).current = videoEl;
-    if (videoEl) {
-      const stream = webrtcManager.getLocalStream();
-      if (stream && videoEl.srcObject !== stream) {
-        videoEl.srcObject = stream;
-        videoEl.play().catch(() => {});
-      }
-    }
-  };
-
-  const attachRemoteStream = (videoEl: HTMLVideoElement | null) => {
-    (remoteVideoRef as React.MutableRefObject<HTMLVideoElement | null>).current = videoEl;
-    if (videoEl) {
-      const stream = webrtcManager.getRemoteStream();
-      if (stream && videoEl.srcObject !== stream) {
-        videoEl.srcObject = stream;
-        videoEl.play().catch(() => {});
-      }
-    }
-  };
-
-  // Video Streams Attachment & Camera Initialization
   useEffect(() => {
-    let isCancelled = false;
+    let active = true;
 
     const setupCamera = async () => {
       try {
         let stream = webrtcManager.getLocalStream();
-        if (!stream && isCameraOn) {
+        if (!stream && isCameraOn && isGestureMode && gameState?.phase !== "match_ended") {
           stream = await webrtcManager.initLocalMedia();
         }
-        if (!isCancelled && localVideoRef.current && stream) {
+        if (active && localVideoRef.current && stream) {
           localVideoRef.current.srcObject = stream;
-          localVideoRef.current.play().catch(() => {});
+          try {
+            await localVideoRef.current.play();
+          } catch {}
         }
       } catch (err) {
-        console.warn("[LiveMatchScreen] Camera initialization error:", err);
-        if (!isCancelled) {
-          setIsCameraOn(false);
-        }
+        console.warn("[LiveMatch] Camera initialization skipped or denied:", err);
       }
     };
 
-    if (isCameraOn) {
+    if (isGestureMode && isCameraOn && gameState?.phase !== "match_ended") {
       setupCamera();
-    } else if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
+    } else {
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      if (!isGestureMode || gameState?.phase === "match_ended") {
+        handDetector.stop();
+        webrtcManager.stopLocalStream();
+      }
     }
 
     if (!isBotMatch) {
-      const remoteStream = webrtcManager.getRemoteStream();
-      if (remoteVideoRef.current && remoteStream) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        remoteVideoRef.current.play().catch(() => {});
-      }
-
       webrtcManager.onRemoteStream = (stream) => {
         if (remoteVideoRef.current) {
           remoteVideoRef.current.srcObject = stream;
-          remoteVideoRef.current.play().catch(() => {});
         }
       };
     }
 
     return () => {
-      isCancelled = true;
+      active = false;
+      handDetector.stop();
+      const currentPhase = useLiveMatchStore.getState().gameState?.phase;
+      const currentScreen = useLiveMatchStore.getState().screen;
+      if (currentPhase === "match_ended" || currentScreen === "result" || currentScreen === "landing") {
+        webrtcManager.stopLocalStream();
+      }
     };
-  }, [isBotMatch, isCameraOn]);
+  }, [isGestureMode, isCameraOn, isBotMatch, gameState?.phase]);
 
-  // Hand Tracker Lifecycle
+  // Automatically shut off camera and hand detector when match ends
   useEffect(() => {
-    if (useTapMode || isUserLocked || !gameState || !isCameraOn) {
+    if (gameState?.phase === "match_ended") {
+      handDetector.stop();
+      webrtcManager.stopLocalStream();
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+      setIsCameraOn(false);
+    }
+  }, [gameState?.phase]);
+
+  useEffect(() => {
+    if (useTapMode || !isCameraOn || isUserLocked || !gameState || gameState.phase === "match_ended") {
       handDetector.stop();
       return;
     }
@@ -206,8 +198,30 @@ export const LiveMatchScreen: React.FC = () => {
           setHasSuggestedTap(true);
         }
 
-        if (res.landmarks && skeletonCanvasRef.current) {
-          drawHandSkeleton(skeletonCanvasRef.current, res.landmarks, res.locked);
+        // Always update skeleton canvas — draw landmarks when present, clear when absent
+        if (skeletonCanvasRef.current) {
+          // Sync canvas resolution to the actual video dimensions for accurate overlay
+          const video = localVideoRef.current;
+          if (video && video.videoWidth > 0) {
+            const canvas = skeletonCanvasRef.current;
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+            }
+          }
+          drawHandSkeleton(skeletonCanvasRef.current, res.landmarks, isUserLocked || res.locked);
+        }
+
+        // Fast lock-in: when holding a valid gesture steady (100% progress) in Quick Lock mode
+        if (
+          tapToLock &&
+          !isUserLocked &&
+          res.progress >= 1 &&
+          res.gesture !== null &&
+          res.gesture >= 1 &&
+          res.gesture <= 6
+        ) {
+          submitBallPick(res.gesture);
         }
       };
 
@@ -217,80 +231,16 @@ export const LiveMatchScreen: React.FC = () => {
     return () => {
       handDetector.stop();
     };
-  }, [useTapMode, isUserLocked, isCameraOn, gameState?.innings1?.balls, gameState?.innings2?.balls]);
+  }, [useTapMode, isCameraOn, isUserLocked, tapToLock, gameState?.innings1?.balls, gameState?.innings2?.balls]);
 
-  // Synchronized Ball Countdown (3 -> 2 -> 1 -> Throw)
   useEffect(() => {
-    if (!gameState || !gameState.phase.startsWith("innings_") || isPaused) {
-      return;
-    }
-
-    if (outcomeText) {
-      setRoundStage("result");
-      setBallCountdownNumber(null);
-      return;
-    }
-
-    if (isUserLocked) {
-      setRoundStage("throwing");
-      setBallCountdownNumber(null);
-      return;
-    }
-
-    // New ball delivery ready: initialize 3-2-1 countdown
-    hasSubmittedThisBallRef.current = false;
-    roundStartTimeRef.current = Date.now();
-    setRoundStage("countdown");
-    setBallCountdownNumber(3);
-
-    const interval = setInterval(() => {
-      if (hasSubmittedThisBallRef.current) return;
-
-      const elapsed = Date.now() - roundStartTimeRef.current;
-
-      if (elapsed < 1000) {
-        setBallCountdownNumber(3);
-      } else if (elapsed < 2000) {
-        setBallCountdownNumber(2);
-      } else if (elapsed < 3000) {
-        setBallCountdownNumber(1);
-      } else {
-        // Countdown completed: trigger throw event!
-        setBallCountdownNumber(null);
-        setRoundStage("throwing");
-        hasSubmittedThisBallRef.current = true;
-        clearInterval(interval);
-
-        const currentGesture = detectedGesture ?? lastStableGesture;
-        const fallback = Math.floor(Math.random() * 6) + 1;
-        const throwPick =
-          useTapMode && selectedNum
-            ? selectedNum
-            : currentGesture && currentGesture >= 1 && currentGesture <= 6
-            ? currentGesture
-            : selectedNum || fallback;
-
-        submitBallPick(throwPick);
+    if (timerSeconds === 1 && !isUserLocked && !useTapMode) {
+      const pickToLock = detectedGesture ?? lastStableGesture;
+      if (pickToLock && pickToLock >= 1 && pickToLock <= 6) {
+        submitBallPick(pickToLock);
       }
-    }, 100);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [
-    gameState?.phase,
-    gameState?.currentInnings,
-    gameState?.innings1?.balls,
-    gameState?.innings2?.balls,
-    outcomeText,
-    isUserLocked,
-    isPaused,
-    useTapMode,
-    selectedNum,
-    detectedGesture,
-    lastStableGesture,
-    submitBallPick,
-  ]);
+    }
+  }, [timerSeconds, isUserLocked, useTapMode, detectedGesture, lastStableGesture, submitBallPick]);
 
   if (!gameState) return null;
 
@@ -322,20 +272,60 @@ export const LiveMatchScreen: React.FC = () => {
   const handleSkipOrLeave = () => {
     playClickSound();
     if (window.confirm("Are you sure you want to forfeit this match?")) {
-      webrtcManager.cleanup();
       forfeitCurrentMatch("Forfeited by player");
     }
   };
 
   const handleToggleCamera = async () => {
-    playClickSound();
-    const nextState = await webrtcManager.toggleCamera();
+    if (!isGestureMode) return;
+    if (!isCameraOn) {
+      let stream = webrtcManager.getLocalStream();
+      if (!stream) {
+        try {
+          stream = await webrtcManager.initLocalMedia();
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = stream;
+            await localVideoRef.current.play().catch(() => {});
+          }
+        } catch (e) {
+          console.warn("[LiveMatch] Camera access denied:", e);
+        }
+      }
+    }
+    const nextState = webrtcManager.toggleCamera();
     setIsCameraOn(nextState);
-    if (nextState && localVideoRef.current) {
-      const stream = webrtcManager.getLocalStream();
-      if (stream) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(() => {});
+  };
+
+  const handleSetGestureMode = async (enableGesture: boolean) => {
+    if (enableGesture === isGestureMode) return;
+    playClickSound();
+    setIsGestureMode(enableGesture);
+    if (!enableGesture) {
+      // Switching to Tap Mode:
+      // Immediately stop hand detector, turn off camera, and release local stream so hardware light turns off
+      handDetector.stop();
+      setIsCameraOn(false);
+      webrtcManager.toggleCamera(false);
+      webrtcManager.stopLocalStream();
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+    } else {
+      // Switching to Gesture Mode:
+      // Turn camera on and acquire local media
+      setIsCameraOn(true);
+      webrtcManager.toggleCamera(true);
+      try {
+        let stream = webrtcManager.getLocalStream();
+        if (!stream) {
+          stream = await webrtcManager.initLocalMedia();
+        }
+        if (localVideoRef.current && stream) {
+          localVideoRef.current.srcObject = stream;
+          await localVideoRef.current.play().catch(() => {});
+        }
+      } catch (err) {
+        console.warn("[LiveMatch] Camera access denied on mode switch:", err);
       }
     }
   };
@@ -347,21 +337,12 @@ export const LiveMatchScreen: React.FC = () => {
 
   const handleFlipCamera = async () => {
     playClickSound();
-    try {
-      await webrtcManager.flipCamera();
-      const stream = webrtcManager.getLocalStream();
-      if (localVideoRef.current && stream) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(() => {});
-      }
-    } catch (err) {
-      console.warn("[LiveMatchScreen] Flip camera error:", err);
-    }
+    await webrtcManager.flipCamera();
   };
 
   return (
     <main
-      className={`relative min-h-[100dvh] overflow-hidden bg-ink text-chalk selection:bg-turf selection:text-ink ${
+      className={`relative h-[100dvh] max-h-[100dvh] w-full overflow-hidden bg-ink text-chalk selection:bg-turf selection:text-ink ${
         screenShake ? "animate-shake" : ""
       }`}
     >
@@ -371,8 +352,8 @@ export const LiveMatchScreen: React.FC = () => {
       />
       <div className="pitch-grid pointer-events-none fixed inset-0 opacity-10" aria-hidden="true" />
 
-      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[1440px] flex-col px-2.5 pb-3 pt-2.5 sm:px-4 sm:pb-4 sm:pt-4">
-        <header className="flex flex-wrap items-center justify-between gap-2">
+      <div className="match-screen-container relative z-10 mx-auto flex h-[100dvh] max-h-[100dvh] w-full max-w-[1440px] flex-col p-2 sm:p-2.5 overflow-hidden">
+        <header className="match-header flex shrink-0 flex-wrap items-center justify-between gap-1.5 sm:gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex items-center gap-2.5">
               <span className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-turf/30 bg-gradient-to-br from-turf/20 to-sky/10 text-turf">
@@ -459,22 +440,12 @@ export const LiveMatchScreen: React.FC = () => {
           </div>
         </header>
 
-        <div className="mt-2.5">
+        <div className="mt-1.5 shrink-0">
           <ScoreBar state={gameState} userPlayerId={userRole} />
         </div>
 
-        {/* Real-time Ball Incoming Status Panel */}
-        {roundStage === "countdown" && ballCountdownNumber !== null && (
-          <div className="mt-2.5 animate-fade-up">
-            <BallIncomingStatusPanel
-              stage="countdown"
-              countdownNumber={ballCountdownNumber}
-            />
-          </div>
-        )}
-
         {opponentDisconnectSeconds !== null && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-ball/40 bg-ball/10 px-3 py-2 text-[11px] font-semibold text-ball">
+          <div className="mt-1.5 shrink-0 flex items-center justify-between gap-2 rounded-xl border border-ball/40 bg-ball/10 px-3 py-1.5 text-[11px] font-semibold text-ball">
             <div className="flex items-center gap-2">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               <span>Opponent connection lost. Waiting for reconnect...</span>
@@ -486,35 +457,35 @@ export const LiveMatchScreen: React.FC = () => {
         )}
 
         {milestoneText && (
-          <div className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-amber/40 bg-amber px-3 py-2 font-heading text-sm font-black uppercase text-ink shadow-[0_0_40px_-10px_rgba(247,181,0,0.5)] animate-fade-up">
-            <Sparkles className="h-4 w-4 fill-current" />
+          <div className="mt-1.5 shrink-0 flex items-center justify-center gap-2 rounded-xl border border-amber/40 bg-amber px-3 py-1.5 font-heading text-xs font-black uppercase text-ink shadow-[0_0_40px_-10px_rgba(247,181,0,0.5)] animate-fade-up">
+            <Sparkles className="h-3.5 w-3.5 fill-current" />
             <span>{milestoneText}</span>
-            <Sparkles className="h-4 w-4 fill-current" />
+            <Sparkles className="h-3.5 w-3.5 fill-current" />
           </div>
         )}
 
         {hasSuggestedTap && !useTapMode && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-xl border border-sky/30 bg-sky/10 px-3 py-2 text-[11px] text-sky">
+          <div className="mt-1.5 shrink-0 flex items-center justify-between gap-2 rounded-xl border border-sky/30 bg-sky/10 px-3 py-1.5 text-[10px] text-sky">
             <span>Hand gesture not detected. Tap a number below to play.</span>
             <button
               type="button"
               onClick={() => setUseTapMode(true)}
-              className="shrink-0 rounded-md bg-sky px-2 py-1 font-heading text-[9px] font-black uppercase tracking-wider text-ink"
+              className="shrink-0 rounded-md bg-sky px-2 py-0.5 font-heading text-[8px] font-black uppercase tracking-wider text-ink"
             >
               Use taps
             </button>
           </div>
         )}
 
-        <div className="mt-2.5 grid flex-1 gap-2.5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="match-live-grid mt-1.5 flex-1 min-h-0 grid gap-2 lg:grid-cols-[minmax(0,1fr)_310px] xl:grid-cols-[minmax(0,1fr)_340px]">
           <section
-            className="relative flex min-h-[300px] flex-col overflow-hidden rounded-[26px] border border-line bg-[#071021] shadow-panel sm:min-h-[380px] lg:min-h-0"
+            className="relative flex flex-col h-full min-h-0 overflow-hidden rounded-2xl border border-line bg-[#071021] shadow-panel"
             aria-label="Hand Cricket Live Video Arena"
           >
             <div className="relative flex-1 overflow-hidden">
               {!isBotMatch ? (
                 <video
-                  ref={attachRemoteStream}
+                  ref={remoteVideoRef}
                   autoPlay
                   playsInline
                   className={`h-full w-full object-cover transition-all duration-300 ${
@@ -607,13 +578,6 @@ export const LiveMatchScreen: React.FC = () => {
                       {revealCountdown}
                     </span>
                   </div>
-                ) : ballCountdownNumber !== null ? (
-                  <div className="flex flex-col items-center gap-3 animate-fade-up">
-                    <BallIncomingCountdownBadge countdownNumber={ballCountdownNumber} stage={roundStage} />
-                    <div className="rounded-xl border-2 border-black bg-[#FFD600] px-4 py-1.5 font-heading text-xs font-black uppercase text-black shadow-[3px_3px_0px_#000]">
-                      BALL INCOMING · THROW ON 1
-                    </div>
-                  </div>
                 ) : isBotMatch ? (
                   <div className="flex flex-col items-center gap-2.5">
                     <div className="relative">
@@ -660,19 +624,21 @@ export const LiveMatchScreen: React.FC = () => {
                 ) : (
                   <div className="rounded-xl border border-amber/35 bg-surface/90 px-4 py-2 text-center backdrop-blur-md">
                     <span className="block font-heading text-[10px] font-black uppercase tracking-[0.16em] text-amber">
-                      Show your number
+                      {isGestureMode ? "Show your number" : "Select your number"}
                     </span>
-                    <span className="text-[10px] text-muted">Hand to camera or tap 1–6</span>
+                    <span className="text-[10px] text-muted">
+                      {isGestureMode ? "Hand to camera or tap 1–6" : "Tap 1–6 buttons below or press keys 1–6"}
+                    </span>
                   </div>
                 )}
               </div>
 
-              {(isCameraOn || !isBotMatch) && (
+              {isGestureMode && (
                 <div className="absolute bottom-3 right-2.5 z-20 w-24 overflow-hidden rounded-xl border border-line/70 bg-[#050b16] shadow-2xl sm:w-32 lg:w-36">
                   {isCameraOn ? (
                     <div className="relative aspect-[4/3] w-full">
                       <video
-                        ref={attachLocalStream}
+                        ref={localVideoRef}
                         autoPlay
                         playsInline
                         muted
@@ -680,19 +646,26 @@ export const LiveMatchScreen: React.FC = () => {
                       />
                       <canvas
                         ref={skeletonCanvasRef}
-                        width={320}
-                        height={240}
-                        className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+                        className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
                       />
-                      {/* Detection status pill on camera feed */}
-                      <div className="absolute left-1 top-1 z-20">
-                        <CameraDetectionPill
-                          detectedGesture={detectedGesture}
-                          isTapMode={useTapMode}
-                          selectedNum={selectedNum}
-                          isLocked={isUserLocked}
-                          userPick={userPick}
-                        />
+                      <div className="absolute left-1 top-1 z-10">
+                        {isLoadingModel ? (
+                          <span className="rounded bg-black/65 px-1 py-0.5 font-mono text-[7px] text-white/70">
+                            Loading tracker
+                          </span>
+                        ) : isUserLocked ? (
+                          <span className="rounded bg-turf px-1 py-0.5 font-mono text-[7px] font-bold uppercase text-ink">
+                            Locked {userPick}
+                          </span>
+                        ) : detectedGesture !== null ? (
+                          <span className="rounded bg-amber px-1 py-0.5 font-mono text-[7px] font-bold uppercase text-ink">
+                            {detectedGesture} · {Math.round(gestureProgress * 100)}%
+                          </span>
+                        ) : (
+                          <span className="rounded bg-black/65 px-1 py-0.5 font-mono text-[7px] text-white/70">
+                            Find hand
+                          </span>
+                        )}
                       </div>
                     </div>
                   ) : (
@@ -707,16 +680,31 @@ export const LiveMatchScreen: React.FC = () => {
               )}
 
               <div className="absolute bottom-3 left-2.5 z-20 flex items-center gap-1 rounded-xl border border-line/70 bg-surface/90 p-1 backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={handleToggleCamera}
-                  title={isCameraOn ? "Turn camera off" : "Turn camera on"}
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-                    isCameraOn ? "bg-surface-2 text-chalk hover:text-turf" : "bg-surface text-muted hover:text-chalk"
-                  }`}
-                >
-                  {isCameraOn ? <Camera className="h-3.5 w-3.5" /> : <CameraOff className="h-3.5 w-3.5" />}
-                </button>
+                {isGestureMode && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleToggleCamera}
+                      title={isCameraOn ? "Turn camera off" : "Turn camera on"}
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
+                        isCameraOn ? "bg-surface-2 text-chalk hover:text-turf" : "bg-surface text-muted hover:text-chalk"
+                      }`}
+                    >
+                      {isCameraOn ? <Camera className="h-3.5 w-3.5" /> : <CameraOff className="h-3.5 w-3.5" />}
+                    </button>
+
+                    {isCameraOn && (
+                      <button
+                        type="button"
+                        onClick={handleFlipCamera}
+                        title="Flip Camera"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted transition-colors hover:text-turf"
+                      >
+                        <RotateCw className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </>
+                )}
 
                 {!isBotMatch && (
                   <button
@@ -731,30 +719,16 @@ export const LiveMatchScreen: React.FC = () => {
                   </button>
                 )}
 
-                {isCameraOn && (
-                  <button
-                    type="button"
-                    onClick={handleFlipCamera}
-                    title="Flip Camera"
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface text-muted transition-colors hover:text-turf"
-                  >
-                    <RotateCw className="h-3.5 w-3.5" />
-                  </button>
-                )}
-
                 <button
                   type="button"
-                  onClick={() => {
-                    playClickSound();
-                    setUseTapMode(!useTapMode);
-                  }}
-                  title={useTapMode ? "Switch to gesture mode" : "Switch to tap mode"}
-                  className={`flex h-7 items-center gap-1 rounded-lg px-2 font-heading text-[8px] font-black uppercase tracking-wider transition-colors ${
-                    useTapMode ? "bg-sky text-ink" : "bg-surface text-turf hover:bg-turf/15"
+                  onClick={() => handleSetGestureMode(!isGestureMode)}
+                  title={isGestureMode ? "Gesture Mode active. Click to switch to Tap Mode." : "Tap Mode active. Click to switch to Gesture Mode."}
+                  className={`flex h-7 items-center gap-1.5 rounded-lg px-2.5 font-heading text-[9px] font-black uppercase tracking-wider transition-colors ${
+                    isGestureMode ? "bg-turf/20 text-turf border border-turf/40" : "bg-sky text-ink"
                   }`}
                 >
-                  <Hand className="h-3 w-3" />
-                  <span>{useTapMode ? "Tap" : "Gesture"}</span>
+                  {isGestureMode ? <Hand className="h-3 w-3" /> : <Zap className="h-3 w-3 fill-current" />}
+                  <span>{isGestureMode ? "Gesture" : "Tap"}</span>
                 </button>
 
                 {!isBotMatch && (
@@ -773,13 +747,13 @@ export const LiveMatchScreen: React.FC = () => {
 
               <div className="absolute bottom-3 left-1/2 z-20 hidden -translate-x-1/2 items-center gap-1.5 rounded-full border border-line/60 bg-surface/85 px-2.5 py-1 text-[8px] uppercase tracking-[0.14em] text-muted backdrop-blur-md sm:flex">
                 <Radio className="h-2.5 w-2.5 text-ball" />
-                Live feed · P2P encrypted
+                {isGestureMode ? "Live feed · P2P encrypted" : "Tap Mode · Camera Off"}
               </div>
             </div>
           </section>
 
-          <aside className="flex flex-col gap-2.5">
-            <div className="grid grid-cols-2 gap-2.5">
+          <aside className="match-sidebar flex flex-col gap-1.5 sm:gap-2.5 h-full min-h-0 overflow-hidden">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 flex-1 min-h-0">
               <HandTile
                 playerName="You"
                 isUser
@@ -800,8 +774,8 @@ export const LiveMatchScreen: React.FC = () => {
             </div>
 
             {isEndless ? (
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-line/70 bg-surface/70 px-3 py-2">
-                <div className="flex items-center gap-3 text-[10px] text-muted">
+              <div className="shrink-0 flex items-center justify-between gap-2 rounded-xl border border-line/70 bg-surface/70 px-2.5 py-1 sm:py-1.5">
+                <div className="flex items-center gap-2.5 text-[9px] text-muted">
                   <span>
                     Balls <strong className="font-mono text-chalk">{activeInnings.balls}</strong>
                   </span>
@@ -811,27 +785,113 @@ export const LiveMatchScreen: React.FC = () => {
                     {(activeInnings.strikeStreak || 0) >= 3 && <Flame className="h-3 w-3 fill-current text-amber" />}
                   </span>
                 </div>
-                <span className="font-heading text-[9px] font-black uppercase tracking-wider text-turf">
+                <span className="font-heading text-[8px] font-black uppercase tracking-wider text-turf">
                   {isChasing ? `${runsNeeded} needed` : "Bat until out"}
                 </span>
               </div>
             ) : (
-              <BallStrip
-                currentOver={activeInnings.currentOver}
-                overIndex={currentOverIndex}
-                maxOvers={gameState.format.maxOvers}
-              />
+              <div className="shrink-0">
+                <BallStrip
+                  currentOver={activeInnings.currentOver}
+                  overIndex={currentOverIndex}
+                  maxOvers={gameState.format.maxOvers}
+                />
+              </div>
             )}
 
-            <div className="relative overflow-hidden rounded-2xl border border-line/70 bg-surface/70 p-2.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="match-delivery-panel shrink-0 relative overflow-hidden rounded-xl sm:rounded-2xl border border-line/70 bg-surface/80 p-2 sm:p-2.5">
+              <div className="mb-1 flex items-center justify-between gap-1.5 sm:gap-2">
                 <div className="flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${isUserLocked ? "bg-turf" : "animate-pulse bg-amber"}`} />
-                  <span className="font-heading text-[9px] font-black uppercase tracking-[0.14em] text-muted">
-                    Your delivery
+                  <span className="font-heading text-[10px] font-black uppercase tracking-[0.14em] text-chalk">
+                    {isUserLocked ? "Pick locked · get ready" : "Your delivery"}
                   </span>
                 </div>
-                <span className="flex items-center gap-1 text-[8px] uppercase tracking-[0.12em] text-muted">
+
+                <div className="flex items-center gap-1.5">
+                  {/* Mode switcher with 2 clear options */}
+                  <div
+                    className="flex items-center rounded-lg border border-line bg-surface-2/80 p-0.5"
+                    role="group"
+                    aria-label="Gameplay mode switcher"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSetGestureMode(true)}
+                      aria-pressed={isGestureMode}
+                      title="Gesture Mode: Show 1–6 fingers to camera"
+                      className={`flex items-center gap-1 rounded-md px-1.5 sm:px-2 py-0.5 font-heading text-[8px] sm:text-[9px] font-black uppercase tracking-wider transition-all ${
+                        isGestureMode
+                          ? "bg-turf text-ink shadow-sm"
+                          : "text-muted hover:text-chalk"
+                      }`}
+                    >
+                      <Hand className="h-2.5 w-2.5" />
+                      <span>Gesture</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetGestureMode(false)}
+                      aria-pressed={!isGestureMode}
+                      title="Tap Mode: Click 1–6 buttons or use keyboard"
+                      className={`flex items-center gap-1 rounded-md px-1.5 sm:px-2 py-0.5 font-heading text-[8px] sm:text-[9px] font-black uppercase tracking-wider transition-all ${
+                        !isGestureMode
+                          ? "bg-sky text-ink shadow-sm"
+                          : "text-muted hover:text-chalk"
+                      }`}
+                    >
+                      <Zap className="h-2.5 w-2.5" />
+                      <span>Tap</span>
+                    </button>
+                  </div>
+
+                  {!tapToLock && (selectedNum || userPick) && !isUserLocked && userTileState === "empty" && (
+                    <button
+                      type="button"
+                      onClick={handleConfirmLock}
+                      className="flex items-center gap-1 rounded-full border border-turf/50 bg-turf px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-ink transition-transform hover:scale-105 active:scale-95 shadow-glow"
+                      title="Lock in selected pick"
+                    >
+                      <Lock className="h-2.5 w-2.5 stroke-[2.5]" />
+                      Lock {selectedNum || userPick}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setTapToLock(!tapToLock)}
+                    aria-label={`Toggle Tap to Lock. Currently ${tapToLock ? "Enabled" : "Disabled"}`}
+                    title="Toggle instant lock mode"
+                    className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider transition-colors ${
+                      tapToLock
+                        ? "border-amber/40 bg-amber/10 text-amber"
+                        : "border-line bg-surface-2/50 text-muted hover:text-chalk"
+                    }`}
+                  >
+                    <Zap className={`h-2 w-2 ${tapToLock ? "fill-current" : ""}`} />
+                    {tapToLock ? "Quick" : "Confirm"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode description strip */}
+              <div className="mb-1.5 flex items-center justify-between text-[8px] text-slate-300">
+                {isGestureMode ? (
+                  <p className="flex items-center gap-1 text-slate-300 truncate">
+                    <span className="h-1 w-1 shrink-0 rounded-full bg-turf animate-pulse" />
+                    <span>
+                      <strong className="text-turf">Gesture Mode:</strong> Show 1–6 fingers to webcam • Auto-locks on hold
+                    </span>
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1 text-slate-300 truncate">
+                    <span className="h-1 w-1 shrink-0 rounded-full bg-sky" />
+                    <span>
+                      <strong className="text-sky">Tap Mode:</strong> Tap buttons below or press keys 1–6 to play
+                    </span>
+                  </p>
+                )}
+                <span className="hidden sm:inline-flex items-center gap-1 text-[8px] font-semibold uppercase tracking-wider text-muted shrink-0 ml-1">
                   <ShieldCheck className="h-2.5 w-2.5 text-turf" />
                   Secret pick
                 </span>
@@ -850,15 +910,8 @@ export const LiveMatchScreen: React.FC = () => {
                 disabled={userTileState !== "empty"}
                 tapToLock={tapToLock}
                 onToggleTapToLock={() => setTapToLock(!tapToLock)}
+                hideHeader={true}
               />
-            </div>
-
-            <div className="hidden items-center justify-between rounded-xl border border-line/50 bg-surface/40 px-3 py-1.5 text-[8px] uppercase tracking-[0.12em] text-muted sm:flex">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="h-2.5 w-2.5 text-turf" />
-                Peer-to-peer video
-              </span>
-              <span>On-device AI umpire</span>
             </div>
           </aside>
         </div>

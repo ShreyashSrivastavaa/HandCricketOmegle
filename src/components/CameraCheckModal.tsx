@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 import { webrtcManager, type MediaDeviceOption } from "@/lib/webrtc/webrtcManager";
 import { GesturePractice } from "./GesturePractice";
+import { playClickSound } from "@/lib/client/audio";
 import {
   Camera,
+  Mic,
   Video,
   Gamepad2,
   RefreshCw,
@@ -13,202 +15,195 @@ import {
   CheckCircle2,
   ShieldCheck,
   X,
-  RotateCcw,
-  Info,
-  Check,
+  Hand,
+  Zap,
+  Swords,
 } from "lucide-react";
 
 interface CameraCheckModalProps {
   isOpen: boolean;
-  initialMode?: "video" | "game_only";
+  initialMode: "video" | "game_only";
   onReady: (mode: "video" | "game_only") => void;
   onCancel: () => void;
 }
 
-interface CameraDiagnostics {
-  isApiSupported: boolean;
-  isSecureContext: boolean;
-  permissionState: "prompt" | "granted" | "denied" | "unsupported";
-  isRequestInitiated: boolean;
-  hasLocalStream: boolean;
-  videoTrackCount: number;
-  videoTrackLabel?: string;
-  isPlaybackStarted: boolean;
-}
-
 export function CameraCheckModal({
   isOpen,
-  initialMode = "video",
+  initialMode,
   onReady,
   onCancel,
 }: CameraCheckModalProps) {
   const [mode, setMode] = useState<"video" | "game_only">(initialMode);
   const [permissionState, setPermissionState] = useState<"prompt" | "granted" | "denied">("prompt");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [errorType, setErrorType] = useState<string | null>(null);
-  const [isRequesting, setIsRequesting] = useState<boolean>(false);
 
   const [videoDevices, setVideoDevices] = useState<MediaDeviceOption[]>([]);
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceOption[]>([]);
   const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>("");
-  const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>("");
 
-  const [diagnostics, setDiagnostics] = useState<CameraDiagnostics>({
-    isApiSupported: true,
-    isSecureContext: true,
-    permissionState: "prompt",
-    isRequestInitiated: false,
-    hasLocalStream: false,
-    videoTrackCount: 0,
-    isPlaybackStarted: false,
-  });
+  const [micLevel, setMicLevel] = useState<number>(0);
+  const [isMicTestActive, setIsMicTestActive] = useState<boolean>(true);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [skeletonCanvas, setSkeletonCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [liveGesture, setLiveGesture] = useState<number | null>(null);
+  const [isLoadingModel, setIsLoadingModel] = useState<boolean>(false);
+  const [tapTestNumber, setTapTestNumber] = useState<number | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const isReadyRef = useRef<boolean>(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
-  // Sync initial mode
   useEffect(() => {
     setMode(initialMode);
   }, [initialMode]);
 
-  // Refresh diagnostics from system
-  const updateDiagnostics = useCallback(async (overrides?: Partial<CameraDiagnostics>) => {
-    try {
-      const baseDiag = await webrtcManager.getCameraDiagnostics();
-      setDiagnostics((prev) => ({
-        ...prev,
-        isApiSupported: baseDiag.isApiSupported,
-        isSecureContext: baseDiag.isSecureContext,
-        permissionState: baseDiag.permissionState,
-        hasLocalStream: baseDiag.hasLocalStream,
-        videoTrackCount: baseDiag.videoTrackCount,
-        videoTrackLabel: baseDiag.videoTrackLabel,
-        ...overrides,
-      }));
-    } catch {
-      // Diagnostic check failure should never crash UI
-    }
-  }, []);
-
-  // Request camera and attach preview
-  const initDevicesAndStream = useCallback(async (vDeviceId?: string) => {
-    setErrorMessage(null);
-    setErrorType(null);
-    setIsRequesting(true);
-
-    await updateDiagnostics({ isRequestInitiated: true, isPlaybackStarted: false });
-
-    try {
-      // Direct camera-only acquisition (audio: false)
-      const stream = await webrtcManager.initLocalMedia(vDeviceId);
-      setPermissionState("granted");
-      setIsRequesting(false);
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current
-          .play()
-          .then(() => {
-            updateDiagnostics({ isPlaybackStarted: true, hasLocalStream: true });
-          })
-          .catch((err) => {
-            console.debug("[CameraCheck] Video play warning:", err);
-          });
-      }
-
-      // Enumerate available video devices
-      if (typeof navigator !== "undefined" && navigator.mediaDevices?.enumerateDevices) {
-        try {
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const vDevs = devices
-            .filter((d) => d.kind === "videoinput")
-            .map((d, i) => ({
-              deviceId: d.deviceId,
-              label: d.label || `Camera ${i + 1}`,
-            }));
-
-          setVideoDevices(vDevs);
-          if (vDevs.length > 0 && !vDeviceId) {
-            setSelectedVideoDevice(vDevs[0].deviceId);
-          }
-        } catch (e) {
-          console.debug("[CameraCheck] Device enumeration error:", e);
-        }
-      }
-
-      await updateDiagnostics({
-        permissionState: "granted",
-        hasLocalStream: true,
-      });
-    } catch (err: any) {
-      console.error("[CameraCheck] Camera access error:", err?.name, err?.message);
-      setPermissionState("denied");
-      setIsRequesting(false);
-      setErrorType(err?.name || "UnknownError");
-
-      await updateDiagnostics({
-        permissionState: "denied",
-        hasLocalStream: false,
-        isPlaybackStarted: false,
-      });
-
-      // Phase 3: Explicit contextual error handling
-      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        setErrorMessage(
-          "Camera access was denied. To enable: click the lock/camera icon in your browser URL bar, set Camera to 'Allow', and click 'Retry Camera'."
-        );
-      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        setErrorMessage(
-          "No camera detected on this device. Please connect a webcam or switch to Game Only mode."
-        );
-      } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-        setErrorMessage(
-          "Your camera is currently in use by another application (e.g. Zoom, Google Meet, OBS, or another tab). Close the other app and retry."
-        );
-      } else if (err.name === "OverconstrainedError" || err.name === "ConstraintNotSatisfiedError") {
-        setErrorMessage(
-          "Your camera does not support the requested video constraints. Retrying with simpler defaults..."
-        );
-      } else if (err.name === "SecurityError") {
-        setErrorMessage(
-          "Camera access was blocked by browser security settings or Permissions-Policy. Ensure you are on HTTPS."
-        );
-      } else if (err.name === "NotSupportedError") {
-        setErrorMessage(
-          "Your browser does not support the MediaDevices camera API. Please use a modern browser (Chrome, Edge, Safari, Firefox)."
-        );
-      } else {
-        setErrorMessage(
-          err.message ? `Hardware error: ${err.message}` : "Failed to access camera hardware."
-        );
-      }
-    }
-  }, [updateDiagnostics]);
-
   // Request permissions and initialize hardware when opened in "video" mode
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      stopAudioAnalysis();
+      if (!isReadyRef.current) {
+        webrtcManager.stopLocalStream();
+      }
+      return;
+    }
 
+    isReadyRef.current = false;
     if (mode === "video") {
       initDevicesAndStream();
     } else {
+      stopAudioAnalysis();
       webrtcManager.stopLocalStream();
-      setPermissionState("prompt");
-      setErrorMessage(null);
-      setErrorType(null);
     }
-  }, [isOpen, mode, initDevicesAndStream]);
 
-  const handleDeviceChange = (id: string) => {
-    setSelectedVideoDevice(id);
-    initDevicesAndStream(id);
+    return () => {
+      stopAudioAnalysis();
+      if (!isReadyRef.current) {
+        webrtcManager.stopLocalStream();
+      }
+    };
+  }, [isOpen, mode]);
+
+  const initDevicesAndStream = async (vDeviceId?: string, aDeviceId?: string) => {
+    setErrorMessage(null);
+    try {
+      const stream = await webrtcManager.initLocalMedia(vDeviceId, aDeviceId);
+      setPermissionState("granted");
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+
+      // Enumerate available devices
+      if (navigator.mediaDevices?.enumerateDevices) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const vDevs = devices
+          .filter((d) => d.kind === "videoinput")
+          .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` }));
+        const aDevs = devices
+          .filter((d) => d.kind === "audioinput")
+          .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Microphone ${i + 1}` }));
+
+        setVideoDevices(vDevs);
+        setAudioDevices(aDevs);
+
+        if (vDevs.length > 0 && !vDeviceId) setSelectedVideoDevice(vDevs[0].deviceId);
+        if (aDevs.length > 0 && !aDeviceId) setSelectedAudioDevice(aDevs[0].deviceId);
+      }
+
+      // Start mic level analyzer
+      startAudioAnalysis(stream);
+    } catch (err: any) {
+      console.warn("[CameraCheck] Access error", err);
+      setPermissionState("denied");
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        setErrorMessage("Camera/Microphone permission denied. Allow access in your browser settings to use Video mode, or play in Game Only mode.");
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        setErrorMessage("No camera or microphone found on this device. You can still play in Game Only mode.");
+      } else {
+        setErrorMessage(`Hardware error: ${err.message || "Failed to access devices."}`);
+      }
+    }
+  };
+
+  const startAudioAnalysis = (stream: MediaStream) => {
+    try {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (!audioTrack) return;
+
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+
+      // Unmute momentarily just for level testing inside preview if muted
+      const originalEnabled = audioTrack.enabled;
+      audioTrack.enabled = true;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const checkLevel = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        const normalized = Math.min(100, Math.round((avg / 128) * 100));
+        setMicLevel(normalized);
+
+        animFrameRef.current = requestAnimationFrame(checkLevel);
+      };
+
+      checkLevel();
+    } catch (e) {
+      console.debug("[CameraCheck] Audio analysis error", e);
+    }
+  };
+
+  const stopAudioAnalysis = () => {
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    analyserRef.current = null;
+    setMicLevel(0);
+  };
+
+  const handleDeviceChange = (type: "video" | "audio", id: string) => {
+    if (type === "video") {
+      setSelectedVideoDevice(id);
+      initDevicesAndStream(id, selectedAudioDevice);
+    } else {
+      setSelectedAudioDevice(id);
+      initDevicesAndStream(selectedVideoDevice, id);
+    }
   };
 
   const handleReady = () => {
-    // Preserve stream for transition into the match!
+    isReadyRef.current = true;
+    stopAudioAnalysis();
     onReady(mode);
   };
 
   const handleClose = () => {
-    // Release hardware when user cancels
+    stopAudioAnalysis();
     webrtcManager.stopLocalStream();
     onCancel();
   };
@@ -217,7 +212,7 @@ export function CameraCheckModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-3 backdrop-blur-md sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-md sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="camera-check-title"
@@ -240,10 +235,10 @@ export function CameraCheckModal({
                 id="camera-check-title"
                 className="font-heading text-xl font-black uppercase leading-none tracking-tight text-chalk sm:text-2xl"
               >
-                Camera Umpire Setup
+                Camera &amp; Mic Check
               </h2>
               <p className="mt-0.5 text-[11px] text-muted">
-                Test your camera &amp; hand gestures before stepping into the crease.
+                Test your hardware before stepping into the arena.
               </p>
             </div>
           </div>
@@ -253,22 +248,24 @@ export function CameraCheckModal({
               <button
                 type="button"
                 onClick={() => setMode("video")}
+                aria-pressed={mode === "video"}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-[10px] font-black uppercase tracking-wider transition-colors ${
-                  mode === "video" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
+                  mode === "video" ? "bg-turf text-ink shadow-sm" : "text-muted hover:text-chalk"
                 }`}
               >
-                <Video className="h-3.5 w-3.5" />
-                <span>Camera Umpire</span>
+                <Hand className="h-3.5 w-3.5" />
+                <span>Gesture Mode</span>
               </button>
               <button
                 type="button"
                 onClick={() => setMode("game_only")}
+                aria-pressed={mode === "game_only"}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-[10px] font-black uppercase tracking-wider transition-colors ${
-                  mode === "game_only" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
+                  mode === "game_only" ? "bg-sky text-ink shadow-sm" : "text-muted hover:text-chalk"
                 }`}
               >
-                <Gamepad2 className="h-3.5 w-3.5" />
-                <span>Game Only</span>
+                <Zap className="h-3.5 w-3.5" />
+                <span>Tap Mode</span>
               </button>
             </div>
             <button
@@ -282,7 +279,25 @@ export function CameraCheckModal({
           </div>
         </div>
 
-        {/* Modal Body */}
+        {/* Mode Distinction & Description Strip */}
+        <div className="relative z-10 border-b border-line/60 bg-surface-2/40 px-5 py-2.5 sm:px-6">
+          {mode === "video" ? (
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-turf animate-pulse" />
+              <span>
+                <strong className="text-turf">Gesture Mode (Camera):</strong> Uses your webcam to detect 1–6 hand gestures in real time. Show fingers to bowl or bat.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-sky" />
+              <span>
+                <strong className="text-sky">Tap Mode (Buttons):</strong> Play with on-screen number buttons or keyboard keys 1–6. Camera is disabled — fast, quiet, and private.
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {mode === "video" ? (
             <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
@@ -292,90 +307,61 @@ export function CameraCheckModal({
                   {permissionState === "granted" ? (
                     <>
                       <video
-                        ref={videoRef}
+                        ref={(el) => {
+                          videoRef.current = el;
+                          setVideoElement(el);
+                          if (el && !el.srcObject) {
+                            const stream = webrtcManager.getLocalStream();
+                            if (stream) {
+                              el.srcObject = stream;
+                              el.play().catch(() => {});
+                            }
+                          }
+                        }}
                         autoPlay
                         playsInline
                         muted
-                        onPlaying={() =>
-                          setDiagnostics((prev) => ({ ...prev, isPlaybackStarted: true }))
-                        }
                         className="h-full w-full -scale-x-100 object-cover"
+                      />
+                      <canvas
+                        ref={(el) => setSkeletonCanvas(el)}
+                        className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
                       />
                       <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full border border-turf/30 bg-ink/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-turf backdrop-blur-md">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-turf" />
-                        Live camera stream
+                        Live preview
                       </div>
-                      <div className="absolute bottom-2.5 left-2.5 rounded-lg border border-line bg-ink/80 px-2 py-1 font-mono text-[9px] text-muted backdrop-blur-md">
-                        Video only • No audio used
+                      <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1.5 rounded-full border border-line bg-ink/80 px-2.5 py-1 font-mono text-[9px] backdrop-blur-md">
+                        {isLoadingModel ? (
+                          <span className="text-amber">Loading tracker...</span>
+                        ) : liveGesture !== null ? (
+                          <span className="font-bold text-turf">Detected: {liveGesture}</span>
+                        ) : (
+                          <span className="text-muted">Show hand to test</span>
+                        )}
+                      </div>
+                      <div className="absolute bottom-2.5 left-2.5 rounded-lg border border-line bg-ink/80 px-2 py-1 text-[9px] text-muted backdrop-blur-md">
+                        Mic starts muted during the match
                       </div>
                     </>
                   ) : permissionState === "denied" ? (
-                    <div className="space-y-3 p-5 text-center">
-                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl border border-ball/30 bg-ball/10 text-ball">
-                        <AlertCircle className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-heading text-xs font-bold uppercase tracking-wide text-ball">
-                          {errorType || "Camera Permission Denied"}
-                        </p>
-                        <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-chalk/90">
-                          {errorMessage || "Camera access was denied by your browser."}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => initDevicesAndStream(selectedVideoDevice)}
-                          className="inline-flex items-center gap-1.5 rounded-xl bg-turf px-3.5 py-1.5 font-heading text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-turf-hover"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" />
-                          <span>Retry Camera</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setMode("game_only")}
-                          className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-2 px-3 py-1.5 font-heading text-xs font-semibold text-muted transition-colors hover:text-chalk"
-                        >
-                          <Gamepad2 className="h-3.5 w-3.5" />
-                          <span>Play Game Only</span>
-                        </button>
-                      </div>
+                    <div className="space-y-2 p-5 text-center">
+                      <AlertCircle className="mx-auto h-8 w-8 text-ball" />
+                      <p className="text-xs font-medium leading-relaxed text-ball">
+                        {errorMessage || "Camera or Microphone access was denied."}
+                      </p>
+                      <p className="text-[11px] text-muted">
+                        Enable camera permissions in your browser or switch to{" "}
+                        <strong className="text-chalk">Game Only</strong> mode.
+                      </p>
                     </div>
                   ) : (
-                    <div className="space-y-2.5 p-5 text-center">
-                      <RefreshCw className="mx-auto h-7 w-7 animate-spin text-turf" />
-                      <div>
-                        <p className="font-heading text-xs font-bold uppercase tracking-wider text-chalk">
-                          {isRequesting ? "Waiting for Browser Permission..." : "Initializing Camera..."}
-                        </p>
-                        <p className="mt-1 text-[11px] text-muted">
-                          Please click &ldquo;Allow&rdquo; in the browser prompt to activate the Camera Umpire.
-                        </p>
-                      </div>
+                    <div className="space-y-2 p-5 text-center">
+                      <RefreshCw className="mx-auto h-6 w-6 animate-spin text-turf" />
+                      <p className="text-xs text-muted">Requesting camera and microphone access...</p>
                     </div>
                   )}
                 </div>
-
-                {/* Device Selector & Controls */}
-                {permissionState === "granted" && videoDevices.length > 1 && (
-                  <div className="flex items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3 py-2">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted">
-                      Camera:
-                    </label>
-                    <select
-                      value={selectedVideoDevice}
-                      onChange={(e) => handleDeviceChange(e.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-line bg-ink px-2.5 py-1 text-xs text-chalk focus:border-turf focus:outline-none"
-                    >
-                      {videoDevices.map((d) => (
-                        <option key={d.deviceId} value={d.deviceId}>
-                          {d.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
                 {/* Privacy & Safety Policies */}
                 <div className="space-y-2 rounded-2xl border border-line bg-surface-2/60 p-3.5 text-[11px] text-muted">
@@ -402,83 +388,78 @@ export function CameraCheckModal({
                   <div className="flex items-start gap-1.5 border-t border-line/60 pt-2 text-[10px] leading-relaxed">
                     <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-turf" />
                     <span>
-                      <strong className="text-turf">Zero video storage.</strong> Hand gesture detection
-                      runs entirely inside your local browser via MediaPipe. Video is peer-to-peer.
+                      <strong className="text-turf">Zero video storage.</strong> Video and audio are
+                      strictly peer-to-peer (WebRTC). Gesture detection runs 100% locally in your
+                      browser. 18+ only.
                     </span>
                   </div>
                 </div>
-
-                {/* Lightweight Diagnostics Status (Phase 5) */}
-                <div className="rounded-xl border border-line/60 bg-surface-2/40 px-3 py-2 text-[10px]">
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setShowDiagnostics((prev) => !prev)}
-                      className="inline-flex items-center gap-1.5 font-mono text-[10px] text-muted hover:text-chalk"
-                    >
-                      <Info className="h-3 w-3 text-sky" />
-                      <span>Camera Diagnostics</span>
-                      <span className="text-[9px] text-sky">{showDiagnostics ? "(hide)" : "(show)"}</span>
-                    </button>
-                    <div className="flex items-center gap-2 font-mono text-[9px]">
-                      <span className={diagnostics.isSecureContext ? "text-turf" : "text-ball"}>
-                        {diagnostics.isSecureContext ? "HTTPS" : "INSECURE"}
-                      </span>
-                      <span>•</span>
-                      <span
-                        className={
-                          permissionState === "granted"
-                            ? "text-turf"
-                            : permissionState === "denied"
-                            ? "text-ball"
-                            : "text-amber-400"
-                        }
-                      >
-                        {permissionState.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {showDiagnostics && (
-                    <div className="mt-2 grid grid-cols-2 gap-1.5 border-t border-line/50 pt-2 font-mono text-[9px] text-muted">
-                      <div>
-                        API Supported:{" "}
-                        <span className={diagnostics.isApiSupported ? "text-turf" : "text-ball"}>
-                          {diagnostics.isApiSupported ? "YES" : "NO"}
-                        </span>
-                      </div>
-                      <div>
-                        Secure Context:{" "}
-                        <span className={diagnostics.isSecureContext ? "text-turf" : "text-ball"}>
-                          {diagnostics.isSecureContext ? "YES" : "NO"}
-                        </span>
-                      </div>
-                      <div>
-                        Stream Acquired:{" "}
-                        <span className={diagnostics.hasLocalStream ? "text-turf" : "text-muted"}>
-                          {diagnostics.hasLocalStream ? "ACTIVE" : "NONE"}
-                        </span>
-                      </div>
-                      <div>
-                        Playback:{" "}
-                        <span className={diagnostics.isPlaybackStarted ? "text-turf" : "text-muted"}>
-                          {diagnostics.isPlaybackStarted ? "PLAYING" : "STOPPED"}
-                        </span>
-                      </div>
-                      {diagnostics.videoTrackLabel && (
-                        <div className="col-span-2 truncate">
-                          Track: <span className="text-chalk">{diagnostics.videoTrackLabel}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
 
-              {/* Hand Gesture Practice Side */}
               <div className="flex flex-col gap-3">
                 {permissionState === "granted" ? (
-                  <GesturePractice videoElement={videoRef.current} />
+                  <>
+                    <div className="space-y-3 rounded-2xl border border-line bg-surface-2/60 p-3.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 font-medium text-muted">
+                          <Mic className="h-3.5 w-3.5 text-turf" />
+                          Mic input level
+                        </span>
+                        <span className="font-mono text-[11px] text-turf">{micLevel}%</span>
+                      </div>
+
+                      <div className="h-2 w-full overflow-hidden rounded-full border border-line bg-ink">
+                        <div
+                          className="h-full bg-gradient-to-r from-turf/70 to-turf transition-all duration-75"
+                          style={{ width: `${Math.min(100, micLevel * 1.5)}%` }}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2 lg:grid-cols-1">
+                        <div>
+                          <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
+                            Camera Device
+                          </label>
+                          <select
+                            value={selectedVideoDevice}
+                            onChange={(e) => handleDeviceChange("video", e.target.value)}
+                            className="w-full rounded-lg border border-line bg-ink px-2.5 py-1.5 text-xs text-chalk focus:border-turf focus:outline-none"
+                          >
+                            {videoDevices.map((d) => (
+                              <option key={d.deviceId} value={d.deviceId}>
+                                {d.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] uppercase tracking-wider text-muted">
+                            Microphone Device
+                          </label>
+                          <select
+                            value={selectedAudioDevice}
+                            onChange={(e) => handleDeviceChange("audio", e.target.value)}
+                            className="w-full rounded-lg border border-line bg-ink px-2.5 py-1.5 text-xs text-chalk focus:border-turf focus:outline-none"
+                          >
+                            {audioDevices.map((d) => (
+                              <option key={d.deviceId} value={d.deviceId}>
+                                {d.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <GesturePractice
+                      videoElement={videoElement || videoRef.current}
+                      skeletonCanvas={skeletonCanvas}
+                      onDetectionUpdate={(res) => {
+                        setLiveGesture(res.gesture);
+                        setIsLoadingModel(!!res.isLoadingModel);
+                      }}
+                    />
+                  </>
                 ) : (
                   <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface-2/40 p-6 text-center">
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-sky/25 bg-sky/10 text-sky">
@@ -486,46 +467,73 @@ export function CameraCheckModal({
                     </span>
                     <div>
                       <p className="font-heading text-sm font-black uppercase tracking-wide text-chalk">
-                        Camera Umpire Practice
+                        Privacy first
                       </p>
                       <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                        Once camera permission is granted, you can practice 1 to 6 finger gestures
-                        here with live AI recognition before entering the arena.
+                        Nothing is recorded or uploaded. Grant camera access to preview your feed,
+                        or jump straight in with Game Only mode.
                       </p>
                     </div>
-                    {permissionState === "denied" && (
-                      <button
-                        type="button"
-                        onClick={() => initDevicesAndStream(selectedVideoDevice)}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-xl bg-turf px-4 py-2 font-heading text-xs font-bold uppercase tracking-wider text-ink transition-colors hover:bg-turf-hover"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        <span>Retry Camera Access</span>
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-2 py-8 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-turf/30 bg-turf/10 text-turf">
-                <CheckCircle2 className="h-8 w-8" />
+            <div className="mx-auto flex max-w-lg flex-col items-center gap-4 px-2 py-6 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-sky/30 bg-sky/10 text-sky">
+                <Zap className="h-7 w-7" />
               </div>
               <div>
                 <h3 className="font-heading text-lg font-black uppercase tracking-wide text-chalk">
-                  Game Only Mode Selected
+                  Tap Mode Active
                 </h3>
-                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
-                  You will play using tap controls and number buttons. No camera will be requested or
-                  used.
+                <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted">
+                  No camera or microphone required. Play by clicking numbers 1–6 on-screen or pressing number keys <strong className="text-chalk">1–6</strong> on your keyboard.
                 </p>
               </div>
-              <div className="flex items-start gap-2 rounded-2xl border border-line bg-surface-2/60 p-3 text-left text-[10px] leading-relaxed text-muted">
+
+              {/* Interactive Practice Pad for Tap Mode */}
+              <div className="w-full rounded-2xl border border-line bg-surface-2/60 p-4 text-left">
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="font-heading font-bold uppercase tracking-wider text-muted">
+                    Test Number Pad (1–6)
+                  </span>
+                  {tapTestNumber !== null && (
+                    <span className="font-heading font-black text-sky">
+                      Tapped: {tapTestNumber} ✓
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-6 gap-2">
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        playClickSound();
+                        setTapTestNumber(num);
+                      }}
+                      className={`flex flex-col items-center justify-center rounded-xl border p-2 transition-all ${
+                        tapTestNumber === num
+                          ? "border-sky bg-sky/20 text-sky scale-105 shadow-glow"
+                          : "border-line bg-surface text-chalk hover:border-sky/50 hover:bg-surface-2"
+                      }`}
+                    >
+                      <span className="font-heading text-lg font-black">{num}</span>
+                      <span className="font-mono text-[8px] text-muted">key {num}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-center text-[10px] text-muted">
+                  Try tapping a number above to test your controls. In the live match, you can tap to lock instantly.
+                </p>
+              </div>
+
+              <div className="flex w-full items-start gap-2 rounded-2xl border border-line bg-surface-2/60 p-3 text-left text-[10px] leading-relaxed text-muted">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-turf" />
                 <span>
-                  <strong className="text-turf">Zero camera usage.</strong> Finger detection is
-                  disabled in this mode. You can always switch to camera mode later.
+                  <strong className="text-turf">Camera Disabled:</strong> Zero camera or microphone permissions needed. Matches with both Tap Mode and Gesture Mode players seamlessly.
                 </span>
               </div>
             </div>

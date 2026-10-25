@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { handleRematch } from "@/lib/server/match";
+import { getOrCreateGuestSession, attachSessionCookies } from "@/lib/server/session";
 
 const rematchSchema = z.object({
-  guestId: z.string().min(1),
+  guestId: z.string().optional(),
 });
 
 export async function POST(
@@ -12,18 +13,23 @@ export async function POST(
 ) {
   try {
     const { id: matchId } = await params;
-    const body = await req.json();
+    const { session } = getOrCreateGuestSession(req);
+    const body = await req.json().catch(() => ({}));
     const parsed = rematchSchema.safeParse(body);
 
-    if (!parsed.success) {
+    const effectiveGuestId = (parsed.success && parsed.data.guestId) ? parsed.data.guestId : session.guestId;
+
+    if (!effectiveGuestId) {
       return NextResponse.json(
-        { error: "Invalid request data", details: parsed.error.issues },
+        { error: "Guest ID required" },
         { status: 400 }
       );
     }
 
-    const result = await handleRematch(matchId, parsed.data.guestId);
-    return NextResponse.json(result);
+    const result = await handleRematch(matchId, effectiveGuestId);
+    const res = NextResponse.json(result);
+    attachSessionCookies(res, session);
+    return res;
   } catch (err: any) {
     console.error("[Rematch API Error]:", err);
     return NextResponse.json(

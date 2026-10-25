@@ -229,3 +229,143 @@
   }
 
 }
+
+/* Responsive Viewport Fitting for Match Screen */
+.match-live-grid {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+@media (max-height: 860px) {
+  .match-screen-container {
+    padding: 0.375rem 0.5rem !important;
+  }
+  .match-live-grid {
+    margin-top: 0.25rem !important;
+    gap: 0.375rem !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+  }
+  .match-sidebar {
+    gap: 0.375rem !important;
+  }
+  .match-hand-tile {
+    padding: 0.5rem !important;
+  }
+  .match-tile-inner {
+    padding-block: 0.25rem !important;
+  }
+  .match-tile-box {
+    height: 3rem !important;
+    width: 3rem !important;
+  }
+  .match-tile-box svg {
+    max-height: 75% !important;
+    max-width: 75% !important;
+  }
+  .match-ball-strip {
+    padding-block: 0.25rem !important;
+  }
+  .match-delivery-panel {
+    padding: 0.375rem !important;
+  }
+  .match-number-pad-button {
+    min-height: 48px !important;
+  }
+  .match-footer-note {
+    display: none !important;
+  }
+}
+
+@media (max-height: 760px) {
+  .match-screen-container {
+    padding: 0.25rem 0.5rem !important;
+  }
+  .match-scorebar {
+    border-radius: 0.75rem !important;
+  }
+  .match-scorebar-header {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+  .match-scorebar-main {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+  .match-scorebar-text {
+    font-size: 1.625rem !important;
+  }
+  .match-hand-tile {
+    padding: 0.375rem 0.5rem !important;
+    border-radius: 0.75rem !important;
+  }
+  .match-tile-box {
+    height: 2.5rem !important;
+    width: 2.5rem !important;
+  }
+  .match-tile-box svg {
+    max-height: 70% !important;
+    max-width: 70% !important;
+  }
+  .match-tile-inner {
+    padding-block: 0.125rem !important;
+  }
+  .match-delivery-panel {
+    padding: 0.375rem !important;
+    border-radius: 0.75rem !important;
+  }
+  .match-number-pad-button {
+    min-height: 42px !important;
+    padding: 0.25rem !important;
+    border-radius: 0.625rem !important;
+  }
+  .match-number-pad-button svg {
+    height: 18px !important;
+    width: 18px !important;
+  }
+  .match-confirm-btn {
+    min-height: 32px !important;
+    height: 2rem !important;
+    font-size: 0.6875rem !important;
+    padding-block: 0.25rem !important;
+  }
+}
+
+@media (max-height: 660px) {
+  .match-screen-container {
+    padding: 0.125rem 0.375rem !important;
+  }
+  .match-header {
+    padding-block: 0.125rem !important;
+  }
+  .match-scorebar-header {
+    padding-top: 0.125rem !important;
+    padding-bottom: 0.125rem !important;
+    font-size: 0.5rem !important;
+  }
+  .match-scorebar-main {
+    padding-top: 0.125rem !important;
+    padding-bottom: 0.125rem !important;
+  }
+  .match-scorebar-text {
+    font-size: 1.375rem !important;
+  }
+  .match-hand-tile {
+    padding: 0.25rem 0.375rem !important;
+  }
+  .match-tile-box {
+    height: 2rem !important;
+    width: 2rem !important;
+  }
+  .match-number-pad-button {
+    min-height: 36px !important;
+    padding: 0.125rem !important;
+  }
+  .match-number-pad-button svg {
+    height: 15px !important;
+    width: 15px !important;
+  }
+  .match-confirm-btn {
+    min-height: 28px !important;
+    height: 1.75rem !important;
+    font-size: 0.625rem !important;
+  }
+}

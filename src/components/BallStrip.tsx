@@ -19,7 +19,7 @@ export const BallStrip: React.FC<BallStripProps> = ({
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface/70 px-2.5 py-1.5 backdrop-blur-sm ${className}`}
+      className={`match-ball-strip flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-surface/70 px-2.5 py-1.5 backdrop-blur-sm ${className}`}
       aria-label={`Over ${overIndex + 1} of ${maxOvers} deliveries`}
     >
       <div className="flex shrink-0 items-center gap-1.5">

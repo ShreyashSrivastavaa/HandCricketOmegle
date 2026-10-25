@@ -235,11 +235,17 @@ describe("WebRTC Signaling, Safety Store, and Matchmaker Tests", () => {
         client2.on("match:found", resolve);
       });
 
+      const client1WaitingPromise = new Promise<void>((resolve) => {
+        client1.once("queue:waiting", () => resolve());
+      });
+
       client1.emit("queue:join", {
         guestId: "user_1",
         queueType: "video",
         ageConfirmed: true,
       });
+
+      await client1WaitingPromise;
 
       client2.emit("queue:join", {
         guestId: "user_2",

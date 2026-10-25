@@ -138,6 +138,18 @@ describe("Show to Camera Gesture Lock-in & Stability Tests", () => {
       expect(classifyHandLandmarks(fixture6)).toBe(6);
     });
 
+    it("classifies Gesture 4 accurately even with loose thumb", () => {
+      const fixture4 = createHandFixture({
+        thumb: false,
+        index: true,
+        middle: true,
+        ring: true,
+        pinky: true,
+      });
+      fixture4[4] = { x: 0.38, y: 0.70, z: 0 };
+      expect(classifyHandLandmarks(fixture4)).toBe(4);
+    });
+
     it("returns null for ambiguous / unsupported gestures (e.g. Rock on / Horns)", () => {
       const horns = createHandFixture({
         thumb: false,

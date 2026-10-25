@@ -340,6 +340,18 @@ describe("Finger Counting & Landmark Classification", () => {
       expect(flickerRes.currentCandidate).toBe(5);
     });
 
+    it("recognizes Gesture 4 even when thumb is slightly loose/relaxed near palm", () => {
+      const four = createHandFixture({
+        thumb: false,
+        index: true,
+        middle: true,
+        ring: true,
+        pinky: true,
+      });
+      four[4] = { x: 0.38, y: 0.70, z: 0 };
+      expect(classifyHandLandmarks(four)).toBe(4);
+    });
+
     it("resets frame count if hand disappears (null detection)", () => {
       const t = 1000;
       stabilizer.update(1, t);

@@ -18,6 +18,7 @@ import {
 import type { HandTileState } from "@/components/HandTile";
 import type { FloatingReaction } from "@/components/EmojiReactions";
 import { webrtcManager } from "../webrtc/webrtcManager";
+import { handDetector } from "../gesture/handDetector";
 
 export type AppScreen = "landing" | "searching" | "toss" | "match" | "innings_break" | "result";
 
@@ -83,10 +84,16 @@ interface LiveMatchStore {
   isReportOpen: boolean;
   setIsReportOpen: (open: boolean) => void;
 
+  // Rematch / Series State
+  playAgainWaiting: boolean;
+  seriesScore: { [guestId: string]: number };
+  gameNumber: number;
+
   // Actions
   initGuestSession: () => Promise<void>;
   startMatchmaking: (playVsBot?: boolean) => Promise<void>;
   cancelMatchmaking: () => Promise<void>;
+  requestPlayAgain: () => Promise<void>;
   submitTossCall: (call: "odd" | "even") => Promise<void>;
   submitTossPick: (pick: number) => Promise<void>;
   submitTossDecision: (decision: "bat" | "bowl") => Promise<void>;
@@ -268,6 +275,8 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         }
 
         if (latestState.phase === "match_ended") {
+          webrtcManager.stopLocalStream();
+          handDetector.stop();
           set({ screen: "result", outcomeText: null });
         } else if (latestState.phase === "innings_break") {
           set({ screen: "innings_break", outcomeText: null });
@@ -331,12 +340,6 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
             clearDisconnectTimer();
           }
         });
-
-        // Set up WebRTC peer session over Ably for multiplayer video
-        const isInitiator = get().userRole === "p1";
-        webrtcManager.startAblyPeerSession(channel, guestId, isInitiator).catch((err) => {
-          console.warn("[LiveMatchStore] Failed to start Ably WebRTC peer session:", err);
-        });
       }
 
       // Ball resolved event
@@ -364,8 +367,46 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
       channel.subscribe("toss-decision-submitted", (msg: any) => {
         const { gameState } = msg.data;
-        set({ gameState, screen: "match" });
+        set({
+          gameState,
+          screen: "match",
+          userPick: null,
+          isUserLocked: false,
+          opponentPick: null,
+          opponentTileState: "empty",
+          userTileState: "empty",
+          outcomeText: null,
+          isOutcomeWicket: false,
+          currentBallIndex: 0,
+        });
         startBallTimer();
+      });
+
+      // Rematch / Series start
+      channel.subscribe("match-rematch-start", (msg: any) => {
+        isResolvingBall = false;
+        clearBallTimer();
+        clearDisconnectTimer();
+        const { gameState, seriesScore, gameNumber } = msg.data;
+        set({
+          playAgainWaiting: false,
+          gameState,
+          screen: "toss",
+          userPick: null,
+          isUserLocked: false,
+          opponentPick: null,
+          opponentTileState: "empty",
+          userTileState: "empty",
+          outcomeText: null,
+          isOutcomeWicket: false,
+          currentBallIndex: 0,
+          timerSeconds: 8,
+          isTimerActive: false,
+          revealCountdown: null,
+          activeReactions: [],
+          seriesScore: seriesScore || {},
+          gameNumber: gameNumber || 1,
+        });
       });
 
       // Second innings started
@@ -387,6 +428,8 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       channel.subscribe("match-forfeited", (msg: any) => {
         clearBallTimer();
         clearDisconnectTimer();
+        webrtcManager.stopLocalStream();
+        handDetector.stop();
         set({
           gameState: msg.data.gameState,
           screen: "result",
@@ -450,6 +493,8 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
                   if (data.gameState.phase === "innings_break" && localState?.phase !== "innings_break") {
                     set({ gameState: data.gameState, screen: "innings_break" });
                   } else if (data.gameState.phase === "match_ended" && localState?.phase !== "match_ended") {
+                    webrtcManager.stopLocalStream();
+                    handDetector.stop();
                     set({ gameState: data.gameState, screen: "result" });
                   }
                 } else if (currentScreen === "innings_break") {
@@ -505,8 +550,13 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     isVideoCallActive: true,
     setIsVideoCallActive: (isVideoCallActive) => set({ isVideoCallActive }),
 
-    isGestureMode: true,
-    setIsGestureMode: (isGestureMode) => set({ isGestureMode }),
+    isGestureMode: typeof window !== "undefined" ? localStorage.getItem("hc_play_mode") !== "tap" : true,
+    setIsGestureMode: (isGestureMode) => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("hc_play_mode", isGestureMode ? "gesture" : "tap");
+      }
+      set({ isGestureMode });
+    },
 
     isPaused: false,
     togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
@@ -540,6 +590,10 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     setIsRulesOpen: (isRulesOpen) => set({ isRulesOpen }),
     isReportOpen: false,
     setIsReportOpen: (isReportOpen) => set({ isReportOpen }),
+
+    playAgainWaiting: false,
+    seriesScore: {},
+    gameNumber: 1,
 
     initGuestSession: async () => {
       if (guestSessionPromise) return guestSessionPromise;
@@ -630,7 +684,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           isBot?: boolean;
         }) => {
           clearQueuePoll();
-          if (get().screen !== "searching") return;
+          if (get().screen !== "searching" && !playVsBot) return;
 
           const format =
             mode === "endless"
@@ -641,12 +695,28 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
               ? CLASSIC_FORMAT
               : DEFAULT_SUDDEN_DEATH_FORMAT;
 
+          isResolvingBall = false;
           set({
             matchId: matchData.matchId,
             userRole: matchData.role || "p1",
             opponentName: matchData.opponentName || "Opponent",
             isBotMatch: !!matchData.isBot,
             screen: "toss",
+            userPick: null,
+            isUserLocked: false,
+            opponentPick: null,
+            opponentTileState: "empty",
+            userTileState: "empty",
+            outcomeText: null,
+            isOutcomeWicket: false,
+            currentBallIndex: 0,
+            timerSeconds: 8,
+            isTimerActive: false,
+            revealCountdown: null,
+            activeReactions: [],
+            playAgainWaiting: false,
+            seriesScore: {},
+            gameNumber: 1,
             gameState: {
               format,
               phase: "toss_call",
@@ -740,16 +810,20 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     },
 
     submitTossCall: async (call) => {
-      const { matchId } = get();
+      const { matchId, guestId } = get();
       if (!matchId) return;
 
       try {
         const res = await fetch(`/api/match/${matchId}/move`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(guestId ? { "x-guest-id": guestId } : {}),
+          },
           body: JSON.stringify({
             kind: "toss",
             action: { type: "call", value: call },
+            guestId,
           }),
         });
         const data = await res.json();
@@ -762,7 +836,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     },
 
     submitTossPick: async (pick) => {
-      const { matchId, userRole } = get();
+      const { matchId, userRole, guestId } = get();
       if (!matchId) return;
 
       set((s) => ({
@@ -777,10 +851,14 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       try {
         const res = await fetch(`/api/match/${matchId}/move`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(guestId ? { "x-guest-id": guestId } : {}),
+          },
           body: JSON.stringify({
             kind: "toss",
             action: { type: "pick", value: pick },
+            guestId,
           }),
         });
         const data = await res.json();
@@ -789,7 +867,17 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           if (data.gameState.phase === "innings_1") {
             setTimeout(() => {
               if (get().screen === "toss") {
-                set({ screen: "match" });
+                set({
+                  screen: "match",
+                  userPick: null,
+                  isUserLocked: false,
+                  opponentPick: null,
+                  opponentTileState: "empty",
+                  userTileState: "empty",
+                  outcomeText: null,
+                  isOutcomeWicket: false,
+                  currentBallIndex: 0,
+                });
                 startBallTimer();
               }
             }, 1800);
@@ -801,21 +889,36 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     },
 
     submitTossDecision: async (decision) => {
-      const { matchId } = get();
+      const { matchId, guestId } = get();
       if (!matchId) return;
 
       try {
         const res = await fetch(`/api/match/${matchId}/move`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(guestId ? { "x-guest-id": guestId } : {}),
+          },
           body: JSON.stringify({
             kind: "toss",
             action: { type: "decision", value: decision },
+            guestId,
           }),
         });
         const data = await res.json();
         if (data.gameState) {
-          set({ gameState: data.gameState, screen: "match" });
+          set({
+            gameState: data.gameState,
+            screen: "match",
+            userPick: null,
+            isUserLocked: false,
+            opponentPick: null,
+            opponentTileState: "empty",
+            userTileState: "empty",
+            outcomeText: null,
+            isOutcomeWicket: false,
+            currentBallIndex: 0,
+          });
           startBallTimer();
         }
       } catch (err) {
@@ -824,7 +927,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     },
 
     submitBallPick: async (pick) => {
-      const { matchId, currentBallIndex, isUserLocked } = get();
+      const { matchId, currentBallIndex, isUserLocked, guestId } = get();
       if (!matchId || isUserLocked) return;
 
       triggerHaptic("light");
@@ -833,11 +936,15 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       try {
         const res = await fetch(`/api/match/${matchId}/move`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(guestId ? { "x-guest-id": guestId } : {}),
+          },
           body: JSON.stringify({
             kind: "ball",
             ballIndex: currentBallIndex,
             pick,
+            guestId,
           }),
         });
         const data = await res.json();
@@ -857,14 +964,17 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     },
 
     startSecondInnings: async () => {
-      const { matchId } = get();
+      const { matchId, guestId } = get();
       if (!matchId) return;
 
       try {
         const res = await fetch(`/api/match/${matchId}/move`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kind: "start_innings_2" }),
+          headers: {
+            "Content-Type": "application/json",
+            ...(guestId ? { "x-guest-id": guestId } : {}),
+          },
+          body: JSON.stringify({ kind: "start_innings_2", guestId }),
         });
         const data = await res.json();
         if (data.gameState) {
@@ -902,7 +1012,8 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       clearDisconnectTimer();
       clearQueuePoll();
       clearMatchSync();
-      webrtcManager.cleanup();
+      webrtcManager.stopLocalStream();
+      handDetector.stop();
 
       const { matchId } = get();
       if (matchId) {
@@ -917,12 +1028,68 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       set({ screen: "landing", matchId: null });
     },
 
+    requestPlayAgain: async () => {
+      const { matchId, guestId, isBotMatch } = get();
+      if (!matchId) {
+        get().startMatchmaking(isBotMatch);
+        return;
+      }
+
+      set({ playAgainWaiting: true });
+
+      try {
+        const res = await fetch(`/api/match/${matchId}/rematch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guestId: guestId || "guest" }),
+        });
+
+        if (!res.ok) {
+          set({ playAgainWaiting: false });
+          get().startMatchmaking(isBotMatch);
+          return;
+        }
+
+        const data = await res.json();
+        if (data.rematchStarted && data.gameState) {
+          isResolvingBall = false;
+          clearBallTimer();
+          clearDisconnectTimer();
+          set({
+            playAgainWaiting: false,
+            gameState: data.gameState,
+            screen: "toss",
+            userPick: null,
+            isUserLocked: false,
+            opponentPick: null,
+            opponentTileState: "empty",
+            userTileState: "empty",
+            outcomeText: null,
+            isOutcomeWicket: false,
+            currentBallIndex: 0,
+            timerSeconds: 8,
+            isTimerActive: false,
+            revealCountdown: null,
+            activeReactions: [],
+            seriesScore: data.seriesScore || {},
+            gameNumber: data.gameNumber || 1,
+          });
+        }
+      } catch (err) {
+        console.error("[Rematch] Error requesting rematch:", err);
+        set({ playAgainWaiting: false });
+        get().startMatchmaking(isBotMatch);
+      }
+    },
+
     resetToLanding: () => {
+      isResolvingBall = false;
       clearBallTimer();
       clearDisconnectTimer();
       clearQueuePoll();
       clearMatchSync();
       webrtcManager.cleanup();
+      handDetector.stop();
       if (activeAblyChannel) {
         try {
           activeAblyChannel.unsubscribe();
@@ -940,7 +1107,12 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         opponentTileState: "empty",
         userTileState: "empty",
         outcomeText: null,
+        isOutcomeWicket: false,
         activeReactions: [],
+        playAgainWaiting: false,
+        currentBallIndex: 0,
+        seriesScore: {},
+        gameNumber: 1,
       });
     },
   };
