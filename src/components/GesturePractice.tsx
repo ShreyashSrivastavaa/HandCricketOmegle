@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { handDetector, DetectionResult } from "@/lib/gesture/handDetector";
+import { handDetector, DetectionResult, drawHandSkeleton } from "@/lib/gesture/handDetector";
 import { HandGesture } from "@/lib/gesture/handClassifier";
 import { Check, Sparkles, AlertCircle } from "lucide-react";
 
 interface GesturePracticeProps {
   videoElement: HTMLVideoElement | null;
+  skeletonCanvas?: HTMLCanvasElement | null;
+  onDetectionUpdate?: (result: DetectionResult) => void;
   className?: string;
 }
 
@@ -19,7 +21,12 @@ const GESTURE_LEGEND: { num: HandGesture; name: string; desc: string }[] = [
   { num: 6, name: "Thumb Only", desc: "Thumbs-up" },
 ];
 
-export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, className = "" }) => {
+export const GesturePractice: React.FC<GesturePracticeProps> = ({
+  videoElement,
+  skeletonCanvas,
+  onDetectionUpdate,
+  className = "",
+}) => {
   const [detection, setDetection] = useState<DetectionResult>({
     gesture: null,
     progress: 0,
@@ -30,6 +37,7 @@ export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, 
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [lockedNumber, setLockedNumber] = useState<HandGesture | null>(null);
 
+  const isLockedRef = React.useRef<boolean>(false);
   const latestGestureRef = React.useRef<HandGesture | null>(null);
   const timerIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const autoRestartTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -38,26 +46,68 @@ export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, 
   useEffect(() => {
     if (!videoElement) return;
 
-    handDetector.autoLock = false; // Never prematurely auto-lock
+    handDetector.autoLock = false;
     handDetector.resetForNextBall();
 
     handDetector.onDetectionChange = (res) => {
       setDetection(res);
       latestGestureRef.current = res.gesture;
+      onDetectionUpdate?.(res);
+
+      if (skeletonCanvas) {
+        if (videoElement && videoElement.videoWidth > 0) {
+          if (
+            skeletonCanvas.width !== videoElement.videoWidth ||
+            skeletonCanvas.height !== videoElement.videoHeight
+          ) {
+            skeletonCanvas.width = videoElement.videoWidth;
+            skeletonCanvas.height = videoElement.videoHeight;
+          }
+        }
+        drawHandSkeleton(skeletonCanvas, res.landmarks, isLockedRef.current || res.locked);
+      }
+
+      // Fast responsive lock: if holding gesture steady (progress reaches 100%), lock in!
+      if (
+        !isLockedRef.current &&
+        res.progress >= 1 &&
+        res.gesture !== null &&
+        res.gesture >= 1 &&
+        res.gesture <= 6
+      ) {
+        isLockedRef.current = true;
+        setIsLocked(true);
+        setLockedNumber(res.gesture);
+
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+
+        // Auto-restart next practice round after 2.5 seconds
+        if (autoRestartTimeoutRef.current) clearTimeout(autoRestartTimeoutRef.current);
+        autoRestartTimeoutRef.current = setTimeout(() => {
+          startPracticeRound();
+        }, 2500);
+      }
     };
 
     handDetector.start(videoElement);
 
     return () => {
       handDetector.stop();
+      if (skeletonCanvas) {
+        drawHandSkeleton(skeletonCanvas, undefined, false);
+      }
     };
-  }, [videoElement]);
+  }, [videoElement, skeletonCanvas, onDetectionUpdate]);
 
-  // Start / restart practice countdown round (5s -> 1s lock)
+  // Start / restart practice round
   const startPracticeRound = React.useCallback(() => {
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     if (autoRestartTimeoutRef.current) clearTimeout(autoRestartTimeoutRef.current);
 
+    isLockedRef.current = false;
     setIsLocked(false);
     setLockedNumber(null);
     setTimerSeconds(5);
@@ -65,15 +115,17 @@ export const GesturePractice: React.FC<GesturePracticeProps> = ({ videoElement, 
     timerIntervalRef.current = setInterval(() => {
       setTimerSeconds((prev) => {
         if (prev === 2) {
-          // At 1s remaining: Lock whatever is currently visible ("jb 1 sec bacha ho toh jodikhra ho voh lock kre")
-          const pick = latestGestureRef.current;
-          setIsLocked(true);
-          setLockedNumber(pick);
+          // At 1s deadline: lock whatever is currently visible
+          if (!isLockedRef.current) {
+            const pick = latestGestureRef.current;
+            isLockedRef.current = true;
+            setIsLocked(true);
+            setLockedNumber(pick);
 
-          // Auto-restart next practice round after 3 seconds of viewing locked result
-          autoRestartTimeoutRef.current = setTimeout(() => {
-            startPracticeRound();
-          }, 3000);
+            autoRestartTimeoutRef.current = setTimeout(() => {
+              startPracticeRound();
+            }, 2500);
+          }
 
           return 1;
         }

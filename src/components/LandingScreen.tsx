@@ -39,6 +39,7 @@ interface LandingScreenProps {
   onPlayVsBot: () => void;
   onPlayWithFriend: () => void;
   onOpenRules: () => void;
+  onOpenHardwareCheck?: () => void;
 }
 
 const GESTURES = [
@@ -78,8 +79,9 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   onPlayVsBot,
   onPlayWithFriend,
   onOpenRules,
+  onOpenHardwareCheck,
 }) => {
-  const { guestName, setGuestName, mode, setMode } = useLiveMatchStore();
+  const { guestName, setGuestName, mode, setMode, isGestureMode, setIsGestureMode } = useLiveMatchStore();
 
   const fadeUp: Variants = {
     hidden: { opacity: 0, y: 18 },
@@ -194,6 +196,77 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                   Camera-umpired. No signup.
                 </span>
               </motion.div>
+            </motion.div>
+
+            {/* Play Style Distinction: Gesture Mode vs Tap Mode */}
+            <motion.div
+              variants={fadeUp}
+              className="mx-auto mt-6 max-w-xl rounded-2xl border border-line/80 bg-surface/80 p-3 sm:p-3.5 backdrop-blur-md shadow-panel"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line/60 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-turf/30 bg-turf/10 text-turf">
+                    <Swords className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="font-heading text-xs font-black uppercase tracking-wider text-chalk">
+                    Choose Play Mode
+                  </span>
+                </div>
+
+                <div className="flex items-center rounded-xl border border-line bg-surface-2 p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      setIsGestureMode(true);
+                    }}
+                    aria-pressed={isGestureMode}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 font-heading text-[10px] font-black uppercase tracking-wider transition-all ${
+                      isGestureMode
+                        ? "bg-turf text-ink shadow-sm"
+                        : "text-muted hover:text-chalk"
+                    }`}
+                  >
+                    <HandIcon className="h-3.5 w-3.5" />
+                    <span>Gesture Mode</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      setIsGestureMode(false);
+                    }}
+                    aria-pressed={!isGestureMode}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 font-heading text-[10px] font-black uppercase tracking-wider transition-all ${
+                      !isGestureMode
+                        ? "bg-sky text-ink shadow-sm"
+                        : "text-muted hover:text-chalk"
+                    }`}
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>Tap Mode</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Small description below the modes explaining each mode */}
+              <div className="pt-2">
+                {isGestureMode ? (
+                  <p className="flex items-center gap-1.5 text-xs text-slate-300">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-turf animate-pulse" />
+                    <span>
+                      <strong className="text-turf">Gesture Mode:</strong> Show 1–6 fingers to your webcam. Real-time AI detects your hand and locks your pick.
+                    </span>
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1.5 text-xs text-slate-300">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-sky" />
+                    <span>
+                      <strong className="text-sky">Tap Mode:</strong> Play by clicking 1–6 buttons on-screen or using keyboard keys 1–6. Fast, quiet, no camera required.
+                    </span>
+                  </p>
+                )}
+              </div>
             </motion.div>
 
             <motion.div
@@ -394,10 +467,25 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               </div>
 
               <div className="relative mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-[10px] text-slate-400">
-                <span className="flex items-center gap-1.5">
-                  <Camera className="h-3.5 w-3.5 text-turf" />
-                  Camera-umpired
-                </span>
+                {onOpenHardwareCheck ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playClickSound();
+                      onOpenHardwareCheck();
+                    }}
+                    title="Test your webcam & hand gesture detection"
+                    className="flex items-center gap-1.5 text-slate-300 transition-colors hover:text-turf text-left"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-turf shrink-0" />
+                    <span>Camera Check</span>
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Camera className="h-3.5 w-3.5 text-turf" />
+                    Camera-umpired
+                  </span>
+                )}
                 <span className="flex items-center gap-1.5">
                   <Lock className="h-3.5 w-3.5 text-sky" />
                   No signup

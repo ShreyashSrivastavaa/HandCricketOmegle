@@ -37,9 +37,17 @@ export function getOrCreateGuestSession(req: NextRequest): {
   session: GuestSession;
   isNew: boolean;
 } {
-  const guestId = req.cookies.get(GUEST_COOKIE_NAME)?.value;
-  const guestName = req.cookies.get(GUEST_NAME_COOKIE_NAME)?.value;
-  const ageVerified = req.cookies.get(AGE_COOKIE_NAME)?.value === "true";
+  const guestId =
+    req.cookies.get(GUEST_COOKIE_NAME)?.value ||
+    req.headers.get("x-guest-id") ||
+    undefined;
+  const guestName =
+    req.cookies.get(GUEST_NAME_COOKIE_NAME)?.value ||
+    req.headers.get("x-guest-name") ||
+    undefined;
+  const ageVerified =
+    req.cookies.get(AGE_COOKIE_NAME)?.value === "true" ||
+    req.headers.get("x-age-verified") === "true";
 
   if (guestId && guestName) {
     return {

@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { fireVictoryConfetti } from "@/lib/client/confetti";
 import { playVictorySound, playClickSound } from "@/lib/client/audio";
+import { webrtcManager } from "@/lib/webrtc/webrtcManager";
+import { handDetector } from "@/lib/gesture/handDetector";
 
 export interface ResultBannerProps {
   state?: GameState;
@@ -65,6 +67,12 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
 
   const isWin = resolvedResult === "win";
   const isTie = resolvedResult === "tie";
+
+  // Automatically shut off camera and hand detector when game is over
+  useEffect(() => {
+    webrtcManager.stopLocalStream();
+    handDetector.stop();
+  }, []);
 
   useEffect(() => {
     if (isWin) {

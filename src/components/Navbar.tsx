@@ -17,6 +17,7 @@ import {
   Play,
   ArrowRight,
   ArrowUpRight,
+  Camera,
 } from "lucide-react";
 import { isSoundMuted, toggleSoundMute, playClickSound } from "@/lib/client/audio";
 import { subscribeToLobbyPresence } from "@/lib/client/ablyClient";
@@ -25,9 +26,14 @@ import { Hand } from "@/components/Hand";
 interface NavbarProps {
   guestName?: string;
   onOpenRules?: () => void;
+  onOpenHardwareCheck?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  guestName,
+  onOpenRules,
+  onOpenHardwareCheck,
+}) => {
   const pathname = usePathname();
   const [muted, setMuted] = useState<boolean>(false);
   const [onlineCount, setOnlineCount] = useState<number>(1);
@@ -138,6 +144,21 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
               <span className="hidden text-[9px] uppercase tracking-[0.14em] text-slate-400 md:inline">online</span>
             </div>
 
+            {onOpenHardwareCheck && (
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound();
+                  onOpenHardwareCheck();
+                }}
+                aria-label="Camera and Gesture Check"
+                title="Camera and gesture test"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-turf/40 hover:text-turf"
+              >
+                <Camera className="h-4 w-4" />
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleToggleMute}
@@ -237,6 +258,20 @@ export const Navbar: React.FC<NavbarProps> = ({ guestName, onOpenRules }) => {
                 >
                   <HelpCircle className="h-4 w-4 text-turf" />
                   <span>How To Play</span>
+                </button>
+              )}
+              {onOpenHardwareCheck && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClickSound();
+                    setIsMobileMenuOpen(false);
+                    onOpenHardwareCheck();
+                  }}
+                  className="flex items-center gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left font-heading text-xs font-bold uppercase tracking-[0.1em] text-white transition-colors hover:border-turf/30 hover:bg-white/[0.06] hover:text-turf"
+                >
+                  <Camera className="h-4 w-4 text-turf" />
+                  <span>Camera &amp; Gestures</span>
                 </button>
               )}
               <Link

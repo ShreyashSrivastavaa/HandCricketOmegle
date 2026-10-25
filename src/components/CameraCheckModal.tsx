@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 import { webrtcManager, type MediaDeviceOption } from "@/lib/webrtc/webrtcManager";
 import { GesturePractice } from "./GesturePractice";
+import { playClickSound } from "@/lib/client/audio";
 import {
   Camera,
   Mic,
@@ -14,6 +15,9 @@ import {
   CheckCircle2,
   ShieldCheck,
   X,
+  Hand,
+  Zap,
+  Swords,
 } from "lucide-react";
 
 interface CameraCheckModalProps {
@@ -40,8 +44,14 @@ export function CameraCheckModal({
 
   const [micLevel, setMicLevel] = useState<number>(0);
   const [isMicTestActive, setIsMicTestActive] = useState<boolean>(true);
+  const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [skeletonCanvas, setSkeletonCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [liveGesture, setLiveGesture] = useState<number | null>(null);
+  const [isLoadingModel, setIsLoadingModel] = useState<boolean>(false);
+  const [tapTestNumber, setTapTestNumber] = useState<number | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const isReadyRef = useRef<boolean>(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
@@ -54,10 +64,13 @@ export function CameraCheckModal({
   useEffect(() => {
     if (!isOpen) {
       stopAudioAnalysis();
-      webrtcManager.stopLocalStream();
+      if (!isReadyRef.current) {
+        webrtcManager.stopLocalStream();
+      }
       return;
     }
 
+    isReadyRef.current = false;
     if (mode === "video") {
       initDevicesAndStream();
     } else {
@@ -67,7 +80,9 @@ export function CameraCheckModal({
 
     return () => {
       stopAudioAnalysis();
-      webrtcManager.stopLocalStream();
+      if (!isReadyRef.current) {
+        webrtcManager.stopLocalStream();
+      }
     };
   }, [isOpen, mode]);
 
@@ -79,6 +94,7 @@ export function CameraCheckModal({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
       }
 
       // Enumerate available devices
@@ -181,6 +197,7 @@ export function CameraCheckModal({
   };
 
   const handleReady = () => {
+    isReadyRef.current = true;
     stopAudioAnalysis();
     onReady(mode);
   };
@@ -231,22 +248,24 @@ export function CameraCheckModal({
               <button
                 type="button"
                 onClick={() => setMode("video")}
+                aria-pressed={mode === "video"}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-[10px] font-black uppercase tracking-wider transition-colors ${
-                  mode === "video" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
+                  mode === "video" ? "bg-turf text-ink shadow-sm" : "text-muted hover:text-chalk"
                 }`}
               >
-                <Video className="h-3.5 w-3.5" />
-                <span>Video</span>
+                <Hand className="h-3.5 w-3.5" />
+                <span>Gesture Mode</span>
               </button>
               <button
                 type="button"
                 onClick={() => setMode("game_only")}
+                aria-pressed={mode === "game_only"}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-heading text-[10px] font-black uppercase tracking-wider transition-colors ${
-                  mode === "game_only" ? "bg-turf text-ink" : "text-muted hover:text-chalk"
+                  mode === "game_only" ? "bg-sky text-ink shadow-sm" : "text-muted hover:text-chalk"
                 }`}
               >
-                <Gamepad2 className="h-3.5 w-3.5" />
-                <span>Game Only</span>
+                <Zap className="h-3.5 w-3.5" />
+                <span>Tap Mode</span>
               </button>
             </div>
             <button
@@ -260,6 +279,25 @@ export function CameraCheckModal({
           </div>
         </div>
 
+        {/* Mode Distinction & Description Strip */}
+        <div className="relative z-10 border-b border-line/60 bg-surface-2/40 px-5 py-2.5 sm:px-6">
+          {mode === "video" ? (
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-turf animate-pulse" />
+              <span>
+                <strong className="text-turf">Gesture Mode (Camera):</strong> Uses your webcam to detect 1–6 hand gestures in real time. Show fingers to bowl or bat.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-sky" />
+              <span>
+                <strong className="text-sky">Tap Mode (Buttons):</strong> Play with on-screen number buttons or keyboard keys 1–6. Camera is disabled — fast, quiet, and private.
+              </span>
+            </div>
+          )}
+        </div>
+
         <div className="relative z-10 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {mode === "video" ? (
             <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
@@ -269,15 +307,38 @@ export function CameraCheckModal({
                   {permissionState === "granted" ? (
                     <>
                       <video
-                        ref={videoRef}
+                        ref={(el) => {
+                          videoRef.current = el;
+                          setVideoElement(el);
+                          if (el && !el.srcObject) {
+                            const stream = webrtcManager.getLocalStream();
+                            if (stream) {
+                              el.srcObject = stream;
+                              el.play().catch(() => {});
+                            }
+                          }
+                        }}
                         autoPlay
                         playsInline
                         muted
                         className="h-full w-full -scale-x-100 object-cover"
                       />
+                      <canvas
+                        ref={(el) => setSkeletonCanvas(el)}
+                        className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
+                      />
                       <div className="absolute left-2.5 top-2.5 flex items-center gap-1.5 rounded-full border border-turf/30 bg-ink/80 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-turf backdrop-blur-md">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-turf" />
                         Live preview
+                      </div>
+                      <div className="absolute right-2.5 top-2.5 z-10 flex items-center gap-1.5 rounded-full border border-line bg-ink/80 px-2.5 py-1 font-mono text-[9px] backdrop-blur-md">
+                        {isLoadingModel ? (
+                          <span className="text-amber">Loading tracker...</span>
+                        ) : liveGesture !== null ? (
+                          <span className="font-bold text-turf">Detected: {liveGesture}</span>
+                        ) : (
+                          <span className="text-muted">Show hand to test</span>
+                        )}
                       </div>
                       <div className="absolute bottom-2.5 left-2.5 rounded-lg border border-line bg-ink/80 px-2 py-1 text-[9px] text-muted backdrop-blur-md">
                         Mic starts muted during the match
@@ -390,7 +451,14 @@ export function CameraCheckModal({
                       </div>
                     </div>
 
-                    <GesturePractice videoElement={videoRef.current} />
+                    <GesturePractice
+                      videoElement={videoElement || videoRef.current}
+                      skeletonCanvas={skeletonCanvas}
+                      onDetectionUpdate={(res) => {
+                        setLiveGesture(res.gesture);
+                        setIsLoadingModel(!!res.isLoadingModel);
+                      }}
+                    />
                   </>
                 ) : (
                   <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-line bg-surface-2/40 p-6 text-center">
@@ -411,24 +479,61 @@ export function CameraCheckModal({
               </div>
             </div>
           ) : (
-            <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-2 py-8 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-turf/30 bg-turf/10 text-turf">
-                <CheckCircle2 className="h-8 w-8" />
+            <div className="mx-auto flex max-w-lg flex-col items-center gap-4 px-2 py-6 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-sky/30 bg-sky/10 text-sky">
+                <Zap className="h-7 w-7" />
               </div>
               <div>
                 <h3 className="font-heading text-lg font-black uppercase tracking-wide text-chalk">
-                  Game Only Mode Selected
+                  Tap Mode Active
                 </h3>
-                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
-                  You will only be paired with other Game Only players. No camera or microphone will
-                  be used.
+                <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-muted">
+                  No camera or microphone required. Play by clicking numbers 1–6 on-screen or pressing number keys <strong className="text-chalk">1–6</strong> on your keyboard.
                 </p>
               </div>
-              <div className="flex items-start gap-2 rounded-2xl border border-line bg-surface-2/60 p-3 text-left text-[10px] leading-relaxed text-muted">
+
+              {/* Interactive Practice Pad for Tap Mode */}
+              <div className="w-full rounded-2xl border border-line bg-surface-2/60 p-4 text-left">
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="font-heading font-bold uppercase tracking-wider text-muted">
+                    Test Number Pad (1–6)
+                  </span>
+                  {tapTestNumber !== null && (
+                    <span className="font-heading font-black text-sky">
+                      Tapped: {tapTestNumber} ✓
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-6 gap-2">
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => {
+                        playClickSound();
+                        setTapTestNumber(num);
+                      }}
+                      className={`flex flex-col items-center justify-center rounded-xl border p-2 transition-all ${
+                        tapTestNumber === num
+                          ? "border-sky bg-sky/20 text-sky scale-105 shadow-glow"
+                          : "border-line bg-surface text-chalk hover:border-sky/50 hover:bg-surface-2"
+                      }`}
+                    >
+                      <span className="font-heading text-lg font-black">{num}</span>
+                      <span className="font-mono text-[8px] text-muted">key {num}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-center text-[10px] text-muted">
+                  Try tapping a number above to test your controls. In the live match, you can tap to lock instantly.
+                </p>
+              </div>
+
+              <div className="flex w-full items-start gap-2 rounded-2xl border border-line bg-surface-2/60 p-3 text-left text-[10px] leading-relaxed text-muted">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-turf" />
                 <span>
-                  <strong className="text-turf">Zero video storage.</strong> Finger detection is
-                  disabled in this mode. 18+ only.
+                  <strong className="text-turf">Camera Disabled:</strong> Zero camera or microphone permissions needed. Matches with both Tap Mode and Gesture Mode players seamlessly.
                 </span>
               </div>
             </div>

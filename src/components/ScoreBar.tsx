@@ -45,7 +45,7 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border border-line bg-surface/85 text-chalk shadow-panel backdrop-blur-sm select-none ${className}`}
+      className={`match-scorebar relative overflow-hidden rounded-2xl border border-line bg-surface/85 text-chalk shadow-panel backdrop-blur-sm select-none ${className}`}
       role="region"
       aria-label="Match Scoreboard"
     >
@@ -54,7 +54,7 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
         aria-hidden="true"
       />
 
-      <div className="relative flex flex-wrap items-center justify-between gap-1 border-b border-line/60 px-3 py-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-muted sm:px-4">
+      <div className="match-scorebar-header relative flex flex-wrap items-center justify-between gap-1 border-b border-line/60 px-3 py-1 text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.14em] text-muted sm:px-4">
         <div className="flex items-center gap-1.5">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-turf opacity-60" />
@@ -74,10 +74,10 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
         </div>
       </div>
 
-      <div className="relative flex items-center justify-between gap-3 px-3 py-2.5 sm:px-4 sm:py-3">
+      <div className="match-scorebar-main relative flex items-center justify-between gap-3 px-3 py-1.5 sm:px-4 sm:py-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <span className="truncate text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
               {battingPlayerName}
             </span>
             <span className="rounded-full border border-turf/25 bg-turf/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-turf">
@@ -86,10 +86,10 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
           </div>
 
           <div className="mt-0.5 flex items-baseline gap-1">
-            <span className="font-heading text-4xl font-black leading-none tracking-tight tabular-nums text-chalk sm:text-5xl">
+            <span className="match-scorebar-text font-heading text-3xl font-black leading-none tracking-tight tabular-nums text-chalk sm:text-4xl">
               {runs}
             </span>
-            <span className="font-heading text-xl font-black leading-none tabular-nums text-ball/90 sm:text-2xl">
+            <span className="font-heading text-lg font-black leading-none tabular-nums text-ball/90 sm:text-xl">
               /{wickets}
             </span>
             <span className="ml-1 hidden text-[9px] uppercase tracking-wider text-muted sm:inline">
@@ -98,22 +98,22 @@ export const ScoreBar: React.FC<ScoreBarProps> = ({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="hidden items-center gap-1.5 rounded-xl border border-line/60 bg-surface-2/40 px-2.5 py-1.5 sm:flex">
-            <Activity className="h-3.5 w-3.5 text-turf" />
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <div className="hidden items-center gap-1.5 rounded-xl border border-line/60 bg-surface-2/40 px-2 py-1 sm:flex">
+            <Activity className="h-3 w-3 text-turf" />
             <div>
-              <p className="text-[8px] uppercase tracking-[0.14em] text-muted">CRR</p>
-              <p className="font-mono text-xs font-bold text-chalk">{crr}</p>
+              <p className="text-[7px] uppercase tracking-[0.14em] text-muted">CRR</p>
+              <p className="font-mono text-[11px] font-bold text-chalk">{crr}</p>
             </div>
           </div>
 
           <div className="text-right">
-            <p className="text-[9px] uppercase tracking-[0.14em] text-muted">Overs</p>
+            <p className="text-[8px] sm:text-[9px] uppercase tracking-[0.14em] text-muted">Overs</p>
             <div className="flex items-baseline justify-end gap-0.5">
-              <span className="font-heading text-2xl font-black leading-none tabular-nums text-chalk sm:text-3xl">
+              <span className="font-heading text-xl font-black leading-none tabular-nums text-chalk sm:text-2xl">
                 {oversFormatted}
               </span>
-              <span className="text-[10px] font-medium text-muted">/{maxOvers}.0</span>
+              <span className="text-[9px] sm:text-[10px] font-medium text-muted">/{maxOvers}.0</span>
             </div>
           </div>
         </div>

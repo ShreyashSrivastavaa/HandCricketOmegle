@@ -508,6 +508,8 @@ function PlayMatchContent() {
               ? guestId
               : opponent?.guestId;
           s.emit("game:match_complete", { winnerGuestId });
+          webrtcManager.stopLocalStream();
+          handDetector.stop();
         }
 
         // Advance to next ball after 1.5s

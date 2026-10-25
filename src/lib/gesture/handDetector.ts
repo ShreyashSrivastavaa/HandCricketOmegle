@@ -33,25 +33,30 @@ export const HAND_CONNECTIONS: [number, number][] = [
 ];
 
 /**
- * Draws real-time AR hand skeleton onto an overlay canvas
+ * Draws real-time AR hand skeleton onto an overlay canvas.
+ * Call with empty/missing landmarks to clear the overlay.
  */
 export function drawHandSkeleton(
   canvas: HTMLCanvasElement,
-  landmarks: Landmark[],
+  landmarks: Landmark[] | undefined,
   isLocked: boolean = false
 ): void {
   const ctx = canvas.getContext("2d");
-  if (!ctx || !landmarks || landmarks.length < 21) return;
+  if (!ctx) return;
 
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  ctx.lineWidth = 3;
+  if (!landmarks || landmarks.length < 21) return;
+
+  // Scale line width and circle radius according to canvas resolution so it stays bold and visible
+  const baseScale = Math.max(w, h) / 320;
+  ctx.lineWidth = Math.max(3.5, Math.round(4 * baseScale));
   ctx.lineCap = "round";
   ctx.strokeStyle = isLocked ? "#10b981" : "#06b6d4"; // emerald when locked, cyan when tracking
-  ctx.shadowColor = isLocked ? "rgba(16, 185, 129, 0.8)" : "rgba(6, 182, 212, 0.8)";
-  ctx.shadowBlur = 8;
+  ctx.shadowColor = isLocked ? "rgba(16, 185, 129, 0.9)" : "rgba(6, 182, 212, 0.9)";
+  ctx.shadowBlur = Math.max(6, Math.round(8 * baseScale));
 
   // Draw connections/bones
   for (const [startIdx, endIdx] of HAND_CONNECTIONS) {
@@ -66,15 +71,18 @@ export function drawHandSkeleton(
 
   // Draw landmark points
   ctx.shadowBlur = 0;
+  const tipRadius = Math.max(5, Math.round(6 * baseScale));
+  const jointRadius = Math.max(3.5, Math.round(4.5 * baseScale));
+
   for (let i = 0; i < landmarks.length; i++) {
     const pt = landmarks[i];
     const isTip = [4, 8, 12, 16, 20].includes(i);
     ctx.beginPath();
-    ctx.arc(pt.x * w, pt.y * h, isTip ? 5 : 3.5, 0, 2 * Math.PI);
+    ctx.arc(pt.x * w, pt.y * h, isTip ? tipRadius : jointRadius, 0, 2 * Math.PI);
     ctx.fillStyle = isLocked ? "#34d399" : isTip ? "#38bdf8" : "#ffffff";
     ctx.fill();
     ctx.strokeStyle = isLocked ? "#065f46" : "#0284c7";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1.5, Math.round(2 * baseScale));
     ctx.stroke();
   }
 }
@@ -82,12 +90,13 @@ export function drawHandSkeleton(
 export class HandDetector {
   private handLandmarker: any = null;
   private isInitializing: boolean = false;
-  private stabilizer: GestureStabilizer = new GestureStabilizer(300, 8);
+  private stabilizer: GestureStabilizer = new GestureStabilizer(250, 5);
   private animFrameId: number | null = null;
   private isRunning: boolean = false;
   private lastProcessTime: number = 0;
-  private minIntervalMs: number = 40; // ~25 fps (1000ms / 25 = 40ms)
+  private minIntervalMs: number = 33; // ~30 fps (1000ms / 30 = 33ms)
   private currentVideoElement: HTMLVideoElement | null = null;
+  private lastTimestamp: number = 0;
 
   public autoLock: boolean = false; // By default false: tracks continuously so player can change moves until 1s remaining
   private isLocked: boolean = false;
@@ -156,9 +165,9 @@ export class HandDetector {
         },
         runningMode: "VIDEO",
         numHands: 1,
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        minHandDetectionConfidence: 0.35,
+        minHandPresenceConfidence: 0.35,
+        minTrackingConfidence: 0.35,
       });
 
       this.isInitializing = false;
@@ -184,9 +193,9 @@ export class HandDetector {
           },
           runningMode: "VIDEO",
           numHands: 1,
-          minHandDetectionConfidence: 0.5,
-          minHandPresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5,
+          minHandDetectionConfidence: 0.35,
+          minHandPresenceConfidence: 0.35,
+          minTrackingConfidence: 0.35,
         });
         this.isInitializing = false;
         this.onDetectionChange?.({
@@ -248,6 +257,7 @@ export class HandDetector {
     this.runStartTime = Date.now();
     this.lastHandDetectedTime = Date.now();
     this.hasSuggestedTap = false;
+    this.lastTimestamp = 0;
 
     if (!this.offscreenCanvas && typeof document !== "undefined") {
       this.offscreenCanvas = document.createElement("canvas");
@@ -298,7 +308,11 @@ export class HandDetector {
         isLowLight = this.checkLighting(this.offscreenCtx, 640, 480);
       }
 
-      const results = this.handLandmarker.detectForVideo(videoElement, timestamp);
+      // Guarantee strictly increasing integer timestamp for MediaPipe Video mode
+      const currentTimestamp = Math.max(Math.floor(timestamp), this.lastTimestamp + 1);
+      this.lastTimestamp = currentTimestamp;
+
+      const results = this.handLandmarker.detectForVideo(videoElement, currentTimestamp);
       let detectedGesture: HandGesture | null = null;
       let rawLandmarks: Landmark[] | undefined = undefined;
 
@@ -317,14 +331,14 @@ export class HandDetector {
 
       let locked = this.isLocked;
       let lockedNumber = this.lockedNumber;
-      let progress = 0;
 
+      // Always update stabilizer to measure hold stability & progress
+      const updateResult = this.stabilizer.update(detectedGesture);
       if (this.autoLock) {
-        const updateResult = this.stabilizer.update(detectedGesture);
         locked = updateResult.locked;
         lockedNumber = updateResult.lockedNumber;
-        progress = updateResult.progress;
       }
+      const progress = updateResult.progress;
 
       // 3-second hand undetected auto-suggestion
       const now = Date.now();
@@ -359,7 +373,7 @@ export class HandDetector {
         this.stop();
       }
     } catch (err) {
-      // Ignore frame errors silently
+      console.warn("[HandDetector] Frame detection error:", err);
     }
   }
 

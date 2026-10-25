@@ -17,8 +17,7 @@ export function getDistance(a: Landmark, b: Landmark): number {
 }
 
 /**
- * Checks if a non-thumb finger is extended based on tip and pip distance from wrist,
- * as well as tip-to-mcp vs pip-to-mcp.
+ * Checks if a non-thumb finger is extended based on joint distances and vertical direction.
  */
 function isFingerExtended(
   wrist: Landmark,
@@ -27,48 +26,24 @@ function isFingerExtended(
   dip: Landmark,
   tip: Landmark
 ): boolean {
-  const tipDistWrist = getDistance(tip, wrist);
-  const pipDistWrist = getDistance(pip, wrist);
-  const dipDistWrist = getDistance(dip, wrist);
+  const tipMcp = getDistance(tip, mcp);
+  const pipMcp = getDistance(pip, mcp);
+  const tipWrist = getDistance(tip, wrist);
+  const pipWrist = getDistance(pip, wrist);
 
-  // Tip must be significantly further from wrist than PIP and DIP
-  return tipDistWrist > pipDistWrist * 1.1 && tipDistWrist > dipDistWrist;
-}
+  // In an upright hand (wrist below MCP knuckle), tip being higher than PIP is a very direct signal
+  const isUpright = wrist.y > mcp.y;
+  const isTipHigher = tip.y < pip.y;
 
-/**
- * Checks if thumb is extended away from palm.
- * Uses distance from thumb tip to pinky MCP and distance from thumb tip to thumb MCP.
- */
-function isThumbExtended(
-  wrist: Landmark,
-  thumbMcp: Landmark,
-  thumbIp: Landmark,
-  thumbTip: Landmark,
-  indexMcp: Landmark,
-  pinkyMcp: Landmark,
-  handedness?: "Left" | "Right" | string,
-  isMirrored?: boolean
-): boolean {
-  const tipDistToPinky = getDistance(thumbTip, pinkyMcp);
-  const ipDistToPinky = getDistance(thumbIp, pinkyMcp);
-  const tipDistToWrist = getDistance(thumbTip, wrist);
-  const mcpDistToWrist = getDistance(thumbMcp, wrist);
+  // Scale-invariant ratio of tip-to-MCP vs PIP-to-MCP
+  const ratio = tipMcp / Math.max(pipMcp, 0.001);
 
-  // Geometric distance check: thumb tip is further from pinky base and wrist than IP/MCP
-  const distBasedExtended = tipDistToPinky > ipDistToPinky && tipDistToWrist > mcpDistToWrist * 1.05;
+  if (isUpright) {
+    return (ratio > 1.15 && tipWrist > pipWrist) || (isTipHigher && ratio > 1.0 && tipWrist > pipWrist * 0.9);
+  }
 
-  // X-distance relative to handedness & palm orientation:
-  // If pinky MCP is to the right of index MCP, thumb extends outward to the left
-  // If pinky MCP is to the left of index MCP, thumb extends outward to the right
-  const isPinkyRight = pinkyMcp.x > indexMcp.x;
-  const xSpan = Math.abs(thumbTip.x - indexMcp.x);
-  const xDirectionValid = isPinkyRight ? thumbTip.x < indexMcp.x : thumbTip.x > indexMcp.x;
-  const xExtended = xSpan > 0.05 && xDirectionValid;
-
-  // Vertical thumb (thumbs-up): thumb tip is higher (smaller Y) than thumb IP and MCP
-  const isThumbsUpVertical = thumbTip.y < thumbIp.y && thumbIp.y < thumbMcp.y;
-
-  return distBasedExtended || (xExtended && isThumbsUpVertical);
+  // Tilted or sideways hand
+  return ratio > 1.15 && tipWrist > pipWrist;
 }
 
 /**
@@ -78,7 +53,7 @@ function isThumbExtended(
  * 0: Closed fist (all fingers and thumb tucked/curled)
  * 1: Index finger only (1 finger)
  * 2: Index + Middle fingers (2 fingers)
- * 3: Index + Middle + Ring fingers (3 fingers)
+ * 3: Index + Middle + Ring fingers (3 fingers) OR Thumb + Index + Middle (scout/German 3)
  * 4: Index + Middle + Ring + Pinky (4 fingers, thumb tucked)
  * 5: Open palm (all 5 fingers extended)
  * 6: Thumb only (Thumbs-Up, 4 fingers curled)
@@ -96,83 +71,102 @@ export function classifyHandLandmarks(
 
   const wrist = landmarks[0];
 
-  // Thumb: 1, 2, 3, 4
+  // Thumb: 1(CMC), 2(MCP), 3(IP), 4(TIP)
   const thumbMcp = landmarks[2];
   const thumbIp = landmarks[3];
   const thumbTip = landmarks[4];
 
-  // Index: 5, 6, 7, 8
+  // Index: 5(MCP), 6(PIP), 7(DIP), 8(TIP)
   const indexMcp = landmarks[5];
   const indexPip = landmarks[6];
   const indexDip = landmarks[7];
   const indexTip = landmarks[8];
 
-  // Middle: 9, 10, 11, 12
+  // Middle: 9(MCP), 10(PIP), 11(DIP), 12(TIP)
   const middleMcp = landmarks[9];
   const middlePip = landmarks[10];
   const middleDip = landmarks[11];
   const middleTip = landmarks[12];
 
-  // Ring: 13, 14, 15, 16
+  // Ring: 13(MCP), 14(PIP), 15(DIP), 16(TIP)
   const ringMcp = landmarks[13];
   const ringPip = landmarks[14];
   const ringDip = landmarks[15];
   const ringTip = landmarks[16];
 
-  // Pinky: 17, 18, 19, 20
+  // Pinky: 17(MCP), 18(PIP), 19(DIP), 20(TIP)
   const pinkyMcp = landmarks[17];
   const pinkyPip = landmarks[18];
   const pinkyDip = landmarks[19];
   const pinkyTip = landmarks[20];
 
+  // Scale of the hand (distance from wrist to middle knuckle or palm width)
+  const palmHeight = getDistance(wrist, middleMcp);
+  const palmWidth = getDistance(indexMcp, pinkyMcp);
+  const palmScale = Math.max(palmHeight, palmWidth, 0.05);
+
   const indexUp = isFingerExtended(wrist, indexMcp, indexPip, indexDip, indexTip);
   const middleUp = isFingerExtended(wrist, middleMcp, middlePip, middleDip, middleTip);
   const ringUp = isFingerExtended(wrist, ringMcp, ringPip, ringDip, ringTip);
   const pinkyUp = isFingerExtended(wrist, pinkyMcp, pinkyPip, pinkyDip, pinkyTip);
-  const thumbUp = isThumbExtended(
-    wrist,
-    thumbMcp,
-    thumbIp,
-    thumbTip,
-    indexMcp,
-    pinkyMcp,
-    handedness,
-    isMirrored
-  );
+
+  const mainFingersCount = (indexUp ? 1 : 0) + (middleUp ? 1 : 0) + (ringUp ? 1 : 0) + (pinkyUp ? 1 : 0);
+
+  // Vertical Thumbs-Up (Gesture 6):
+  // Thumb is pointing straight upward, tip is higher than joints and higher than index knuckle
+  const isThumbPointingUp =
+    thumbTip.y < thumbIp.y &&
+    thumbIp.y < thumbMcp.y &&
+    thumbTip.y < indexMcp.y;
+  const isThumbExtendedUp =
+    isThumbPointingUp &&
+    getDistance(thumbTip, wrist) > getDistance(thumbMcp, wrist) * 1.15;
+
+  // Spread Thumb Outward (Gesture 5 / Open Palm):
+  // When thumb is extended sideways away from the index finger
+  const thumbDistIndexMcp = getDistance(thumbTip, indexMcp);
+  const thumbDistMiddleMcp = getDistance(thumbTip, middleMcp);
+  const thumbDistPinkyMcp = getDistance(thumbTip, pinkyMcp);
+  const thumbSpread =
+    thumbDistIndexMcp > palmScale * 0.48 &&
+    thumbDistMiddleMcp > palmScale * 0.52 &&
+    thumbDistPinkyMcp > getDistance(thumbIp, pinkyMcp);
+
+  const thumbActive = isThumbExtendedUp || thumbSpread;
 
   // 6: Thumb only (Thumbs-up) -> thumb extended, all other 4 fingers curled
-  if (thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) {
+  if (mainFingersCount === 0 && isThumbExtendedUp) {
     return 6;
   }
 
-  // 5: Open palm -> all 5 fingers extended
-  if (thumbUp && indexUp && middleUp && ringUp && pinkyUp) {
+  // 0: Closed fist -> all fingers curled and thumb not extended up
+  if (mainFingersCount === 0 && !isThumbExtendedUp) {
+    return 0;
+  }
+
+  // 5: Open palm -> all 4 main fingers extended AND thumb spread outward
+  if (mainFingersCount === 4 && thumbActive) {
     return 5;
   }
 
-  // 4: 4 fingers raised, thumb tucked/curled
-  if (!thumbUp && indexUp && middleUp && ringUp && pinkyUp) {
+  // 4: 4 fingers raised, thumb tucked/curled across palm
+  if (mainFingersCount === 4 && !thumbActive) {
     return 4;
   }
 
-  // 3: 3 fingers (Index, Middle, Ring), pinky and thumb curled
-  if (!thumbUp && indexUp && middleUp && ringUp && !pinkyUp) {
+  // 3: 3 fingers (Index, Middle, Ring), pinky curled
+  if (indexUp && middleUp && ringUp && !pinkyUp) {
     return 3;
   }
 
-  // 2: 2 fingers (Index, Middle), ring, pinky, and thumb curled
-  if (!thumbUp && indexUp && middleUp && !ringUp && !pinkyUp) {
+  // 2: 2 fingers (Index, Middle), ring and pinky curled
+  if (indexUp && middleUp && !ringUp && !pinkyUp) {
     return 2;
   }
 
-  // 1: 1 finger (Index only), middle, ring, pinky, and thumb curled
-  if (!thumbUp && indexUp && !middleUp && !ringUp && !pinkyUp) {
+  // 1: 1 finger (Index only), middle, ring, pinky curled
+  if (indexUp && !middleUp && !ringUp && !pinkyUp) {
     return 1;
-  }
-
-  // 0: Closed fist -> all fingers curled and thumb curled
-  if (!thumbUp && !indexUp && !middleUp && !ringUp && !pinkyUp) {
-    return 0;
   }
 
   // Unclear / unsupported gesture (e.g., horns, pinky only, etc.)
@@ -190,7 +184,7 @@ export class GestureStabilizer {
   private isLocked: boolean = false;
   private lockedValue: HandGesture | null = null;
   private requiredHoldMs: number = 300;
-  private requiredConsecutiveFrames: number = 8;
+  private requiredConsecutiveFrames: number = 5;
 
   constructor(requiredHoldMs: number = 300, requiredConsecutiveFrames?: number) {
     this.requiredHoldMs = requiredHoldMs;
@@ -198,7 +192,7 @@ export class GestureStabilizer {
       requiredConsecutiveFrames !== undefined
         ? requiredConsecutiveFrames
         : requiredHoldMs === 300
-        ? 8
+        ? 5
         : 1;
   }
 
