@@ -64,7 +64,18 @@ export async function GET(
     return NextResponse.json({ error: "Room not found or expired." }, { status: 404 });
   }
 
-  const res = NextResponse.json({ success: true, room });
+  let match: any = null;
+  if (room.matchId) {
+    try {
+      const redis = getRedis();
+      const raw = await redis.get(`match:${room.matchId}`);
+      if (raw) {
+        match = typeof raw === "string" ? JSON.parse(raw) : raw;
+      }
+    } catch {}
+  }
+
+  const res = NextResponse.json({ success: true, room, match });
   attachSessionCookies(res, session);
   return res;
 }
@@ -211,7 +222,7 @@ export async function POST(
         p2,
       });
 
-      const res = NextResponse.json({ success: true, room, matchId });
+      const res = NextResponse.json({ success: true, room, matchId, match: matchData, gameState });
       attachSessionCookies(res, session);
       return res;
     }

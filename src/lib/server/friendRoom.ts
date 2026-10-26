@@ -121,7 +121,21 @@ export async function getFriendRoomByCode(
 ): Promise<ServerlessFriendRoom | null> {
   const code = normalizeRoomCode(rawCode);
   const redis = getRedis();
-  const raw = await redis.get<ServerlessFriendRoom | string>(`friend_room:${code}`);
+  let raw = await redis.get<ServerlessFriendRoom | string>(`friend_room:${code}`);
+  if (!raw) {
+    // If exact code not found, try common character visual substitutions (e.g. 7 <-> Z, 2 <-> Z, B <-> 8)
+    const variations: string[] = [];
+    if (code.includes("7")) variations.push(code.replace(/7/g, "Z"));
+    if (code.includes("Z")) variations.push(code.replace(/Z/g, "7"));
+    if (code.includes("2")) variations.push(code.replace(/2/g, "Z"));
+    if (code.includes("B")) variations.push(code.replace(/B/g, "8"));
+    if (code.includes("8")) variations.push(code.replace(/8/g, "B"));
+
+    for (const alt of variations) {
+      raw = await redis.get<ServerlessFriendRoom | string>(`friend_room:${alt}`);
+      if (raw) break;
+    }
+  }
   if (!raw) return null;
   return typeof raw === "string" ? JSON.parse(raw) : raw;
 }

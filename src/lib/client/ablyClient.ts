@@ -144,7 +144,35 @@ export function getClientAbly(): any {
 
   if (ablyClient) return ablyClient;
 
-  // Use the native SSE realtime channel fallback
+  // If real Ably library is available on window, connect with token auth
+  const AblyGlobal = (window as any).Ably;
+  if (AblyGlobal && typeof AblyGlobal.Realtime === "function") {
+    try {
+      ablyClient = new AblyGlobal.Realtime({
+        authUrl: "/api/ably-token",
+        authMethod: "GET",
+      });
+      return ablyClient;
+    } catch (e) {
+      console.warn("[Ably Client] Realtime init error, using fallback:", e);
+    }
+  }
+
+  // Pre-load script if not yet loaded so it connects soon
+  loadAblyScript().then((AblyLib) => {
+    if (AblyLib && typeof AblyLib.Realtime === "function" && (!ablyClient || !ablyClient.connection)) {
+      try {
+        ablyClient = new AblyLib.Realtime({
+          authUrl: "/api/ably-token",
+          authMethod: "GET",
+        });
+      } catch (err) {
+        console.warn("[Ably Client] Async Realtime upgrade error:", err);
+      }
+    }
+  });
+
+  // Use the native SSE realtime channel fallback while Ably script is loading
   const sseClient = {
     channels: { get: createMockChannel },
     close: () => {

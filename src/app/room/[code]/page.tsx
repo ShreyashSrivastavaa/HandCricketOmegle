@@ -57,6 +57,11 @@ import type { HandGesture } from "@/lib/gesture/handClassifier";
 import { GestureDetectionChip } from "@/components/GestureDetectionChip";
 import { useWakeLock } from "@/lib/client/useWakeLock";
 import { getClientAbly } from "@/lib/client/ablyClient";
+import {
+  playBatHitSound,
+  playBoundarySound,
+  playWicketSound,
+} from "@/lib/client/audio";
 
 interface FriendRoomState {
   roomId: string;
@@ -65,6 +70,7 @@ interface FriendRoomState {
   mode: "video" | "game_only";
   format: MatchFormat;
   status: "waiting" | "lobby" | "playing" | "ended";
+  matchId?: string;
   host: { guestId: string; name: string; ready: boolean; disconnected?: boolean };
   guest: { guestId: string; name: string; ready: boolean; disconnected?: boolean } | null;
   seriesScore: { [guestId: string]: number };
@@ -159,6 +165,57 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const [layout, setLayout] = useState<"mobile-portrait" | "desktop" | "landscape">("mobile-portrait");
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [rematchWaiting, setRematchWaiting] = useState<boolean>(false);
+  const isResolvingBallRef = useRef<boolean>(false);
+
+  const hydrateActiveMatch = (currentRoom: FriendRoomState, existingMatch?: any) => {
+    const isHost =
+      (guestId && currentRoom.host.guestId === guestId) ||
+      (typeof window !== "undefined" &&
+        sessionStorage.getItem("hca_created_room") === currentRoom.code);
+    const myRole: PlayerId = isHost ? "p1" : "p2";
+    updateMyPlayerId(myRole);
+    setIsInitiator(isHost);
+
+    const opp = isHost ? currentRoom.guest : currentRoom.host;
+    if (opp) {
+      setOpponent({ guestId: opp.guestId, name: opp.name });
+    } else {
+      setOpponent({ guestId: "opp", name: isHost ? "Friend" : "Host" });
+    }
+
+    if (existingMatch?.gameState) {
+      setGameState(existingMatch.gameState);
+    } else {
+      setGameState((prev) => {
+        if (prev) return prev;
+        const p1Name = isHost ? "You" : currentRoom.host.name;
+        const p2Name = isHost ? currentRoom.guest?.name || "Friend" : "You";
+        return createInitialGameState(currentRoom.format, p1Name, p2Name, "p1");
+      });
+    }
+
+    if (!existingMatch?.gameState && currentRoom.matchId) {
+      fetch(`/api/match/${currentRoom.matchId}/move`, {
+        headers: guestId ? { "x-guest-id": guestId } : {},
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.gameState) {
+            setGameState(data.gameState);
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  // Auto-hydrate match arena if room is in playing or ended state but gameState/opponent not set yet
+  useEffect(() => {
+    if (roomState && (roomState.status === "playing" || roomState.status === "ended")) {
+      if (!gameState || !opponent) {
+        hydrateActiveMatch(roomState);
+      }
+    }
+  }, [roomState, gameState, opponent]);
 
   // Screen Wake Lock during active friend match
   const isMatchActive = roomState?.status === "playing" && !!gameState && gameState.phase !== "match_ended";
@@ -321,6 +378,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           const isHost = data.room.host.guestId === guestId;
           const myReady = isHost ? data.room.host.ready : data.room.guest?.ready || false;
           setIsReady(myReady);
+          if (data.room.status === "playing" || data.room.status === "ended") {
+            hydrateActiveMatch(data.room, data.match);
+          }
         } else if (res.status === 404) {
           setIsLoading(false);
           setErrorMessage(data.error || "Room not found or expired.");
@@ -347,6 +407,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           const isHost = data.host.guestId === guestId;
           const myReady = isHost ? data.host.ready : data.guest?.ready || false;
           setIsReady(myReady);
+          if (data.status === "playing" || data.status === "ended") {
+            hydrateActiveMatch(data);
+          }
         });
 
         roomChannel.subscribe("friend:kicked", (msg: any) => {
@@ -381,7 +444,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       console.warn("[Ably Room Sync] error:", e);
     }
 
-    // 3. Fallback polling for status when in lobby (every 3s)
+    // 3. Fallback polling for status when in lobby (every 1.5s)
     const pollInterval = setInterval(async () => {
       if (!isSubscribed) return;
       try {
@@ -392,10 +455,13 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             updateRoomState(data.room);
             const isHost = data.room.host.guestId === guestId;
             setIsReady(isHost ? data.room.host.ready : data.room.guest?.ready || false);
+            if (data.room.status === "playing" || data.room.status === "ended") {
+              hydrateActiveMatch(data.room, data.match);
+            }
           }
         }
       } catch {}
-    }, 3000);
+    }, 1500);
 
     return () => {
       isSubscribed = false;
@@ -407,6 +473,120 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       }
     };
   }, [guestId, roomCode, guestName, router]);
+
+  // Match Polling & Ably Synchronizer for Serverless Multiplayer
+  useEffect(() => {
+    if (!roomState?.matchId || (roomState.status !== "playing" && roomState.status !== "ended")) return;
+
+    const matchId = roomState.matchId;
+    let isMounted = true;
+    let matchChannel: any = null;
+
+    try {
+      const ably = getClientAbly();
+      if (ably?.channels) {
+        matchChannel = ably.channels.get(`match:${matchId}`);
+
+        matchChannel.subscribe("ball-resolved", (msg: any) => {
+          if (!isMounted || !msg.data) return;
+          triggerBallResolution(msg.data);
+        });
+
+        matchChannel.subscribe("player-locked", (msg: any) => {
+          if (!isMounted || !msg.data) return;
+          if (msg.data.lockedGuestId !== guestId) {
+            setIsOpponentLocked(true);
+            setOpponentTileState("locked");
+          }
+        });
+
+        matchChannel.subscribe("toss-call-submitted", (msg: any) => {
+          if (!isMounted || !msg.data?.gameState) return;
+          setGameState(msg.data.gameState);
+        });
+
+        matchChannel.subscribe("toss-pick-submitted", (msg: any) => {
+          if (!isMounted || !msg.data?.gameState) return;
+          setGameState(msg.data.gameState);
+        });
+
+        matchChannel.subscribe("toss-decision-submitted", (msg: any) => {
+          if (!isMounted || !msg.data?.gameState) return;
+          setGameState(msg.data.gameState);
+          startTurnCountdown();
+        });
+
+        matchChannel.subscribe("second-innings-started", (msg: any) => {
+          if (!isMounted || !msg.data?.gameState) return;
+          setGameState(msg.data.gameState);
+          startTurnCountdown();
+        });
+
+        matchChannel.subscribe("match-rematch-start", (msg: any) => {
+          if (!isMounted || !msg.data?.gameState) return;
+          setRematchWaiting(false);
+          setGameState(msg.data.gameState);
+        });
+      }
+    } catch (e) {
+      console.warn("[Ably Match Channel] Subscribe error:", e);
+    }
+
+    const pollInterval = setInterval(async () => {
+      if (!isMounted || isResolvingBallRef.current) return;
+      try {
+        const res = await fetch(`/api/match/${matchId}/move`, {
+          headers: guestId ? { "x-guest-id": guestId } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.gameState && isMounted) {
+            setGameState((prev) => {
+              if (!prev) return data.gameState;
+
+              // Check if ball advanced
+              const prevBalls =
+                prev.currentInnings === 1 ? prev.innings1.balls : prev.innings2?.balls || 0;
+              const serverBalls =
+                data.gameState.currentInnings === 1
+                  ? data.gameState.innings1.balls
+                  : data.gameState.innings2?.balls || 0;
+
+              if (serverBalls > prevBalls && data.gameState.lastOutcome) {
+                triggerBallResolution({
+                  p1Pick: data.gameState.lastOutcome.batterPick,
+                  p2Pick: data.gameState.lastOutcome.bowlerPick,
+                  ballIndex: serverBalls,
+                  serverGameState: data.gameState,
+                });
+                return prev;
+              }
+
+              // Update phase changes (toss, break, end)
+              if (prev.phase !== data.gameState.phase) {
+                if (data.gameState.phase === "innings_1" && prev.phase === "toss_decision") {
+                  startTurnCountdown();
+                }
+                return data.gameState;
+              }
+
+              return prev;
+            });
+          }
+        }
+      } catch {}
+    }, 1000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      if (matchChannel) {
+        try {
+          matchChannel.unsubscribe();
+        } catch {}
+      }
+    };
+  }, [roomState?.matchId, roomState?.status, guestId]);
 
   // Socket Connection & Join (Node.js runtime server fallback)
   useEffect(() => {
@@ -435,6 +615,9 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       const isHost = data.host.guestId === guestId;
       const myReady = isHost ? data.host.ready : data.guest?.ready || false;
       setIsReady(myReady);
+      if (data.status === "playing" || data.status === "ended") {
+        hydrateActiveMatch(data);
+      }
 
       // Camera check if in video mode and not yet checked
       if (data.mode === "video" && !hasCameraChecked) {
@@ -603,89 +786,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
     // 5. REVEAL: server broadcasts both picks together, remote video unblurs
     s.on("game:ball_reveal", (payload: { p1Pick: number; p2Pick: number; ballIndex: number }) => {
-      stopTurnCountdown();
-      setTurnStage("reveal");
-      setRevealCountdown(null);
-
-      const currentRole = myPlayerIdRef.current;
-      const myPick = currentRole === "p1" ? payload.p1Pick : payload.p2Pick;
-      const theirPick = currentRole === "p1" ? payload.p2Pick : payload.p1Pick;
-
-      setUserPick(myPick);
-      setOpponentPick(theirPick);
-
-      setGameState((prev) => {
-        if (!prev) return prev;
-        const activeInnings = prev.currentInnings === 1 ? prev.innings1 : prev.innings2!;
-        const isUserBatting = activeInnings.battingPlayer === currentRole;
-
-        const batterNum = isUserBatting ? myPick : theirPick;
-        const bowlerNum = isUserBatting ? theirPick : myPick;
-
-        const { nextState, outcome } = applyBall(prev, batterNum, bowlerNum);
-
-        let display = "";
-        if (outcome.isWicket) {
-          display = "OUT!";
-        } else if (outcome.runsScored === 6) {
-          display = "SIX! +6";
-        } else if (outcome.runsScored === 4) {
-          display = "FOUR! +4";
-        } else {
-          display = `+${outcome.runsScored}`;
-        }
-
-        setOutcomeText(display);
-        setIsOutcomeWicket(outcome.isWicket);
-        setScreenShake(outcome.isWicket);
-
-        if (outcome.isWicket) {
-          setTimeout(() => setScreenShake(false), 200);
-          setUserTileState(isUserBatting ? "out" : "revealed");
-          setOpponentTileState(isUserBatting ? "revealed" : "out");
-        } else {
-          setUserTileState(isUserBatting ? "scored" : "revealed");
-          setOpponentTileState(isUserBatting ? "revealed" : "scored");
-        }
-
-        // Check if match just ended
-        if (nextState.phase === "match_ended") {
-          const winnerGuestId =
-            nextState.winner === "tie"
-              ? undefined
-              : nextState.winner === currentRole
-              ? guestId
-              : opponent?.guestId;
-          s.emit("game:match_complete", { winnerGuestId });
-          webrtcManager.stopLocalStream();
-          handDetector.stop();
-        }
-
-        // Advance to next ball after 1.5s
-        setTimeout(() => {
-          setUserPick(null);
-          setIsUserLocked(false);
-          setOpponentPick(null);
-          setIsOpponentLocked(false);
-          setUserTileState("empty");
-          setOpponentTileState("empty");
-          setOutcomeText(null);
-          setDetectedGesture(null);
-          latestDetectedGestureRef.current = null;
-          setGestureProgress(0);
-          setGestureHint(undefined);
-          handDetector.resetForNextBall();
-
-          if (nextState.phase !== "match_ended" && nextState.phase !== "innings_break") {
-            startTurnCountdown();
-            s.emit("game:ball_start", { ballIndex: nextState.innings1.balls });
-          } else {
-            setTurnStage("idle");
-          }
-        }, 1500);
-
-        return nextState;
-      });
+      triggerBallResolution(payload);
     });
 
     s.on("game:emote", (payload: { emote: string }) => {
@@ -701,7 +802,22 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     };
   }, [guestId, roomCode]);
 
-  const startTurnCountdown = () => {
+  function stopTurnCountdown() {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+  }
+
+  function handleTurnTimeout() {
+    if (!isUserLocked && userTileState === "empty") {
+      const autoPick = Math.floor(Math.random() * 6) + 1;
+      handleConfirmBallPick(autoPick);
+      addToast(`Time expired! Auto-picked ${autoPick}.`, "warning");
+    }
+  }
+
+  function startTurnCountdown() {
     stopTurnCountdown();
     setTurnStage("pick");
     setTimerSeconds(8);
@@ -722,22 +838,145 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
         return prev - 1;
       });
     }, 1000);
-  };
+  }
 
-  const stopTurnCountdown = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-  };
+  function triggerBallResolution(payload: {
+    p1Pick?: number;
+    p2Pick?: number;
+    ballIndex?: number;
+    serverGameState?: GameState;
+  }) {
+    if (isResolvingBallRef.current) return;
+    isResolvingBallRef.current = true;
 
-  const handleTurnTimeout = () => {
-    if (!isUserLocked && userTileState === "empty") {
-      const autoPick = Math.floor(Math.random() * 6) + 1;
-      handleConfirmBallPick(autoPick);
-      addToast(`Time expired! Auto-picked ${autoPick}.`, "warning");
+    stopTurnCountdown();
+    setTurnStage("reveal");
+    setRevealCountdown(null);
+
+    const currentRole = myPlayerIdRef.current;
+
+    let p1Pick = payload.p1Pick;
+    let p2Pick = payload.p2Pick;
+    if ((p1Pick === undefined || p2Pick === undefined) && payload.serverGameState?.lastOutcome) {
+      const outcome = payload.serverGameState.lastOutcome;
+      const activeInnings =
+        payload.serverGameState.currentInnings === 1
+          ? payload.serverGameState.innings1
+          : payload.serverGameState.innings2!;
+      if (activeInnings.battingPlayer === "p1") {
+        p1Pick = outcome.batterPick;
+        p2Pick = outcome.bowlerPick;
+      } else {
+        p1Pick = outcome.bowlerPick;
+        p2Pick = outcome.batterPick;
+      }
     }
-  };
+
+    const myPick = currentRole === "p1" ? (p1Pick ?? 1) : (p2Pick ?? 1);
+    const theirPick = currentRole === "p1" ? (p2Pick ?? 1) : (p1Pick ?? 1);
+
+    setUserPick(myPick);
+    setOpponentPick(theirPick);
+
+    setGameState((prev) => {
+      const targetState = payload.serverGameState || prev;
+      if (!targetState && !prev) {
+        isResolvingBallRef.current = false;
+        return null;
+      }
+
+      let nextState: GameState;
+      let outcome: any;
+
+      if (payload.serverGameState?.lastOutcome) {
+        nextState = payload.serverGameState;
+        outcome = payload.serverGameState.lastOutcome;
+      } else {
+        const stateToApply = prev || payload.serverGameState!;
+        const activeInnings =
+          stateToApply.currentInnings === 1 ? stateToApply.innings1 : stateToApply.innings2!;
+        const isUserBatting = activeInnings.battingPlayer === currentRole;
+        const batterNum = isUserBatting ? myPick : theirPick;
+        const bowlerNum = isUserBatting ? theirPick : myPick;
+        const res = applyBall(stateToApply, batterNum, bowlerNum);
+        nextState = res.nextState;
+        outcome = res.outcome;
+      }
+
+      const activeInnings =
+        (prev || nextState).currentInnings === 1
+          ? (prev || nextState).innings1
+          : (prev || nextState).innings2!;
+      const isUserBatting = activeInnings.battingPlayer === currentRole;
+
+      let display = "";
+      if (outcome.isWicket) {
+        display = "OUT!";
+        playWicketSound();
+      } else if (outcome.runsScored === 6) {
+        display = "SIX! +6";
+        playBoundarySound(6);
+      } else if (outcome.runsScored === 4) {
+        display = "FOUR! +4";
+        playBoundarySound(4);
+      } else {
+        display = `+${outcome.runsScored}`;
+        playBatHitSound();
+      }
+
+      setOutcomeText(display);
+      setIsOutcomeWicket(outcome.isWicket);
+      setScreenShake(outcome.isWicket);
+
+      if (outcome.isWicket) {
+        setTimeout(() => setScreenShake(false), 200);
+        setUserTileState(isUserBatting ? "out" : "revealed");
+        setOpponentTileState(isUserBatting ? "revealed" : "out");
+      } else {
+        setUserTileState(isUserBatting ? "scored" : "revealed");
+        setOpponentTileState(isUserBatting ? "revealed" : "scored");
+      }
+
+      // Check if match just ended
+      if (nextState.phase === "match_ended") {
+        const winnerGuestId =
+          nextState.winner === "tie"
+            ? undefined
+            : nextState.winner === currentRole
+            ? guestId
+            : opponent?.guestId;
+        socket?.emit("game:match_complete", { winnerGuestId });
+        webrtcManager.stopLocalStream();
+        handDetector.stop();
+      }
+
+      // Advance to next ball after 1.5s
+      setTimeout(() => {
+        isResolvingBallRef.current = false;
+        setUserPick(null);
+        setIsUserLocked(false);
+        setOpponentPick(null);
+        setIsOpponentLocked(false);
+        setUserTileState("empty");
+        setOpponentTileState("empty");
+        setOutcomeText(null);
+        setDetectedGesture(null);
+        latestDetectedGestureRef.current = null;
+        setGestureProgress(0);
+        setGestureHint(undefined);
+        handDetector.resetForNextBall();
+
+        if (nextState.phase !== "match_ended" && nextState.phase !== "innings_break") {
+          startTurnCountdown();
+          socket?.emit("game:ball_start", { ballIndex: nextState.innings1.balls });
+        } else {
+          setTurnStage("idle");
+        }
+      }, 1500);
+
+      return nextState;
+    });
+  }
 
   // Active on-device hand gesture detection loop on camera feed
   useEffect(() => {
@@ -847,6 +1086,15 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "rematch", guestId }),
     }).catch(() => {});
+
+    const activeMatchId = roomState?.matchId;
+    if (activeMatchId) {
+      fetch(`/api/match/${activeMatchId}/rematch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestId }),
+      }).catch(() => {});
+    }
   };
 
   const handleChangeFormat = () => {
@@ -888,17 +1136,85 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       gameState && (gameState.currentInnings === 1 ? gameState.innings1.balls : gameState.innings2?.balls || 0);
 
     socket?.emit("game:ball_pick", { pick: num, ballIndex: ballIdx || 0 });
+
+    const activeMatchId = roomState?.matchId;
+    if (activeMatchId) {
+      fetch(`/api/match/${activeMatchId}/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(guestId ? { "x-guest-id": guestId } : {}),
+        },
+        body: JSON.stringify({
+          kind: "ball",
+          ballIndex: ballIdx || 0,
+          pick: num,
+          guestId,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.status === "resolved" && data.gameState) {
+            triggerBallResolution({
+              p1Pick: data.p1Pick,
+              p2Pick: data.p2Pick,
+              ballIndex: ballIdx || 0,
+              serverGameState: data.gameState,
+            });
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const handleTossCall = (call: TossCall) => {
     setGameState((prev) => (prev ? submitTossCall(prev, call) : prev));
     socket?.emit("game:toss_call", { call });
+
+    const activeMatchId = roomState?.matchId;
+    if (activeMatchId) {
+      fetch(`/api/match/${activeMatchId}/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(guestId ? { "x-guest-id": guestId } : {}),
+        },
+        body: JSON.stringify({
+          kind: "toss",
+          action: { type: "call", value: call },
+          guestId,
+        }),
+      }).catch(() => {});
+    }
   };
 
   const handleTossPick = (num: number) => {
     const currentRole = myPlayerIdRef.current;
     setGameState((prev) => (prev ? submitTossPick(prev, currentRole, num) : prev));
     socket?.emit("game:toss_pick", { pick: num, pickerId: currentRole });
+
+    const activeMatchId = roomState?.matchId;
+    if (activeMatchId) {
+      fetch(`/api/match/${activeMatchId}/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(guestId ? { "x-guest-id": guestId } : {}),
+        },
+        body: JSON.stringify({
+          kind: "toss",
+          action: { type: "pick", value: num },
+          guestId,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.gameState) {
+            setGameState(data.gameState);
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const handleTossDecision = (role: TossDecision) => {
@@ -910,6 +1226,30 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       return next;
     });
     socket?.emit("game:toss_decision", { role, winner: currentRole });
+
+    const activeMatchId = roomState?.matchId;
+    if (activeMatchId) {
+      fetch(`/api/match/${activeMatchId}/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(guestId ? { "x-guest-id": guestId } : {}),
+        },
+        body: JSON.stringify({
+          kind: "toss",
+          action: { type: "decision", value: role },
+          guestId,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.gameState) {
+            setGameState(data.gameState);
+            startTurnCountdown();
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const handleStartInnings2 = () => {
@@ -919,6 +1259,29 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       startTurnCountdown();
       return next;
     });
+
+    const activeMatchId = roomState?.matchId;
+    if (activeMatchId) {
+      fetch(`/api/match/${activeMatchId}/move`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(guestId ? { "x-guest-id": guestId } : {}),
+        },
+        body: JSON.stringify({
+          kind: "start_innings_2",
+          guestId,
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.gameState) {
+            setGameState(data.gameState);
+            startTurnCountdown();
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // Series score string derivation
@@ -1016,7 +1379,28 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   if (!gameState || !opponent) {
     return (
       <main className="min-h-screen bg-ink text-chalk flex flex-col justify-center items-center p-4 select-none">
-        <Loader2 className="w-8 h-8 text-turf animate-spin" />
+        <div className="w-full max-w-sm bg-surface border border-line rounded-[12px] p-6 text-center space-y-4">
+          <Loader2 className="w-8 h-8 text-turf animate-spin mx-auto" />
+          <h2 className="font-heading font-black text-xl uppercase tracking-tight text-chalk">
+            Entering Match Arena...
+          </h2>
+          <p className="text-xs text-muted">Synchronizing duel with your opponent...</p>
+          <div className="pt-2 flex flex-col gap-2">
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={() => {
+                if (roomState) hydrateActiveMatch(roomState);
+              }}
+            >
+              Start Match Arena
+            </Button>
+            <Button variant="secondary" fullWidth onClick={handleLeaveRoom}>
+              Leave Room
+            </Button>
+          </div>
+        </div>
+        <Toast toasts={toasts} onDismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
       </main>
     );
   }
