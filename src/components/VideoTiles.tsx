@@ -80,7 +80,7 @@ export function VideoTiles({
   const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(
     () => webrtcManager.getState() !== "live" || webrtcManager.isOpponentCameraEnabled
   );
-  const [isOpponentMicOn, setIsOpponentMicOn] = useState<boolean>(false);
+  const [isOpponentMicOn, setIsOpponentMicOn] = useState<boolean>(() => webrtcManager.isOpponentMicEnabled);
 
   const [isLocalCameraOn, setIsLocalCameraOn] = useState<boolean>(webrtcManager.isCameraEnabled);
   const [isLocalMicOn, setIsLocalMicOn] = useState<boolean>(webrtcManager.isMicEnabled);
@@ -174,7 +174,7 @@ export function VideoTiles({
   };
 
   // Anti-Copying Remote Video Protection:
-  // Note: We pause video playback and hide rendering client-side. A determined cheater can still
+  // Note: We blur and cover the video client-side (audio keeps playing). A determined cheater can still
   // modify the client to unpause or remove CSS blur; this is a casual game, so the server
   // guarantees picks cannot change after lock and picks stay hidden until both are locked.
   const isPickOrCountdown = hideOpponentVideo ?? (turnStage === "pick" || turnStage === "countdown");
@@ -183,9 +183,9 @@ export function VideoTiles({
     const video = remoteVideoRef.current;
     if (!video) return;
 
-    if (isPickOrCountdown) {
-      video.pause();
-    } else if (turnStage === "reveal" || hideOpponentVideo === false) {
+    // Keep playing while masked: pausing would also cut the opponent's voice.
+    // The blur + frosted overlay below hide the picture.
+    if (video.paused && video.srcObject) {
       video.play().catch(() => {});
     }
   }, [isPickOrCountdown, turnStage, hideOpponentVideo]);
@@ -397,7 +397,7 @@ export function VideoTiles({
             {isLocalCameraOn ? <Camera className="w-3.5 h-3.5" /> : <CameraOff className="w-3.5 h-3.5" />}
           </button>
 
-          {/* Mic toggle (MUTED by default) */}
+          {/* Mic toggle (on by default) */}
           <button
             onClick={handleToggleMic}
             title={isLocalMicOn ? "Mute microphone" : "Unmute microphone"}

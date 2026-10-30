@@ -37,12 +37,13 @@ export class WebRTCManager {
   public onMediaError?: (err: Error) => void;
 
   public isCameraEnabled: boolean = true;
-  public isMicEnabled: boolean = false; // Muted by default per rules
+  public isMicEnabled: boolean = true; // Players hear each other by default; the mic button mutes
   public isSelfHidden: boolean = false;
   public isGestureModeEnabled: boolean = true;
   public isOpponentGestureModeEnabled: boolean = true;
   // Last camera state the partner announced; kept here so screens that remount don't lose it
   public isOpponentCameraEnabled: boolean = false;
+  public isOpponentMicEnabled: boolean = false;
   public facingMode: "user" | "environment" = "user";
 
   private connectionState: WebRTCConnectionState = "idle";
@@ -161,24 +162,26 @@ export class WebRTCManager {
           audio: audioConstraints,
         });
       } catch (err: any) {
-        // No mic, mic blocked, or mic busy shouldn't cost the player their camera
-        if (err?.name === "PermissionDeniedError" || err?.name === "NotAllowedError") {
-          const cameraOnly = await navigator.mediaDevices
-            .getUserMedia({ video: videoConstraints, audio: false })
-            .catch(() => null);
-          if (!cameraOnly) throw err;
-          stream = cameraOnly;
-        } else {
-          stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
-        }
+        // A missing/blocked mic shouldn't cost the camera, and a missing/blocked camera
+        // shouldn't cost the voice: fall back to whichever device still works
+        const cameraOnly = await navigator.mediaDevices
+          .getUserMedia({ video: videoConstraints, audio: false })
+          .catch(() => null);
+        const fallback =
+          cameraOnly ||
+          (await navigator.mediaDevices
+            .getUserMedia({ video: false, audio: audioConstraints })
+            .catch(() => null));
+        if (!fallback) throw err;
+        stream = fallback;
       }
 
       this.localStream = stream;
 
-      // Enforce default state: Camera on, Mic MUTED
+      // Apply the current camera / mic toggles to the fresh tracks
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = this.isMicEnabled; // false by default
+        audioTrack.enabled = this.isMicEnabled;
       }
 
       const videoTrack = stream.getVideoTracks()[0];
@@ -209,6 +212,7 @@ export class WebRTCManager {
     this.isInitiator = isInitiator;
     this.pendingCandidates = [];
     this.isOpponentCameraEnabled = false;
+    this.isOpponentMicEnabled = false;
 
     this.setConnectionState("connecting");
 
@@ -290,6 +294,12 @@ export class WebRTCManager {
     this.emitMediaState();
   }
 
+  /** True when we are actually sending a live, unmuted mic track. */
+  private hasLiveAudio(): boolean {
+    const track = this.localStream?.getAudioTracks()[0];
+    return !!track && track.readyState === "live" && this.isMicEnabled;
+  }
+
   /** True when we are actually sending a live, enabled video track. */
   private hasLiveVideo(): boolean {
     const track = this.localStream?.getVideoTracks()[0];
@@ -298,6 +308,7 @@ export class WebRTCManager {
 
   private emitMediaState() {
     this.socket?.emit("rtc:camera_toggle", { enabled: this.hasLiveVideo() });
+    this.socket?.emit("rtc:mic_toggle", { enabled: this.hasLiveAudio() });
     this.socket?.emit("rtc:gesture_toggle", { enabled: this.isGestureModeEnabled });
   }
 
@@ -414,7 +425,8 @@ export class WebRTCManager {
     });
 
     this.socket.on("rtc:mic_toggle", (payload: { enabled: boolean }) => {
-      this.onOpponentMicToggle?.(payload.enabled);
+      this.isOpponentMicEnabled = !!payload.enabled;
+      this.onOpponentMicToggle?.(!!payload.enabled);
     });
 
     this.socket.on("rtc:gesture_toggle", (payload: { enabled: boolean }) => {
@@ -454,6 +466,41 @@ export class WebRTCManager {
    * Re-acquire camera/mic after the local stream was stopped (e.g. a rematch) and
    * swap the fresh tracks into the existing peer connection without renegotiating.
    */
+  /**
+   * Make sure the mic is flowing to the opponent even when the camera isn't used (tap mode).
+   * Keeps an existing stream; otherwise opens a mic-only stream.
+   */
+  public async ensureAudio(): Promise<void> {
+    if (this.localStream?.getAudioTracks().some((t) => t.readyState === "live")) return;
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia) return;
+    const audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
+    const audioTrack = audioStream.getAudioTracks()[0];
+    if (!audioTrack) return;
+    audioTrack.enabled = this.isMicEnabled;
+    if (this.localStream) {
+      this.localStream.addTrack(audioTrack);
+    } else {
+      this.localStream = audioStream;
+    }
+    await this.attachLocalTracksToPeer();
+  }
+
+  /** Turn the camera hardware off but keep the mic talking (e.g. switching to tap mode). */
+  public async stopCamera(): Promise<void> {
+    if (!this.localStream) return;
+    for (const track of this.localStream.getVideoTracks()) {
+      track.stop();
+      this.localStream.removeTrack(track);
+    }
+    const videoTransceiver = this.pc?.getTransceivers().find((t) => t.receiver.track?.kind === "video");
+    await videoTransceiver?.sender.replaceTrack(null).catch(() => {});
+    if (this.localStream.getTracks().length === 0) this.localStream = null;
+    this.socket?.emit("rtc:camera_toggle", { enabled: false });
+  }
+
   public async restoreLocalMedia(): Promise<MediaStream> {
     return this.initLocalMedia();
   }
@@ -533,7 +580,7 @@ export class WebRTCManager {
       }
     }
 
-    this.socket?.emit("rtc:mic_toggle", { enabled: newState });
+    this.socket?.emit("rtc:mic_toggle", { enabled: this.hasLiveAudio() });
     return newState;
   }
 

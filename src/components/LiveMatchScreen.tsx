@@ -39,6 +39,9 @@ import {
 } from "lucide-react";
 import { playClickSound, playBoundarySound } from "@/lib/client/audio";
 
+const hasCameraTrack = (stream: MediaStream | null) =>
+  !!stream?.getVideoTracks().some((t) => t.readyState === "live");
+
 export const LiveMatchScreen: React.FC = () => {
   const {
     gameState,
@@ -145,13 +148,25 @@ export const LiveMatchScreen: React.FC = () => {
     }
   }, [gameState?.currentInnings, gameState?.innings1?.score, gameState?.innings2?.score]);
 
+  // Tap mode in a human match: camera off, but keep the mic so both players hear each other
+  const goCameraOffKeepMic = () => {
+    if (isBotMatch) {
+      webrtcManager.stopLocalStream();
+      return;
+    }
+    webrtcManager
+      .stopCamera()
+      .then(() => webrtcManager.ensureAudio())
+      .catch((err) => console.warn("[LiveMatch] Mic unavailable:", err));
+  };
+
   useEffect(() => {
     let active = true;
 
     const setupCamera = async () => {
       try {
         let stream = webrtcManager.getLocalStream();
-        if (!stream && isCameraOn && isGestureMode && gameState?.phase !== "match_ended") {
+        if (!hasCameraTrack(stream) && isCameraOn && isGestureMode && gameState?.phase !== "match_ended") {
           stream = await webrtcManager.initLocalMedia();
         }
         if (active && localVideoRef.current && stream) {
@@ -171,9 +186,14 @@ export const LiveMatchScreen: React.FC = () => {
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = null;
       }
-      if (!isGestureMode || gameState?.phase === "match_ended") {
+      if (gameState?.phase === "match_ended") {
         handDetector.stop();
         webrtcManager.stopLocalStream();
+      } else if (!isGestureMode) {
+        handDetector.stop();
+        goCameraOffKeepMic();
+      } else if (!isBotMatch) {
+        webrtcManager.ensureAudio().catch((err) => console.warn("[LiveMatch] Mic unavailable:", err));
       }
     }
 
@@ -313,7 +333,7 @@ export const LiveMatchScreen: React.FC = () => {
     if (!isGestureMode) return;
     if (!isCameraOn) {
       let stream = webrtcManager.getLocalStream();
-      if (!stream) {
+      if (!hasCameraTrack(stream)) {
         try {
           stream = await webrtcManager.initLocalMedia();
           if (localVideoRef.current) {
@@ -339,7 +359,7 @@ export const LiveMatchScreen: React.FC = () => {
       handDetector.stop();
       setIsCameraOn(false);
       webrtcManager.toggleCamera(false);
-      webrtcManager.stopLocalStream();
+      goCameraOffKeepMic();
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = null;
       }
@@ -350,7 +370,7 @@ export const LiveMatchScreen: React.FC = () => {
       webrtcManager.toggleCamera(true);
       try {
         let stream = webrtcManager.getLocalStream();
-        if (!stream) {
+        if (!hasCameraTrack(stream)) {
           stream = await webrtcManager.initLocalMedia();
         }
         if (localVideoRef.current && stream) {
