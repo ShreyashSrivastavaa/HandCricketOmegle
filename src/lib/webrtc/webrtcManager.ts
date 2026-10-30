@@ -173,6 +173,9 @@ export class WebRTCManager {
       // Prefetch ephemeral ICE credentials asynchronously
       this.getOrFetchIceServers().catch(() => {});
 
+      // Camera turned on after the peer link was set up: swap the fresh tracks in
+      await this.attachLocalTracksToPeer();
+
       return stream;
     } catch (err: any) {
       this.onMediaError?.(err);
@@ -185,6 +188,7 @@ export class WebRTCManager {
    * Start 1-to-1 peer connection session
    */
   public async startPeerSession(socket: Socket | SignalingChannel | any, isInitiator: boolean): Promise<void> {
+    if (this.pc) this.closePeer();
     this.socket = socket;
     this.isInitiator = isInitiator;
     this.pendingCandidates = [];
@@ -201,11 +205,14 @@ export class WebRTCManager {
     this.pc = new RTCPeerConnection(configuration);
     this.remoteStream = new MediaStream();
 
-    // Add local tracks to peer connection
+    // Add local tracks to peer connection, or empty send slots that a camera can fill later
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) {
         this.pc.addTrack(track, this.localStream);
       }
+    } else {
+      this.pc.addTransceiver("video", { direction: "sendrecv" });
+      this.pc.addTransceiver("audio", { direction: "sendrecv" });
     }
 
     // Handle remote tracks
@@ -396,18 +403,19 @@ export class WebRTCManager {
    * swap the fresh tracks into the existing peer connection without renegotiating.
    */
   public async restoreLocalMedia(): Promise<MediaStream> {
-    const stream = await this.initLocalMedia();
-    if (this.pc) {
-      for (const sender of this.pc.getSenders()) {
-        const kind = sender.track?.kind;
-        const replacement = kind ? stream.getTracks().find((t) => t.kind === kind) : undefined;
-        if (replacement) {
-          await sender.replaceTrack(replacement).catch(() => {});
-        }
+    return this.initLocalMedia();
+  }
+
+  private async attachLocalTracksToPeer() {
+    if (!this.pc || !this.localStream) return;
+    for (const transceiver of this.pc.getTransceivers()) {
+      const kind = transceiver.receiver.track?.kind;
+      const replacement = kind ? this.localStream.getTracks().find((t) => t.kind === kind) : undefined;
+      if (replacement && transceiver.sender.track !== replacement) {
+        await transceiver.sender.replaceTrack(replacement).catch(() => {});
       }
     }
     this.emitMediaState();
-    return stream;
   }
 
   /**
@@ -481,6 +489,7 @@ export class WebRTCManager {
     myGuestId: string,
     isInitiator: boolean
   ): Promise<void> {
+    if (this.pc) this.closePeer();
     const listeners: Map<string, Function[]> = new Map();
 
     const handleAblyMessage = (msg: any) => {
@@ -538,10 +547,14 @@ export class WebRTCManager {
    * Mandatory on "Next Opponent", leaving match, or leaving lobby.
    */
   public cleanup() {
-    // 1. Stop local tracks immediately
+    // Stop local tracks immediately, then tear down the peer link
     this.stopLocalStream();
+    this.closePeer();
+    this.setConnectionState("closed");
+  }
 
-    // 2. Stop remote tracks
+  /** Close the peer connection and signaling while keeping the local camera stream. */
+  private closePeer() {
     if (this.remoteStream) {
       for (const track of this.remoteStream.getTracks()) {
         track.stop();
@@ -549,7 +562,6 @@ export class WebRTCManager {
       this.remoteStream = null;
     }
 
-    // 3. Close RTCPeerConnection
     if (this.pc) {
       this.pc.onicecandidate = null;
       this.pc.ontrack = null;
@@ -559,7 +571,6 @@ export class WebRTCManager {
       this.pc = null;
     }
 
-    // 4. Detach socket signal listeners
     if (this.socket) {
       this.socket.off?.("rtc:ready");
       this.socket.off?.("rtc:offer");
@@ -574,8 +585,8 @@ export class WebRTCManager {
     this.detachAbly = null;
 
     this.pendingCandidates = [];
-    this.setConnectionState("closed");
   }
+
 }
 
 export const webrtcManager = new WebRTCManager();

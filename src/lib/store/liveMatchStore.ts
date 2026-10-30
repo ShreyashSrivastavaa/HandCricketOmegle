@@ -7,7 +7,7 @@ import {
   ENDLESS_PRO_FORMAT,
   getRandomPick,
 } from "../game/engine";
-import { getClientAbly } from "../client/ablyClient";
+import { getClientAbly, getRealtimeAblyClient } from "../client/ablyClient";
 import {
   playBatHitSound,
   playBoundarySound,
@@ -309,6 +309,17 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         }
       }, 2000);
     }, 1050);
+  };
+
+  // Opens the opponent video link over Ably. The camera is attached whenever the match screen turns it on.
+  const startOpponentVideo = async (matchId: string, guestId: string, isInitiator: boolean) => {
+    try {
+      const ably = await getRealtimeAblyClient();
+      if (!ably?.channels || get().matchId !== matchId) return;
+      await webrtcManager.startAblyPeerSession(ably.channels.get(`match:${matchId}:rtc`), guestId, isInitiator);
+    } catch (err) {
+      console.warn("[LiveMatch] Opponent video setup failed:", err);
+    }
   };
 
   const setupMatchChannel = (matchId: string) => {
@@ -767,6 +778,9 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
             },
           });
           setupMatchChannel(matchData.matchId);
+          if (!matchData.isBot) {
+            startOpponentVideo(matchData.matchId, get().guestId || guestId, (matchData.role || "p1") === "p1");
+          }
         };
 
         if (data.status === "matched") {

@@ -89,6 +89,10 @@ export const LiveMatchScreen: React.FC = () => {
   const [lastStableGesture, setLastStableGesture] = useState<number | null>(null);
 
   const [milestoneText, setMilestoneText] = useState<string | null>(null);
+  const [isOpponentVideoLive, setIsOpponentVideoLive] = useState<boolean>(
+    () => webrtcManager.getState() === "live"
+  );
+  const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(false);
 
   // Automatically reset manual number selection when a delivery finishes or pick is cleared
   useEffect(() => {
@@ -100,6 +104,25 @@ export const LiveMatchScreen: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const skeletonCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Opponent video link (started by the store when the match is found)
+  useEffect(() => {
+    if (isBotMatch) return;
+    const existingRemote = webrtcManager.getRemoteStream();
+    if (remoteVideoRef.current && existingRemote) {
+      remoteVideoRef.current.srcObject = existingRemote;
+    }
+    webrtcManager.onConnectionStateChange = (state) => {
+      setIsOpponentVideoLive(state === "live");
+    };
+    webrtcManager.onOpponentCameraToggle = (enabled) => {
+      setIsOpponentCameraOn(enabled);
+    };
+    return () => {
+      webrtcManager.onConnectionStateChange = undefined;
+      webrtcManager.onOpponentCameraToggle = undefined;
+    };
+  }, [isBotMatch]);
 
   useEffect(() => {
     if (!gameState) return;
@@ -259,6 +282,10 @@ export const LiveMatchScreen: React.FC = () => {
   const runsNeeded = isChasing ? Math.max(0, (activeInnings.target || 0) - activeInnings.score) : 0;
 
   const turnStage = revealCountdown !== null ? "reveal" : timerSeconds > 7 ? "get_ready" : "show";
+
+  // Opponent's video stays hidden while picking and is revealed once the turn clock hits 3
+  const isOpponentVideoHidden = !outcomeText && revealCountdown === null && timerSeconds > 3;
+  const showOpponentVideo = !isBotMatch && isOpponentVideoLive && isOpponentCameraOn;
 
   const handleSelectNumber = (num: number) => {
     setSelectedNum(num);
@@ -485,14 +512,31 @@ export const LiveMatchScreen: React.FC = () => {
           >
             <div className="relative flex-1 overflow-hidden">
               {!isBotMatch ? (
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  className={`h-full w-full object-cover transition-all duration-300 ${
-                    isOpponentBlurred && turnStage !== "reveal" ? "blur-2xl brightness-50" : ""
-                  }`}
-                />
+                <>
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    className={`h-full w-full object-cover transition-all duration-300 ${
+                      isOpponentVideoHidden || (isOpponentBlurred && turnStage !== "reveal")
+                        ? "blur-2xl brightness-50"
+                        : ""
+                    } ${showOpponentVideo ? "" : "invisible"}`}
+                  />
+                  <div className="absolute left-1/2 top-14 z-20 -translate-x-1/2 sm:top-3">
+                    {!showOpponentVideo ? (
+                      <span className="flex items-center gap-1.5 rounded-full border border-line/70 bg-surface/90 px-3 py-1 text-[10px] font-semibold text-muted backdrop-blur-md">
+                        <CameraOff className="h-3 w-3" />
+                        {isOpponentVideoLive ? "Opponent camera is off" : "Connecting opponent video..."}
+                      </span>
+                    ) : isOpponentVideoHidden ? (
+                      <span className="flex items-center gap-1.5 rounded-full border border-line/70 bg-surface/90 px-3 py-1 text-[10px] font-semibold text-chalk backdrop-blur-md">
+                        <Lock className="h-3 w-3 text-turf" />
+                        Opponent video reveals at 3
+                      </span>
+                    ) : null}
+                  </div>
+                </>
               ) : (
                 <div className="absolute inset-0" aria-hidden="true">
                   <div className="absolute inset-0 bg-[radial-gradient(ellipse_75%_60%_at_50%_68%,rgba(247,181,0,0.14),transparent_65%),linear-gradient(180deg,#0b1628_0%,#050b16_100%)]" />
