@@ -42,6 +42,10 @@ interface VideoTilesProps {
   isGestureLocked?: boolean;
   gestureHint?: string;
   isLowLight?: boolean;
+  // Overrides the turn-stage mask: true keeps the opponent's video hidden, false shows it
+  hideOpponentVideo?: boolean;
+  // Local camera stream to preview once it's acquired after mount
+  localStream?: MediaStream | null;
 }
 
 export function VideoTiles({
@@ -63,6 +67,8 @@ export function VideoTiles({
   isGestureLocked = false,
   gestureHint,
   isLowLight = false,
+  hideOpponentVideo,
+  localStream,
 }: VideoTilesProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const internalRemoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -106,6 +112,13 @@ export function VideoTiles({
       localVideoRef.current.srcObject = localStream;
     }
 
+    // A peer session may already be live before this tile mounted
+    const existingRemote = webrtcManager.getRemoteStream();
+    if (remoteVideoRef.current && existingRemote) {
+      remoteVideoRef.current.srcObject = existingRemote;
+    }
+    setConnectionState(webrtcManager.getState());
+
     // 2. Attach callbacks
     webrtcManager.onConnectionStateChange = (state) => {
       setConnectionState(state);
@@ -138,6 +151,13 @@ export function VideoTiles({
     };
   }, []);
 
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream;
+      localVideoRef.current.play().catch(() => {});
+    }
+  }, [localStream, isLocalCameraOn]);
+
   const handleToggleCamera = () => {
     const newState = webrtcManager.toggleCamera();
     setIsLocalCameraOn(newState);
@@ -157,7 +177,7 @@ export function VideoTiles({
   // Note: We pause video playback and hide rendering client-side. A determined cheater can still
   // modify the client to unpause or remove CSS blur; this is a casual game, so the server
   // guarantees picks cannot change after lock and picks stay hidden until both are locked.
-  const isPickOrCountdown = turnStage === "pick" || turnStage === "countdown";
+  const isPickOrCountdown = hideOpponentVideo ?? (turnStage === "pick" || turnStage === "countdown");
 
   useEffect(() => {
     const video = remoteVideoRef.current;
@@ -165,10 +185,10 @@ export function VideoTiles({
 
     if (isPickOrCountdown) {
       video.pause();
-    } else if (turnStage === "reveal") {
+    } else if (turnStage === "reveal" || hideOpponentVideo === false) {
       video.play().catch(() => {});
     }
-  }, [isPickOrCountdown, turnStage]);
+  }, [isPickOrCountdown, turnStage, hideOpponentVideo]);
 
   useEffect(() => {
     if (localVideoRefOut && localVideoRef.current) {
@@ -301,6 +321,8 @@ export function VideoTiles({
             <span className="text-[10px] text-muted mt-0.5">
               {turnStage === "countdown"
                 ? "Both picks locked! Unblurring camera..."
+                : hideOpponentVideo !== undefined
+                ? "Video reveals at 3..."
                 : "Picks hidden until both players lock in"}
             </span>
           </div>

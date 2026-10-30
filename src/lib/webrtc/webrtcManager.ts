@@ -26,6 +26,7 @@ export class WebRTCManager {
   private remoteStream: MediaStream | null = null;
   private isInitiator: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private detachAbly: (() => void) | null = null;
 
   // State callbacks
   public onConnectionStateChange?: (state: WebRTCConnectionState) => void;
@@ -257,8 +258,19 @@ export class WebRTCManager {
     // Setup socket signal listeners
     this.attachSocketListeners();
 
-    // Signal ready and share gesture toggle setting
+    // Signal ready and share camera / gesture state
     this.socket?.emit("rtc:ready");
+    this.emitMediaState();
+  }
+
+  /** True when we are actually sending a live, enabled video track. */
+  private hasLiveVideo(): boolean {
+    const track = this.localStream?.getVideoTracks()[0];
+    return !!track && track.readyState === "live" && this.isCameraEnabled;
+  }
+
+  private emitMediaState() {
+    this.socket?.emit("rtc:camera_toggle", { enabled: this.hasLiveVideo() });
     this.socket?.emit("rtc:gesture_toggle", { enabled: this.isGestureModeEnabled });
   }
 
@@ -266,7 +278,18 @@ export class WebRTCManager {
     if (!this.socket) return;
 
     this.socket.on("rtc:ready", async () => {
-      if (this.isInitiator && this.pc) {
+      // The partner may have joined after our own rtc:ready went out, so always re-share media state
+      this.emitMediaState();
+
+      if (!this.isInitiator) {
+        // Answer the partner's ready so a late-joining initiator still learns we're here
+        if (this.pc && !this.pc.remoteDescription) {
+          this.socket?.emit("rtc:ready");
+        }
+        return;
+      }
+
+      if (this.pc && !this.pc.localDescription) {
         try {
           const offer = await this.pc.createOffer({
             offerToReceiveAudio: true,
@@ -364,8 +387,27 @@ export class WebRTCManager {
       }
     }
 
-    this.socket?.emit("rtc:camera_toggle", { enabled: newState });
+    this.socket?.emit("rtc:camera_toggle", { enabled: this.hasLiveVideo() });
     return newState;
+  }
+
+  /**
+   * Re-acquire camera/mic after the local stream was stopped (e.g. a rematch) and
+   * swap the fresh tracks into the existing peer connection without renegotiating.
+   */
+  public async restoreLocalMedia(): Promise<MediaStream> {
+    const stream = await this.initLocalMedia();
+    if (this.pc) {
+      for (const sender of this.pc.getSenders()) {
+        const kind = sender.track?.kind;
+        const replacement = kind ? stream.getTracks().find((t) => t.kind === kind) : undefined;
+        if (replacement) {
+          await sender.replaceTrack(replacement).catch(() => {});
+        }
+      }
+    }
+    this.emitMediaState();
+    return stream;
   }
 
   /**
@@ -453,6 +495,11 @@ export class WebRTCManager {
     };
 
     ablyChannel.subscribe(handleAblyMessage);
+    this.detachAbly = () => {
+      try {
+        ablyChannel.unsubscribe(handleAblyMessage);
+      } catch {}
+    };
 
     const channelAdapter: SignalingChannel = {
       emit: (event: string, data?: any) => {
@@ -481,6 +528,8 @@ export class WebRTCManager {
         track.stop();
       }
       this.localStream = null;
+      // Let the partner show "camera off" instead of a frozen frame
+      this.socket?.emit("rtc:camera_toggle", { enabled: false });
     }
   }
 
@@ -518,8 +567,11 @@ export class WebRTCManager {
       this.socket.off?.("rtc:ice");
       this.socket.off?.("rtc:camera_toggle");
       this.socket.off?.("rtc:mic_toggle");
+      this.socket.off?.("rtc:gesture_toggle");
       this.socket = null;
     }
+    this.detachAbly?.();
+    this.detachAbly = null;
 
     this.pendingCandidates = [];
     this.setConnectionState("closed");

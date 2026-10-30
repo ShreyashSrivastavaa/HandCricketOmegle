@@ -187,6 +187,29 @@ export function getClientAbly(): any {
   return ablyClient;
 }
 
+/**
+ * Resolves a real Ably Realtime client (one that can publish), waiting for the
+ * browser bundle to load. Returns null when only the SSE fallback is available.
+ */
+export async function getRealtimeAblyClient(): Promise<any> {
+  if (typeof window === "undefined") return null;
+  const AblyLib = await loadAblyScript();
+  if (!AblyLib || typeof AblyLib.Realtime !== "function") return null;
+
+  if (!ablyClient || !ablyClient.connection) {
+    try {
+      ablyClient = new AblyLib.Realtime({
+        authUrl: "/api/ably-token",
+        authMethod: "GET",
+      });
+    } catch (err) {
+      console.warn("[Ably Client] Realtime init error:", err);
+      return null;
+    }
+  }
+  return ablyClient;
+}
+
 export function closeClientAbly(): void {
   if (ablyClient && typeof ablyClient.close === "function") {
     try {

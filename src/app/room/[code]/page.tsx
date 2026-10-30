@@ -56,7 +56,7 @@ import { handDetector } from "@/lib/gesture/handDetector";
 import type { HandGesture } from "@/lib/gesture/handClassifier";
 import { GestureDetectionChip } from "@/components/GestureDetectionChip";
 import { useWakeLock } from "@/lib/client/useWakeLock";
-import { getClientAbly } from "@/lib/client/ablyClient";
+import { getClientAbly, getRealtimeAblyClient } from "@/lib/client/ablyClient";
 import {
   playBatHitSound,
   playBoundarySound,
@@ -146,6 +146,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const [gestureHint, setGestureHint] = useState<string | undefined>(undefined);
   const [isLowLight, setIsLowLight] = useState<boolean>(false);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const rtcStartedRef = useRef<boolean>(false);
 
   const isLocalCameraOn = webrtcManager.isCameraEnabled;
   const isGestureModeActive =
@@ -672,12 +674,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
 
         addToast(`Match starting against ${data.opponent.name}!`, "success");
 
-        if (data.mode === "video") {
-          const pref = localStorage.getItem("hca_show_to_camera") !== "false";
-          setLocalGestureSetting(pref);
-          webrtcManager.toggleGestureMode(pref);
-          webrtcManager.startPeerSession(s, data.isInitiator);
-        }
+        // Video signaling for friend rooms runs over Ably (see the friend video effect below)
 
         const p1Name = data.isInitiator ? "You" : data.opponent.name;
         const p2Name = data.isInitiator ? data.opponent.name : "You";
@@ -801,6 +798,66 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
       s.disconnect();
     };
   }, [guestId, roomCode]);
+
+  // FRIEND VIDEO: acquire camera and open the WebRTC peer link over Ably once the match starts.
+  // Socket.IO isn't available on serverless deployments, so Ably carries the signaling.
+  const isVideoMatchLive =
+    roomState?.mode === "video" &&
+    (roomState.status === "playing" || roomState.status === "ended") &&
+    !!opponent &&
+    !!guestId;
+  const amHost = !!roomState && roomState.host.guestId === guestId;
+
+  useEffect(() => {
+    if (!isVideoMatchLive || rtcStartedRef.current) return;
+    rtcStartedRef.current = true;
+    let cancelled = false;
+
+    (async () => {
+      const pref = localStorage.getItem("hca_show_to_camera") !== "false";
+      setLocalGestureSetting(pref);
+      webrtcManager.isGestureModeEnabled = pref;
+
+      let stream = webrtcManager.getLocalStream();
+      if (!stream) {
+        try {
+          stream = await webrtcManager.initLocalMedia();
+        } catch (err) {
+          console.warn("[Friend Video] Camera unavailable:", err);
+          webrtcManager.isCameraEnabled = false;
+          addToast("Camera unavailable — your friend will see you as camera off.", "warning");
+        }
+      }
+      if (cancelled) return;
+      setLocalStream(stream);
+
+      const ably = await getRealtimeAblyClient();
+      if (cancelled) return;
+      if (!ably?.channels) {
+        addToast("Video connection unavailable right now.", "warning");
+        return;
+      }
+      const rtcChannel = ably.channels.get(`room:${roomCode}:rtc`);
+      await webrtcManager.startAblyPeerSession(rtcChannel, guestId, amHost);
+    })();
+
+    return () => {
+      cancelled = true;
+      rtcStartedRef.current = false;
+      webrtcManager.cleanup();
+      setLocalStream(null);
+    };
+  }, [isVideoMatchLive, roomCode, guestId, amHost]);
+
+  // Rematch: the camera is released at match end, so bring it back into the existing peer link
+  useEffect(() => {
+    if (!isVideoMatchLive || !gameState || gameState.phase === "match_ended") return;
+    if (!rtcStartedRef.current || webrtcManager.getLocalStream() || !webrtcManager.isCameraEnabled) return;
+    webrtcManager
+      .restoreLocalMedia()
+      .then((stream) => setLocalStream(stream))
+      .catch((err) => console.warn("[Friend Video] Could not restore camera:", err));
+  }, [isVideoMatchLive, gameState?.phase]);
 
   function stopTurnCountdown() {
     if (timerIntervalRef.current) {
@@ -1411,6 +1468,11 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   const opponentRole = isUserBatting ? "bowling" : "batting";
   const currentOverIndex = Math.floor(activeInnings.balls / 6);
 
+  // Opponent's video stays masked while picking and is revealed once the turn timer hits 3
+  const hideOpponentVideo =
+    (turnStage === "pick" && timerSeconds > 3) ||
+    (turnStage === "countdown" && (revealCountdown ?? 5) > 3);
+
   return (
     <main
       className={`min-h-screen bg-ink text-chalk flex flex-col justify-between max-w-4xl mx-auto p-2 sm:p-4 select-none ${
@@ -1477,6 +1539,8 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
           isGestureLocked={isUserLocked}
           gestureHint={gestureHint}
           isLowLight={isLowLight}
+          hideOpponentVideo={hideOpponentVideo}
+          localStream={localStream}
         />
       )}
 
