@@ -154,10 +154,24 @@ export class WebRTCManager {
     this.stopLocalStream();
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: videoConstraints,
-        audio: audioConstraints,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: audioConstraints,
+        });
+      } catch (err: any) {
+        // No mic, mic blocked, or mic busy shouldn't cost the player their camera
+        if (err?.name === "PermissionDeniedError" || err?.name === "NotAllowedError") {
+          const cameraOnly = await navigator.mediaDevices
+            .getUserMedia({ video: videoConstraints, audio: false })
+            .catch(() => null);
+          if (!cameraOnly) throw err;
+          stream = cameraOnly;
+        } else {
+          stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+        }
+      }
 
       this.localStream = stream;
 
@@ -208,26 +222,28 @@ export class WebRTCManager {
     this.pc = new RTCPeerConnection(configuration);
     this.remoteStream = new MediaStream();
 
-    // Add local tracks to peer connection, or empty send slots that a camera can fill later
+    // Add local tracks to peer connection. Without a camera yet, only the initiator opens
+    // empty send slots: an answerer's addTransceiver() slots are never matched to the offer's
+    // m-lines, so the answerer instead upgrades the offered slots to sendrecv in rtc:offer.
     if (this.localStream) {
       for (const track of this.localStream.getTracks()) {
         this.pc.addTrack(track, this.localStream);
       }
-    } else {
+    } else if (isInitiator) {
       this.pc.addTransceiver("video", { direction: "sendrecv" });
       this.pc.addTransceiver("audio", { direction: "sendrecv" });
     }
 
     // Handle remote tracks
     this.pc.ontrack = (event) => {
-      if (event.streams && event.streams[0]) {
-        for (const track of event.streams[0].getTracks()) {
-          this.remoteStream?.addTrack(track);
-        }
-      } else {
-        this.remoteStream?.addTrack(event.track);
-      }
-      this.onRemoteStream?.(this.remoteStream!);
+      // Hand out a fresh MediaStream each time: Safari won't render tracks added to a
+      // stream that's already attached to a <video>
+      const tracks = new Map<string, MediaStreamTrack>();
+      for (const t of this.remoteStream?.getTracks() || []) tracks.set(t.id, t);
+      const incoming = event.streams?.[0]?.getTracks() || [event.track];
+      for (const t of incoming) tracks.set(t.id, t);
+      this.remoteStream = new MediaStream(Array.from(tracks.values()));
+      this.onRemoteStream?.(this.remoteStream);
       this.setConnectionState("live");
     };
 
@@ -317,6 +333,10 @@ export class WebRTCManager {
       if (this.isInitiator) this.sendOffer(true);
     });
 
+    this.socket.on("rtc:renegotiate", () => {
+      if (this.isInitiator) this.sendOffer();
+    });
+
     this.socket.on("rtc:ready", async () => {
       // The partner may have joined after our own rtc:ready went out, so always re-share media state
       this.emitMediaState();
@@ -338,6 +358,14 @@ export class WebRTCManager {
       if (!this.pc || !payload.sdp) return;
       try {
         await this.pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+
+        // Make sure our answer sends media back on every offered slot, with the camera if we have it
+        for (const transceiver of this.pc.getTransceivers()) {
+          if (transceiver.direction === "recvonly" || transceiver.direction === "inactive") {
+            transceiver.direction = "sendrecv";
+          }
+        }
+        await this.attachLocalTracksToPeer(false);
 
         // Process any queued candidates
         while (this.pendingCandidates.length > 0) {
@@ -430,14 +458,25 @@ export class WebRTCManager {
     return this.initLocalMedia();
   }
 
-  private async attachLocalTracksToPeer() {
+  private async attachLocalTracksToPeer(allowRenegotiate = true) {
     if (!this.pc || !this.localStream) return;
+    let needsRenegotiation = false;
     for (const transceiver of this.pc.getTransceivers()) {
       const kind = transceiver.receiver.track?.kind;
       const replacement = kind ? this.localStream.getTracks().find((t) => t.kind === kind) : undefined;
-      if (replacement && transceiver.sender.track !== replacement) {
+      if (!replacement) continue;
+      if (transceiver.sender.track !== replacement) {
         await transceiver.sender.replaceTrack(replacement).catch(() => {});
       }
+      if (transceiver.direction === "recvonly" || transceiver.direction === "inactive") {
+        transceiver.direction = "sendrecv";
+        needsRenegotiation = true;
+      }
+    }
+    if (needsRenegotiation && allowRenegotiate) {
+      // Direction changes only take effect after a new offer/answer round
+      if (this.isInitiator) this.sendOffer();
+      else this.socket?.emit("rtc:renegotiate");
     }
     this.emitMediaState();
   }
@@ -464,12 +503,13 @@ export class WebRTCManager {
         if (newVideoTrack) {
           this.localStream.addTrack(newVideoTrack);
 
-          // Replace track in active RTCPeerConnection sender
+          // Replace track in the active peer connection's video slot
           if (this.pc) {
-            const senders = this.pc.getSenders();
-            const videoSender = senders.find((s) => s.track?.kind === "video" || s.track === null);
-            if (videoSender) {
-              await videoSender.replaceTrack(newVideoTrack);
+            const videoTransceiver = this.pc
+              .getTransceivers()
+              .find((t) => t.receiver.track?.kind === "video");
+            if (videoTransceiver) {
+              await videoTransceiver.sender.replaceTrack(newVideoTrack);
             }
           }
         }
@@ -608,6 +648,7 @@ export class WebRTCManager {
       this.socket.off?.("rtc:mic_toggle");
       this.socket.off?.("rtc:gesture_toggle");
       this.socket.off?.("rtc:restart");
+      this.socket.off?.("rtc:renegotiate");
       this.socket = null;
     }
     this.detachAbly?.();
@@ -619,3 +660,21 @@ export class WebRTCManager {
 }
 
 export const webrtcManager = new WebRTCManager();
+
+/**
+ * Attach and play a remote stream. Some browsers (Safari, iOS, Chrome without a recent tap)
+ * block autoplay with sound, so fall back to muted playback and unmute on the next tap.
+ */
+export function playRemoteVideo(video: HTMLVideoElement | null, stream: MediaStream | null) {
+  if (!video || !stream) return;
+  if (video.srcObject !== stream) video.srcObject = stream;
+  video.play().catch(() => {
+    video.muted = true;
+    video.play().catch(() => {});
+    const unmute = () => {
+      video.muted = false;
+      video.play().catch(() => {});
+    };
+    document.addEventListener("pointerdown", unmute, { once: true });
+  });
+}

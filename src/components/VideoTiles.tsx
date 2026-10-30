@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { webrtcManager, type WebRTCConnectionState } from "@/lib/webrtc/webrtcManager";
+import { webrtcManager, playRemoteVideo, type WebRTCConnectionState } from "@/lib/webrtc/webrtcManager";
 import { nsfwScanner } from "@/lib/safety/nsfwScanner";
 import { PlayerChip } from "./PlayerChip";
 import {
@@ -116,9 +116,7 @@ export function VideoTiles({
 
     // A peer session may already be live before this tile mounted
     const existingRemote = webrtcManager.getRemoteStream();
-    if (remoteVideoRef.current && existingRemote) {
-      remoteVideoRef.current.srcObject = existingRemote;
-    }
+    playRemoteVideo(remoteVideoRef.current, existingRemote);
     setConnectionState(webrtcManager.getState());
 
     // 2. Attach callbacks
@@ -128,7 +126,7 @@ export function VideoTiles({
 
     webrtcManager.onRemoteStream = (stream) => {
       if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = stream;
+        playRemoteVideo(remoteVideoRef.current, stream);
         // Start on-device NSFW scanner for random queue only
         if (!isFriendRoom) {
           nsfwScanner.startScanning(remoteVideoRef.current);

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { useLiveMatchStore } from "@/lib/store/liveMatchStore";
-import { webrtcManager } from "@/lib/webrtc/webrtcManager";
+import { webrtcManager, playRemoteVideo } from "@/lib/webrtc/webrtcManager";
 import { handDetector, drawHandSkeleton } from "@/lib/gesture/handDetector";
 import type { HandGesture } from "@/lib/gesture/handClassifier";
 import { ScoreBar } from "./ScoreBar";
@@ -110,12 +110,7 @@ export const LiveMatchScreen: React.FC = () => {
   // Opponent video link (started by the store when the match is found)
   useEffect(() => {
     if (isBotMatch) return;
-    const attachRemote = (stream: MediaStream | null) => {
-      const video = remoteVideoRef.current;
-      if (!video || !stream) return;
-      if (video.srcObject !== stream) video.srcObject = stream;
-      video.play().catch(() => {});
-    };
+    const attachRemote = (stream: MediaStream | null) => playRemoteVideo(remoteVideoRef.current, stream);
     // This screen remounts between toss / innings break, so re-sync everything the link already knows
     attachRemote(webrtcManager.getRemoteStream());
     setIsOpponentVideoLive(webrtcManager.getState() === "live");
