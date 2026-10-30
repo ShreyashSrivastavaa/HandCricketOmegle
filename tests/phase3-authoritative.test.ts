@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { getRedis } from "../src/lib/server/redis";
 import {
   joinMatchmakingQueue,
+  pollMatchmakingQueue,
+  leaveMatchmakingQueue,
   handleBallMove,
   handleTossAction,
   handleStartSecondInnings,
@@ -195,6 +197,41 @@ describe("Phase 3 — Server-Authoritative Matchmaking & Moves", () => {
       // Increasing seq 2 -> succeeds
       await expect(handleBallMove(matchId, p1.guestId, 0, 6, 2)).resolves.toBeDefined();
     });
+
+    it("resolves the ball when both players lock their picks at the same moment", async () => {
+      const redis = getRedis();
+      const matchId = "match_race_test";
+      const p1 = { guestId: "guest_race_1", name: "Player 1" };
+      const p2 = { guestId: "guest_race_2", name: "Player 2" };
+      const gameState = createInitialGameState(DEFAULT_SUDDEN_DEATH_FORMAT, p1.name, p2.name, "p1");
+      gameState.phase = "innings_1";
+
+      const matchData: RedisMatch = {
+        id: matchId,
+        format: DEFAULT_SUDDEN_DEATH_FORMAT,
+        player1: p1,
+        player2: p2,
+        gameState,
+        isBot: false,
+        currentBallMoves: {},
+        currentBallIndex: 0,
+        tossPicks: {},
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      await redis.set(`match:${matchId}`, JSON.stringify(matchData));
+
+      // Both requests in flight together, e.g. both auto-locking as the turn clock hits 0
+      const results = await Promise.all([
+        handleBallMove(matchId, p1.guestId, 0, 3),
+        handleBallMove(matchId, p2.guestId, 0, 5),
+      ]);
+
+      expect(results.map((r) => r.status).sort()).toEqual(["resolved", "waiting_opponent"]);
+      const saved = await getMatch(matchId);
+      expect(saved?.currentBallIndex).toBe(1);
+      expect(saved?.currentBallMoves).toEqual({});
+    });
   });
 
   describe("Pillar 4: Atomic Matchmaking Queue & Race Prevention", () => {
@@ -290,6 +327,78 @@ describe("Phase 3 — Server-Authoritative Matchmaking & Moves", () => {
       const result = await joinMatchmakingQueue(blocker, "Blocker", "sudden_death");
       expect(result.status).toBe("queued");
       expect(result.matchId).toBeUndefined();
+    });
+
+    it("keeps a blocked candidate in the queue for other players", async () => {
+      await blockGuest("blocker_x", "target_x");
+      await joinMatchmakingQueue("target_x", "Target", "sudden_death");
+      await joinMatchmakingQueue("blocker_x", "Blocker", "sudden_death");
+
+      const third = await joinMatchmakingQueue("third_x", "Third", "sudden_death");
+      expect(third.status).toBe("matched");
+      expect(third.opponentName).toBe("Target");
+    });
+
+    it("pairs two players who both queued at the same time once one of them polls", async () => {
+      const [a, b] = await Promise.all([
+        joinMatchmakingQueue("sim_a", "Alice", "sudden_death"),
+        joinMatchmakingQueue("sim_b", "Bob", "sudden_death"),
+      ]);
+      // Whichever way the race went, polling must leave both players with the same match
+      const resultA = a.status === "matched" ? a : await pollMatchmakingQueue("sim_a", "Alice", "sudden_death");
+      const resultB = b.status === "matched" ? b : await pollMatchmakingQueue("sim_b", "Bob", "sudden_death");
+      expect(resultA.status).toBe("matched");
+      expect(resultB.status).toBe("matched");
+      expect(resultA.matchId).toBe(resultB.matchId);
+    });
+
+    it("does not match with a player who stopped polling, and keeps waiting players matchable past 25s", async () => {
+      const redis = getRedis();
+      const queueKey = "queue:hand_cricket:sudden_death";
+      const longAgo = Date.now() - 60000;
+
+      // Ghost: joined a minute ago and never polled since (closed tab / switched to bot)
+      await redis.rpush(queueKey, JSON.stringify({ guestId: "ghost", guestName: "Ghost", mode: "sudden_death", joinedAt: longAgo }));
+      // Patient: joined a minute ago but is still polling
+      await redis.rpush(queueKey, JSON.stringify({ guestId: "patient", guestName: "Patient", mode: "sudden_death", joinedAt: longAgo }));
+      await redis.set("queue_alive:patient", Date.now(), { ex: 30 });
+
+      const result = await joinMatchmakingQueue("newcomer", "New", "sudden_death");
+      expect(result.status).toBe("matched");
+      expect(result.opponentName).toBe("Patient");
+
+      const patientPoll = await pollMatchmakingQueue("patient", "Patient", "sudden_death");
+      expect(patientPoll.status).toBe("matched");
+      expect(patientPoll.matchId).toBe(result.matchId);
+    });
+
+    it("never puts a player in two matches when both players' polls pair at the same time", async () => {
+      const redis = getRedis();
+      const queueKey = "queue:hand_cricket:sudden_death";
+      for (const [id, name] of [["race_a", "Alice"], ["race_b", "Bob"]]) {
+        await redis.rpush(queueKey, JSON.stringify({ guestId: id, guestName: name, mode: "sudden_death", joinedAt: Date.now() }));
+      }
+
+      const seen: Record<string, { matchId?: string; role?: string }> = {};
+      for (let round = 0; round < 5 && Object.keys(seen).length < 2; round++) {
+        const [a, b] = await Promise.all([
+          pollMatchmakingQueue("race_a", "Alice", "sudden_death"),
+          pollMatchmakingQueue("race_b", "Bob", "sudden_death"),
+        ]);
+        if (a.status === "matched" && !seen.race_a) seen.race_a = a;
+        if (b.status === "matched" && !seen.race_b) seen.race_b = b;
+      }
+
+      expect(seen.race_a?.matchId).toBeDefined();
+      expect(seen.race_a?.matchId).toBe(seen.race_b?.matchId);
+      expect([seen.race_a?.role, seen.race_b?.role].sort()).toEqual(["p1", "p2"]);
+    });
+
+    it("removes a player from the queue on leave", async () => {
+      await joinMatchmakingQueue("leaver", "Leaver", "sudden_death");
+      await leaveMatchmakingQueue("leaver", "sudden_death");
+      const result = await joinMatchmakingQueue("joiner", "Joiner", "sudden_death");
+      expect(result.status).toBe("queued");
     });
   });
 });

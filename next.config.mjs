@@ -6,7 +6,7 @@ const cspHeader = `
   style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data: https:;
   font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' https://*.ably.io wss://*.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://*.upstash.io https://*.supabase.co https://cdn.jsdelivr.net https://storage.googleapis.com;
+  connect-src 'self' https://*.ably.io wss://*.ably.io https://*.ably-realtime.com wss://*.ably-realtime.com https://*.ably.net wss://*.ably.net https://*.upstash.io https://*.supabase.co https://cdn.jsdelivr.net https://storage.googleapis.com;
   media-src 'self' blob:;
   frame-ancestors 'none';
   base-uri 'self';

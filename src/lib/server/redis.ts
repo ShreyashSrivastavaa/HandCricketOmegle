@@ -17,8 +17,16 @@ export class MemoryRedis {
     return entry.value as T;
   }
 
-  async set(key: string, value: any, opts?: { ex?: number }): Promise<"OK"> {
-    const expiresAt = opts?.ex ? Date.now() + opts.ex * 1000 : undefined;
+  async set(
+    key: string,
+    value: any,
+    opts?: { ex?: number; px?: number; nx?: boolean }
+  ): Promise<"OK" | null> {
+    // Checked synchronously (no await) so NX stays atomic like real Redis
+    const existing = this.store.get(key);
+    if (opts?.nx && existing && !(existing.expiresAt && Date.now() > existing.expiresAt)) return null;
+    const ttlMs = opts?.px ?? (opts?.ex ? opts.ex * 1000 : undefined);
+    const expiresAt = ttlMs ? Date.now() + ttlMs : undefined;
     this.store.set(key, { value, expiresAt });
     return "OK";
   }
@@ -59,6 +67,10 @@ export class MemoryRedis {
     if (!list || list.length === 0) return null;
     const item = list.shift();
     return item as T;
+  }
+
+  async llen(key: string): Promise<number> {
+    return this.lists.get(key)?.length ?? 0;
   }
 
   async lrange<T>(key: string, start: number, stop: number): Promise<T[]> {

@@ -62,6 +62,8 @@ interface LiveMatchStore {
   // In-Game Turn & Reveal
   userPick: number | null;
   isUserLocked: boolean;
+  /** True when the turn clock ran out and the pick was chosen at random, not by the player */
+  isAutoPicked: boolean;
   opponentPick: number | null;
   opponentTileState: HandTileState;
   userTileState: HandTileState;
@@ -97,7 +99,7 @@ interface LiveMatchStore {
   submitTossCall: (call: "odd" | "even") => Promise<void>;
   submitTossPick: (pick: number) => Promise<void>;
   submitTossDecision: (decision: "bat" | "bowl") => Promise<void>;
-  submitBallPick: (pick: number) => Promise<void>;
+  submitBallPick: (pick: number, opts?: { auto?: boolean }) => Promise<void>;
   startSecondInnings: () => Promise<void>;
   sendReaction: (emoji: string) => Promise<void>;
   forfeitCurrentMatch: (reason?: string) => Promise<void>;
@@ -157,7 +159,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         set({ timerSeconds: 0, isTimerActive: false });
         // Timeout auto-pick!
         const autoPick = getRandomPick();
-        get().submitBallPick(autoPick);
+        get().submitBallPick(autoPick, { auto: true });
       } else {
         set({ timerSeconds: state.timerSeconds - 1 });
       }
@@ -572,6 +574,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
     userPick: null,
     isUserLocked: false,
+    isAutoPicked: false,
     opponentPick: null,
     opponentTileState: "empty",
     userTileState: "empty",
@@ -606,9 +609,11 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           const res = await fetch("/api/session");
           if (res.ok) {
             const data = await res.json();
-            if (!tabGuestId && typeof window !== "undefined" && data.guestId) {
-              tabGuestId = data.guestId;
-              sessionStorage.setItem("hca_tab_guest_id", data.guestId);
+            if (!tabGuestId && typeof window !== "undefined") {
+              // Every tab gets its own identity: the session cookie is shared across tabs,
+              // and two tabs with the same guestId are treated as one player by the queue
+              tabGuestId = `guest_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+              sessionStorage.setItem("hca_tab_guest_id", tabGuestId);
             }
             if (!tabGuestName && typeof window !== "undefined" && data.guestName) {
               tabGuestName = data.guestName;
@@ -638,6 +643,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       clearMatchSync();
 
       const { mode } = get();
+      const wasSearching = get().screen === "searching";
       set({ screen: "searching" });
 
       let { guestName, guestId } = get();
@@ -653,6 +659,15 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         if (guestId) set({ guestId });
       }
       if (get().screen !== "searching") return;
+
+      if (playVsBot && wasSearching) {
+        // Switching from the stranger queue to a bot: free our queue slot right away
+        fetch("/api/queue/leave", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode, guestId: guestId || undefined }),
+        }).catch(() => {});
+      }
 
       try {
         const res = await fetch("/api/queue/join", {
@@ -773,7 +788,11 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           }
           try {
             const checkRes = await fetch(
-              `/api/queue/status?guestId=${encodeURIComponent(currentGuestId)}`
+              `/api/queue/status?${new URLSearchParams({
+                guestId: currentGuestId,
+                guestName: guestName || "",
+                mode,
+              })}`
             );
             if (checkRes.ok) {
               const checkData = await checkRes.json();
@@ -798,13 +817,13 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           userPrivateChannel.unsubscribe();
         } catch {}
       }
-      const { mode } = get();
+      const { mode, guestId } = get();
       set({ screen: "landing" });
       try {
         await fetch("/api/queue/leave", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode }),
+          body: JSON.stringify({ mode, guestId: guestId || undefined }),
         });
       } catch {}
     },
@@ -926,12 +945,12 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       }
     },
 
-    submitBallPick: async (pick) => {
+    submitBallPick: async (pick, opts) => {
       const { matchId, currentBallIndex, isUserLocked, guestId } = get();
       if (!matchId || isUserLocked) return;
 
       triggerHaptic("light");
-      set({ userPick: pick, isUserLocked: true, userTileState: "locked" });
+      set({ userPick: pick, isUserLocked: true, isAutoPicked: !!opts?.auto, userTileState: "locked" });
 
       try {
         const res = await fetch(`/api/match/${matchId}/move`, {
@@ -1015,13 +1034,13 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
       webrtcManager.stopLocalStream();
       handDetector.stop();
 
-      const { matchId } = get();
+      const { matchId, guestId } = get();
       if (matchId) {
         try {
           await fetch(`/api/match/${matchId}/leave`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reason }),
+            body: JSON.stringify({ reason, guestId: guestId || undefined }),
           });
         } catch {}
       }

@@ -62,6 +62,7 @@ export const LiveMatchScreen: React.FC = () => {
     isPaused,
     togglePause,
     submitBallPick,
+    isAutoPicked,
     sendReaction,
     forfeitCurrentMatch,
     setIsReportOpen,
@@ -618,7 +619,7 @@ export const LiveMatchScreen: React.FC = () => {
                   <div className="flex items-center gap-1.5 rounded-full border border-turf/35 bg-surface/90 px-4 py-1.5 backdrop-blur-md">
                     <Check className="h-3.5 w-3.5 text-turf" />
                     <span className="font-heading text-[10px] font-bold uppercase tracking-wider text-turf">
-                      Locked {userPick}
+                      {isAutoPicked ? "Time up · auto-picked" : "Locked"} {userPick}
                     </span>
                   </div>
                 ) : (
@@ -655,7 +656,7 @@ export const LiveMatchScreen: React.FC = () => {
                           </span>
                         ) : isUserLocked ? (
                           <span className="rounded bg-turf px-1 py-0.5 font-mono text-[7px] font-bold uppercase text-ink">
-                            Locked {userPick}
+                            {isAutoPicked ? "Auto" : "Locked"} {userPick}
                           </span>
                         ) : detectedGesture !== null ? (
                           <span className="rounded bg-amber px-1 py-0.5 font-mono text-[7px] font-bold uppercase text-ink">
@@ -804,7 +805,11 @@ export const LiveMatchScreen: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <span className={`h-1.5 w-1.5 rounded-full ${isUserLocked ? "bg-turf" : "animate-pulse bg-amber"}`} />
                   <span className="font-heading text-[10px] font-black uppercase tracking-[0.14em] text-chalk">
-                    {isUserLocked ? "Pick locked · get ready" : "Your delivery"}
+                    {isUserLocked
+                      ? isAutoPicked
+                        ? `Time up · auto-picked ${userPick}`
+                        : "Pick locked · get ready"
+                      : "Your delivery"}
                   </span>
                 </div>
 

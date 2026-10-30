@@ -18,8 +18,6 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
   onPlayVsBot,
 }) => {
   const [elapsed, setElapsed] = useState<number>(0);
-  const [showBotFallback, setShowBotFallback] = useState<boolean>(false);
-  const botFallbackCalled = React.useRef<boolean>(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -29,15 +27,6 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    if (elapsed >= 5) {
-      setShowBotFallback(true);
-    }
-    if (elapsed >= 9 && !botFallbackCalled.current) {
-      botFallbackCalled.current = true;
-      onPlayVsBot();
-    }
-  }, [elapsed, onPlayVsBot]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -127,39 +116,10 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
           ))}
         </div>
 
-        {showBotFallback ? (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="relative z-10 mt-4 rounded-2xl border border-turf/30 bg-turf/[0.06] p-4"
-          >
-            <div className="flex items-center gap-2 text-turf">
-              <Bot className="h-4 w-4" />
-              <span className="font-heading text-[11px] font-black uppercase tracking-[0.14em]">
-                No live player yet
-              </span>
-            </div>
-            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-              The queue is quiet. Warm up against the house bot or hold on for a few more seconds.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                playClickSound();
-                onPlayVsBot();
-              }}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-turf px-4 py-3 font-heading text-xs font-black uppercase tracking-wider text-ink transition-colors hover:bg-turf-hover"
-            >
-              <Bot className="h-4 w-4 fill-current" />
-              <span>Play vs Bot Arena</span>
-            </button>
-          </motion.div>
-        ) : (
-          <div className="relative z-10 mt-4 flex items-center justify-center gap-2 rounded-2xl border border-line/60 bg-ink/30 px-4 py-3 text-[11px] text-muted">
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-turf" />
-            <span>Scanning the queue for a live stranger...</span>
-          </div>
-        )}
+        <div className="relative z-10 mt-4 flex items-center justify-center gap-2 rounded-2xl border border-line/60 bg-ink/30 px-4 py-3 text-[11px] text-muted">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-turf" />
+          <span>Scanning the queue for a live stranger...</span>
+        </div>
 
         <div className="relative z-10 mt-4 flex items-center justify-between border-t border-line/60 pt-3">
           <button
@@ -174,19 +134,17 @@ export const SearchingOverlay: React.FC<SearchingOverlayProps> = ({
             <span>Cancel search</span>
           </button>
 
-          {!showBotFallback && (
-            <button
-              type="button"
-              onClick={() => {
-                playClickSound();
-                onPlayVsBot();
-              }}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-turf transition-colors hover:bg-turf/10"
-            >
-              <Bot className="h-3.5 w-3.5" />
-              <span>Play vs bot</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              playClickSound();
+              onPlayVsBot();
+            }}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-[11px] font-semibold uppercase tracking-wider text-turf transition-colors hover:bg-turf/10"
+          >
+            <Bot className="h-3.5 w-3.5" />
+            <span>Play vs bot</span>
+          </button>
         </div>
       </div>
     </div>

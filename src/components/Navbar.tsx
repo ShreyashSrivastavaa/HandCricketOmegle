@@ -27,12 +27,15 @@ interface NavbarProps {
   guestName?: string;
   onOpenRules?: () => void;
   onOpenHardwareCheck?: () => void;
+  /** Called when the logo or Home link is clicked, so the page can leave any in-progress screen */
+  onGoHome?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   guestName,
   onOpenRules,
   onOpenHardwareCheck,
+  onGoHome,
 }) => {
   const pathname = usePathname();
   const [muted, setMuted] = useState<boolean>(false);
@@ -68,6 +71,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     setMuted(next);
   };
 
+  const handleHomeClick = () => {
+    setIsMobileMenuOpen(false);
+    if (onGoHome) onGoHome();
+  };
+
   const handleRulesClick = () => {
     playClickSound();
     setIsMobileMenuOpen(false);
@@ -92,7 +100,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <nav className="flex h-[72px] items-center justify-between gap-3" role="navigation" aria-label="Main Navigation">
           <Link
             href="/"
-            onClick={() => setIsMobileMenuOpen(false)}
+            onClick={handleHomeClick}
             className="group flex min-w-0 items-center gap-2.5 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-turf sm:gap-3"
             aria-label="HandCricketOmegle Home"
           >
@@ -111,7 +119,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </Link>
 
           <div className="hidden items-center gap-7 xl:flex">
-            <Link href="/" className={`${desktopLink} ${pathname === "/" ? activeLink : ""}`}>
+            <Link href="/" onClick={handleHomeClick} className={`${desktopLink} ${pathname === "/" ? activeLink : ""}`}>
               Home
             </Link>
             {onOpenRules && (

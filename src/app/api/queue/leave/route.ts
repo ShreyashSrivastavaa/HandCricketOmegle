@@ -8,6 +8,7 @@ export const runtime = "nodejs";
 
 const leaveQueueSchema = z.object({
   mode: z.enum(["sudden_death", "classic", "endless"]).default("sudden_death"),
+  guestId: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -21,9 +22,12 @@ export async function POST(req: NextRequest) {
   const json = await req.json().catch(() => ({}));
   const parseResult = leaveQueueSchema.safeParse(json);
   const mode = parseResult.success ? parseResult.data.mode : "sudden_death";
+  // The queue entry is keyed by the per-tab guestId the client joined with
+  const clientGuestId = parseResult.success ? parseResult.data.guestId?.trim() : undefined;
+  const guestId = clientGuestId && clientGuestId.length > 3 ? clientGuestId : session.guestId;
 
   try {
-    await leaveMatchmakingQueue(session.guestId, mode);
+    await leaveMatchmakingQueue(guestId, mode);
     return NextResponse.json({ success: true, message: "Left matchmaking queue" });
   } catch (err: any) {
     console.error("[Queue Leave API] Error:", err);

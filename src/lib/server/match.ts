@@ -50,89 +50,100 @@ export interface WaitingQueueEntry {
   joinedAt: number;
 }
 
+type QueueMode = "sudden_death" | "classic" | "endless";
+
 /**
  * Returns the queue key for a match mode.
  */
-function getQueueKey(mode: "sudden_death" | "classic" | "endless"): string {
+function getQueueKey(mode: QueueMode): string {
   return `queue:hand_cricket:${mode}`;
 }
 
+/** A queued player counts as gone once neither their join nor a status poll is this recent. */
+export const QUEUE_STALE_MS = 10000;
+
+function getHeartbeatKey(guestId: string): string {
+  return `queue_alive:${guestId}`;
+}
+
+function getClaimedKey(guestId: string): string {
+  return `queue_claimed:${guestId}`;
+}
+
 /**
- * Atomically pops a waiting candidate from the Redis queue using Lua.
- * Guarantees no two concurrent join requests can pop the same candidate (prevents double-pairing).
+ * Records that a queued player is still on the searching screen (refreshed by every status poll).
+ */
+export async function touchQueueHeartbeat(guestId: string): Promise<void> {
+  await getRedis().set(getHeartbeatKey(guestId), Date.now(), { ex: 30 });
+}
+
+function parseQueueEntry(item: unknown): WaitingQueueEntry | null {
+  try {
+    const parsed = typeof item === "string" ? JSON.parse(item) : item;
+    return parsed && typeof (parsed as any).guestId === "string" ? (parsed as WaitingQueueEntry) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Pops the first live candidate from the queue. LPOP is atomic, so no two concurrent
+ * requests can ever receive the same candidate (prevents double-pairing).
+ * Self entries and players who stopped polling (closed tab, went to bot, etc.) are discarded.
  */
 export async function popCandidateAtomically(
   redis: any,
   queueKey: string,
   currentGuestId: string,
-  maxAgeMs = 25000
+  maxIdleMs = QUEUE_STALE_MS
 ): Promise<WaitingQueueEntry | null> {
-  const now = Date.now();
-  const script = `
-local queueKey = KEYS[1]
-local currentGuestId = ARGV[1]
-local maxAgeMs = tonumber(ARGV[2])
-local now = tonumber(ARGV[3])
-
-while true do
-  local item = redis.call('LPOP', queueKey)
-  if not item then
-    return nil
-  end
-  local ok, decoded = pcall(cjson.decode, item)
-  if ok and decoded and decoded.guestId then
-    if decoded.guestId ~= currentGuestId and (now - decoded.joinedAt) <= maxAgeMs then
-      return item
-    end
-  end
-end
-`;
-
-  try {
-    if (typeof redis.eval === "function") {
-      const result = await redis.eval(
-        script,
-        [queueKey],
-        [currentGuestId, String(maxAgeMs), String(now)]
-      );
-      if (result) {
-        return typeof result === "string" ? JSON.parse(result) : result;
-      }
-      return null;
-    }
-  } catch (err) {
-    console.warn("[Matchmaking] Lua atomic pop error, falling back to atomic loop:", err);
-  }
-
-  // Safe LPOP loop fallback
   while (true) {
     const item = await redis.lpop(queueKey);
     if (!item) return null;
-    const parsed = typeof item === "string" ? JSON.parse(item) : item;
-    if (
-      parsed &&
-      parsed.guestId !== currentGuestId &&
-      now - parsed.joinedAt <= maxAgeMs
-    ) {
-      return parsed;
-    }
+    const parsed = parseQueueEntry(item);
+    if (!parsed || parsed.guestId === currentGuestId) continue;
+
+    const heartbeat = Number(await redis.get(getHeartbeatKey(parsed.guestId))) || 0;
+    const lastSeen = Math.max(parsed.joinedAt || 0, heartbeat);
+    if (Date.now() - lastSeen <= maxIdleMs) return parsed;
   }
 }
 
 /**
- * Atomically attempts to pair the guest with a waiting player or queues them.
+ * Removes every queue entry belonging to a guest. Returns the removed entry (if any).
  */
-export async function joinMatchmakingQueue(
-  guestId: string,
-  guestName: string,
-  mode: "sudden_death" | "classic" | "endless" = "sudden_death"
-): Promise<{
+async function removeFromQueue(
+  redis: any,
+  queueKey: string,
+  guestId: string
+): Promise<WaitingQueueEntry | null> {
+  const items: unknown[] = await redis.lrange(queueKey, 0, -1);
+  let removed: WaitingQueueEntry | null = null;
+  for (const item of items) {
+    const parsed = parseQueueEntry(item);
+    if (parsed?.guestId !== guestId) continue;
+    const count = await redis.lrem(queueKey, 0, typeof item === "string" ? item : JSON.stringify(item));
+    if (count > 0) removed = parsed;
+  }
+  return removed;
+}
+
+type QueueResult = {
   status: "matched" | "queued";
   matchId?: string;
   role?: "p1" | "p2";
   opponentName?: string;
   isBot?: boolean;
-}> {
+};
+
+/**
+ * Starts a fresh search: clears leftovers from any previous search, then pairs or queues.
+ */
+export async function joinMatchmakingQueue(
+  guestId: string,
+  guestName: string,
+  mode: QueueMode = "sudden_death"
+): Promise<QueueResult> {
   const redis = getRedis();
   const queueKey = getQueueKey(mode);
 
@@ -142,25 +153,105 @@ export async function joinMatchmakingQueue(
     throw new Error("Access suspended: Your account is temporarily suspended due to community reports.");
   }
 
-  // 2. Atomically pop a candidate from queue
-  let waitingPlayer = await popCandidateAtomically(redis, queueKey, guestId, 25000);
+  // 2. Drop any old entry of ours (re-search after cancel / bot match) so we never sit in the queue twice
+  await Promise.all([
+    removeFromQueue(redis, queueKey, guestId),
+    redis.del(getClaimedKey(guestId)),
+    redis.del(`user_match:${guestId}`),
+  ]);
 
-  // 3. Ensure candidate is not blocked or banned
-  if (waitingPlayer) {
-    const [isBlocked, candidateBan] = await Promise.all([
-      isOpponentBlocked(guestId, waitingPlayer.guestId),
-      isGuestBanned(waitingPlayer.guestId),
-    ]);
+  return pairOrEnqueue(guestId, guestName, mode);
+}
 
-    if (isBlocked || candidateBan.banned) {
-      // Discard invalid candidate and attempt next
-      waitingPlayer = await popCandidateAtomically(redis, queueKey, guestId, 25000);
+/**
+ * Pairs the guest with a live waiting player, or queues them if there is none.
+ *
+ * The guest's own queue entry stays put while it looks for a partner, and a candidate is taken
+ * with LREM (only one request can remove a given entry). Both players are then claimed with
+ * SET NX, lower guestId first so two requests pairing at once can't each grab one claim and
+ * stall. Before claims existed, A's and B's polls could each pick the other and create two
+ * matches with each player as "p2" in one of them, so both screens waited for the other to
+ * call the toss.
+ */
+async function pairOrEnqueue(
+  guestId: string,
+  guestName: string,
+  mode: QueueMode
+): Promise<QueueResult> {
+  const redis = getRedis();
+  const queueKey = getQueueKey(mode);
+  const matchId = `match_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
+  const claim = (id: string) => redis.set(getClaimedKey(id), matchId, { nx: true, ex: 30 });
+
+  const items: unknown[] = await redis.lrange(queueKey, 0, -1);
+  let selfQueued = false;
+  let waitingPlayer: WaitingQueueEntry | null = null;
+  const skipped: WaitingQueueEntry[] = [];
+  let pairedByOther = false;
+  let attempts = 0;
+
+  for (const item of items) {
+    const candidate = parseQueueEntry(item);
+    if (!candidate) continue;
+    if (candidate.guestId === guestId) {
+      selfQueued = true;
+      continue;
     }
+    if (attempts >= 5) continue;
+
+    const raw = typeof item === "string" ? item : JSON.stringify(item);
+    const heartbeat = Number(await redis.get(getHeartbeatKey(candidate.guestId))) || 0;
+    if (Date.now() - Math.max(candidate.joinedAt || 0, heartbeat) > QUEUE_STALE_MS) {
+      await redis.lrem(queueKey, 0, raw); // left the search screen without leaving the queue
+      continue;
+    }
+    // Take the candidate out of the queue; 0 means another request took it first
+    if (!(await redis.lrem(queueKey, 1, raw))) continue;
+    attempts++;
+
+    const [isBlocked, candidateBan] = await Promise.all([
+      isOpponentBlocked(guestId, candidate.guestId),
+      isGuestBanned(candidate.guestId),
+    ]);
+    if (candidateBan.banned) continue;
+    if (isBlocked) {
+      skipped.push(candidate);
+      continue;
+    }
+
+    const [first, second] = [guestId, candidate.guestId].sort();
+    if (!(await claim(first))) {
+      if (first === guestId) {
+        // Someone else just paired us; their match reaches us through user_match
+        skipped.push(candidate);
+        pairedByOther = true;
+        break;
+      }
+      continue; // candidate is already in another match: drop its entry
+    }
+    if (!(await claim(second))) {
+      await redis.del(getClaimedKey(first));
+      if (second === guestId) {
+        skipped.push(candidate);
+        pairedByOther = true;
+        break;
+      }
+      continue;
+    }
+    waitingPlayer = candidate;
+    break;
+  }
+  if (skipped.length > 0) {
+    await redis.lpush(queueKey, ...skipped.map((s) => JSON.stringify(s)));
+  }
+  if (pairedByOther) return { status: "queued" };
+
+  if (waitingPlayer && selfQueued) {
+    await removeFromQueue(redis, queueKey, guestId);
   }
 
   if (waitingPlayer) {
     // Found a match! Pair guest with waitingPlayer
-    const matchId = `match_${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
     const format =
       mode === "endless"
         ? DEFAULT_ENDLESS_FORMAT
@@ -254,7 +345,10 @@ export async function joinMatchmakingQueue(
     joinedAt: Date.now(),
   };
 
-  await redis.rpush(queueKey, JSON.stringify(queueEntry));
+  await Promise.all([
+    selfQueued ? Promise.resolve() : redis.rpush(queueKey, JSON.stringify(queueEntry)),
+    touchQueueHeartbeat(guestId),
+  ]);
 
   return {
     status: "queued",
@@ -262,24 +356,60 @@ export async function joinMatchmakingQueue(
 }
 
 /**
+ * Called by a queued client's status poll. Returns a pending match if one was made for the
+ * guest; otherwise refreshes their heartbeat and retries pairing, so two players who queued
+ * at the same moment (both saw an empty queue) still find each other.
+ */
+export async function pollMatchmakingQueue(
+  guestId: string,
+  guestName: string,
+  mode: QueueMode = "sudden_death"
+): Promise<QueueResult> {
+  const redis = getRedis();
+  const queueKey = getQueueKey(mode);
+
+  const consumeMatch = async () => {
+    const raw = await redis.get(`user_match:${guestId}`);
+    if (!raw) return null;
+    await redis.del(`user_match:${guestId}`);
+    return { status: "matched" as const, ...(typeof raw === "string" ? JSON.parse(raw) : raw) };
+  };
+
+  const pending = await consumeMatch();
+  if (pending) return pending;
+
+  await touchQueueHeartbeat(guestId);
+
+  // Another player claimed us and is creating the match right now: just wait for it
+  if (await redis.get(getClaimedKey(guestId))) {
+    return (await consumeMatch()) || { status: "queued" };
+  }
+
+  // Alone in the queue: nothing to pair with, keep idle polls cheap
+  const queueLength = await redis.llen(queueKey);
+  if (queueLength === 1) {
+    const [onlyEntry] = await redis.lrange(queueKey, 0, 0);
+    if (parseQueueEntry(onlyEntry)?.guestId === guestId) return { status: "queued" };
+  }
+
+  // Pair with someone, or re-queue if our entry was dropped (e.g. a network stall made us look stale)
+  const result = await pairOrEnqueue(guestId, guestName, mode);
+  if (result.status === "queued") return (await consumeMatch()) || result;
+  return result;
+}
+
+/**
  * Removes a player from the matchmaking queue.
  */
 export async function leaveMatchmakingQueue(
   guestId: string,
-  mode: "sudden_death" | "classic" | "endless" = "sudden_death"
+  mode: QueueMode = "sudden_death"
 ): Promise<void> {
   const redis = getRedis();
-  const queueKey = getQueueKey(mode);
-
-  const items = await redis.lrange<WaitingQueueEntry | string>(queueKey, 0, -1);
-  for (const item of items) {
-    const parsed: WaitingQueueEntry =
-      typeof item === "string" ? JSON.parse(item) : item;
-    if (parsed.guestId === guestId) {
-      await redis.lrem(queueKey, 1, typeof item === "string" ? item : JSON.stringify(item));
-      break;
-    }
-  }
+  await Promise.all([
+    removeFromQueue(redis, getQueueKey(mode), guestId),
+    redis.del(getHeartbeatKey(guestId)),
+  ]);
 }
 
 /**
@@ -349,6 +479,47 @@ export async function getMatch(matchId: string): Promise<RedisMatch | null> {
   return typeof raw === "string" ? JSON.parse(raw) : raw;
 }
 
+const MATCH_LOCK_TTL_MS = 5000;
+const MATCH_LOCK_WAIT_MS = 8000;
+
+/**
+ * Runs a match update while holding a per-match Redis lock. Every handler reads the whole
+ * match, changes it and writes it back, so two requests at the same moment (both players
+ * locking a pick as the turn clock hits 0) would otherwise overwrite each other's pick and
+ * the ball would never resolve.
+ */
+async function withMatchLock<T>(matchId: string, fn: () => Promise<T>): Promise<T> {
+  const redis = getRedis();
+  const lockKey = `lock:match:${matchId}`;
+  const token = crypto.randomUUID();
+  const deadline = Date.now() + MATCH_LOCK_WAIT_MS;
+
+  while (!(await redis.set(lockKey, token, { nx: true, px: MATCH_LOCK_TTL_MS }))) {
+    if (Date.now() > deadline) throw new Error("Match is busy, please retry");
+    await new Promise((resolve) => setTimeout(resolve, 25 + Math.random() * 50));
+  }
+
+  try {
+    return await fn();
+  } finally {
+    // Only release our own lock (it may have expired and been taken by another request)
+    if ((await redis.get(lockKey)) === token) await redis.del(lockKey);
+  }
+}
+
+function lockedByMatch<A extends [string, ...any[]], R>(
+  fn: (...args: A) => Promise<R>
+): (...args: A) => Promise<R> {
+  return (...args: A) => withMatchLock(args[0], () => fn(...args));
+}
+
+export const handleTossAction = lockedByMatch(handleTossActionUnlocked);
+export const handleStartSecondInnings = lockedByMatch(handleStartSecondInningsUnlocked);
+export const handleBallMove = lockedByMatch(handleBallMoveUnlocked);
+export const handleForfeit = lockedByMatch(handleForfeitUnlocked);
+export const handleReadyConfirm = lockedByMatch(handleReadyConfirmUnlocked);
+export const handleRematch = lockedByMatch(handleRematchUnlocked);
+
 /**
  * Saves updated match data to Redis with TTL refresh.
  */
@@ -363,7 +534,7 @@ export async function saveMatch(match: RedisMatch): Promise<void> {
 /**
  * Submits a toss action (call, pick, or decision) and resolves authoritatively.
  */
-export async function handleTossAction(
+async function handleTossActionUnlocked(
   matchId: string,
   guestId: string,
   action:
@@ -469,7 +640,7 @@ export async function handleTossAction(
 /**
  * Starts second innings from innings_break.
  */
-export async function handleStartSecondInnings(
+async function handleStartSecondInningsUnlocked(
   matchId: string,
   guestId: string
 ): Promise<{ success: boolean; gameState: GameState }> {
@@ -494,7 +665,7 @@ export async function handleStartSecondInnings(
 /**
  * Submits a secret ball delivery pick (1-6) and resolves when both picks are in.
  */
-export async function handleBallMove(
+async function handleBallMoveUnlocked(
   matchId: string,
   guestId: string,
   ballIndex: number,
@@ -617,7 +788,7 @@ export async function handleBallMove(
 /**
  * Handles match forfeit (disconnect, rage quit, or manual forfeit).
  */
-export async function handleForfeit(
+async function handleForfeitUnlocked(
   matchId: string,
   forfeitingGuestId: string,
   reason: string = "Opponent left the match"
@@ -681,7 +852,7 @@ export async function handleReport(
 /**
  * Mutual 5-second Ready-Check confirmation.
  */
-export async function handleReadyConfirm(
+async function handleReadyConfirmUnlocked(
   matchId: string,
   guestId: string
 ): Promise<{ success: boolean; bothReady: boolean }> {
@@ -710,7 +881,7 @@ export async function handleReadyConfirm(
 /**
  * Endless Series Rematch handler with alternating roles.
  */
-export async function handleRematch(
+async function handleRematchUnlocked(
   matchId: string,
   guestId: string
 ): Promise<{

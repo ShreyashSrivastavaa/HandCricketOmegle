@@ -44,7 +44,19 @@ export default function HomePage() {
     submitTossDecision,
     startSecondInnings,
     resetToLanding,
+    forfeitCurrentMatch,
   } = useLiveMatchStore();
+
+  // Logo / Home click: drop whatever is on screen (search, toss, result...) and show the landing page
+  const goHome = async () => {
+    if (screen === "searching") {
+      await cancelMatchmaking();
+    } else if (screen === "toss" || screen === "innings_break") {
+      await forfeitCurrentMatch("Opponent left the match");
+    }
+    resetToLanding();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const [isFriendModalOpen, setIsFriendModalOpen] = useState<boolean>(false);
   const [isCameraCheckOpen, setIsCameraCheckOpen] = useState<boolean>(false);
@@ -65,6 +77,7 @@ export default function HomePage() {
           guestName={guestName}
           onOpenRules={() => setIsRulesOpen(true)}
           onOpenHardwareCheck={() => setIsCameraCheckOpen(true)}
+          onGoHome={goHome}
         />
       )}
 
