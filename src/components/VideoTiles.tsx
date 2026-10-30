@@ -77,7 +77,9 @@ export function VideoTiles({
   const [connectionState, setConnectionState] = useState<WebRTCConnectionState>(
     webrtcManager.getState()
   );
-  const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(true);
+  const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(
+    () => webrtcManager.getState() !== "live" || webrtcManager.isOpponentCameraEnabled
+  );
   const [isOpponentMicOn, setIsOpponentMicOn] = useState<boolean>(false);
 
   const [isLocalCameraOn, setIsLocalCameraOn] = useState<boolean>(webrtcManager.isCameraEnabled);

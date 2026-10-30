@@ -92,7 +92,9 @@ export const LiveMatchScreen: React.FC = () => {
   const [isOpponentVideoLive, setIsOpponentVideoLive] = useState<boolean>(
     () => webrtcManager.getState() === "live"
   );
-  const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(false);
+  const [isOpponentCameraOn, setIsOpponentCameraOn] = useState<boolean>(
+    () => webrtcManager.isOpponentCameraEnabled
+  );
 
   // Automatically reset manual number selection when a delivery finishes or pick is cleared
   useEffect(() => {
@@ -108,10 +110,18 @@ export const LiveMatchScreen: React.FC = () => {
   // Opponent video link (started by the store when the match is found)
   useEffect(() => {
     if (isBotMatch) return;
-    const existingRemote = webrtcManager.getRemoteStream();
-    if (remoteVideoRef.current && existingRemote) {
-      remoteVideoRef.current.srcObject = existingRemote;
-    }
+    const attachRemote = (stream: MediaStream | null) => {
+      const video = remoteVideoRef.current;
+      if (!video || !stream) return;
+      if (video.srcObject !== stream) video.srcObject = stream;
+      video.play().catch(() => {});
+    };
+    // This screen remounts between toss / innings break, so re-sync everything the link already knows
+    attachRemote(webrtcManager.getRemoteStream());
+    setIsOpponentVideoLive(webrtcManager.getState() === "live");
+    setIsOpponentCameraOn(webrtcManager.isOpponentCameraEnabled);
+
+    webrtcManager.onRemoteStream = attachRemote;
     webrtcManager.onConnectionStateChange = (state) => {
       setIsOpponentVideoLive(state === "live");
     };
@@ -119,6 +129,7 @@ export const LiveMatchScreen: React.FC = () => {
       setIsOpponentCameraOn(enabled);
     };
     return () => {
+      webrtcManager.onRemoteStream = undefined;
       webrtcManager.onConnectionStateChange = undefined;
       webrtcManager.onOpponentCameraToggle = undefined;
     };
@@ -167,14 +178,6 @@ export const LiveMatchScreen: React.FC = () => {
         handDetector.stop();
         webrtcManager.stopLocalStream();
       }
-    }
-
-    if (!isBotMatch) {
-      webrtcManager.onRemoteStream = (stream) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = stream;
-        }
-      };
     }
 
     return () => {

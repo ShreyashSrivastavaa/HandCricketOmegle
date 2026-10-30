@@ -41,6 +41,8 @@ export class WebRTCManager {
   public isSelfHidden: boolean = false;
   public isGestureModeEnabled: boolean = true;
   public isOpponentGestureModeEnabled: boolean = true;
+  // Last camera state the partner announced; kept here so screens that remount don't lose it
+  public isOpponentCameraEnabled: boolean = false;
   public facingMode: "user" | "environment" = "user";
 
   private connectionState: WebRTCConnectionState = "idle";
@@ -192,6 +194,7 @@ export class WebRTCManager {
     this.socket = socket;
     this.isInitiator = isInitiator;
     this.pendingCandidates = [];
+    this.isOpponentCameraEnabled = false;
 
     this.setConnectionState("connecting");
 
@@ -245,6 +248,7 @@ export class WebRTCManager {
         this.setConnectionState("reconnecting");
       } else if (state === "failed") {
         this.setConnectionState("failed");
+        this.requestIceRestart();
       }
     };
 
@@ -281,8 +285,37 @@ export class WebRTCManager {
     this.socket?.emit("rtc:gesture_toggle", { enabled: this.isGestureModeEnabled });
   }
 
+  private async sendOffer(iceRestart = false) {
+    if (!this.pc) return;
+    try {
+      const offer = await this.pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+        iceRestart,
+      });
+      await this.pc.setLocalDescription(offer);
+      this.socket?.emit("rtc:offer", { sdp: this.pc.localDescription });
+    } catch (err) {
+      console.error("[WebRTC] Error creating offer", err);
+      this.setConnectionState("failed");
+    }
+  }
+
+  /** Recover a dropped link: the initiator re-offers with fresh ICE, the other side asks it to. */
+  private requestIceRestart() {
+    if (this.isInitiator) {
+      this.sendOffer(true);
+    } else {
+      this.socket?.emit("rtc:restart");
+    }
+  }
+
   private attachSocketListeners() {
     if (!this.socket) return;
+
+    this.socket.on("rtc:restart", () => {
+      if (this.isInitiator) this.sendOffer(true);
+    });
 
     this.socket.on("rtc:ready", async () => {
       // The partner may have joined after our own rtc:ready went out, so always re-share media state
@@ -297,17 +330,7 @@ export class WebRTCManager {
       }
 
       if (this.pc && !this.pc.localDescription) {
-        try {
-          const offer = await this.pc.createOffer({
-            offerToReceiveAudio: true,
-            offerToReceiveVideo: true,
-          });
-          await this.pc.setLocalDescription(offer);
-          this.socket?.emit("rtc:offer", { sdp: this.pc.localDescription });
-        } catch (err) {
-          console.error("[WebRTC] Error creating offer", err);
-          this.setConnectionState("failed");
-        }
+        await this.sendOffer();
       }
     });
 
@@ -358,7 +381,8 @@ export class WebRTCManager {
     });
 
     this.socket.on("rtc:camera_toggle", (payload: { enabled: boolean }) => {
-      this.onOpponentCameraToggle?.(payload.enabled);
+      this.isOpponentCameraEnabled = !!payload.enabled;
+      this.onOpponentCameraToggle?.(!!payload.enabled);
     });
 
     this.socket.on("rtc:mic_toggle", (payload: { enabled: boolean }) => {
@@ -490,6 +514,10 @@ export class WebRTCManager {
     isInitiator: boolean
   ): Promise<void> {
     if (this.pc) this.closePeer();
+    // Make sure we're attached before the handshake so the partner's first replies aren't missed
+    try {
+      await ablyChannel.attach?.();
+    } catch {}
     const listeners: Map<string, Function[]> = new Map();
 
     const handleAblyMessage = (msg: any) => {
@@ -579,6 +607,7 @@ export class WebRTCManager {
       this.socket.off?.("rtc:camera_toggle");
       this.socket.off?.("rtc:mic_toggle");
       this.socket.off?.("rtc:gesture_toggle");
+      this.socket.off?.("rtc:restart");
       this.socket = null;
     }
     this.detachAbly?.();
