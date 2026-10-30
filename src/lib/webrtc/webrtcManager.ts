@@ -27,6 +27,9 @@ export class WebRTCManager {
   private isInitiator: boolean = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
   private detachAbly: (() => void) | null = null;
+  // Opponent's voice plays from here, outside any screen, so it keeps going through
+  // toss, innings break and result screens. The <video> tiles are muted picture-only.
+  private remoteAudioEl: HTMLAudioElement | null = null;
 
   // State callbacks
   public onConnectionStateChange?: (state: WebRTCConnectionState) => void;
@@ -247,6 +250,7 @@ export class WebRTCManager {
       const incoming = event.streams?.[0]?.getTracks() || [event.track];
       for (const t of incoming) tracks.set(t.id, t);
       this.remoteStream = new MediaStream(Array.from(tracks.values()));
+      this.playRemoteAudio();
       this.onRemoteStream?.(this.remoteStream);
       this.setConnectionState("live");
     };
@@ -292,6 +296,36 @@ export class WebRTCManager {
     // Signal ready and share camera / gesture state
     this.socket?.emit("rtc:ready");
     this.emitMediaState();
+  }
+
+  private playRemoteAudio() {
+    if (typeof document === "undefined" || !this.remoteStream) return;
+    if (!this.remoteAudioEl) {
+      const el = document.createElement("audio");
+      el.autoplay = true;
+      el.setAttribute("playsinline", "");
+      el.style.display = "none";
+      document.body.appendChild(el);
+      this.remoteAudioEl = el;
+    }
+    const el = this.remoteAudioEl;
+    el.srcObject = this.remoteStream;
+    el.play().catch(() => {
+      // Autoplay with sound blocked (Safari / iOS / no recent tap): start on the next tap
+      document.addEventListener("pointerdown", () => el.play().catch(() => {}), { once: true });
+    });
+  }
+
+  /**
+   * Match over: turn the camera off but keep the mic and the opponent's voice while
+   * players are still together (result screen, rematch). Without a partner, release everything.
+   */
+  public endMatchMedia() {
+    if (this.pc) {
+      this.stopCamera().catch(() => {});
+    } else {
+      this.stopLocalStream();
+    }
   }
 
   /** True when we are actually sending a live, unmuted mic track. */
@@ -670,6 +704,10 @@ export class WebRTCManager {
 
   /** Close the peer connection and signaling while keeping the local camera stream. */
   private closePeer() {
+    if (this.remoteAudioEl) {
+      this.remoteAudioEl.pause();
+      this.remoteAudioEl.srcObject = null;
+    }
     if (this.remoteStream) {
       for (const track of this.remoteStream.getTracks()) {
         track.stop();
@@ -708,20 +746,12 @@ export class WebRTCManager {
 
 export const webrtcManager = new WebRTCManager();
 
-/**
- * Attach and play a remote stream. Some browsers (Safari, iOS, Chrome without a recent tap)
- * block autoplay with sound, so fall back to muted playback and unmute on the next tap.
- */
+/** Attach and play the opponent's video picture. */
 export function playRemoteVideo(video: HTMLVideoElement | null, stream: MediaStream | null) {
   if (!video || !stream) return;
+  // Picture only: the voice plays from the manager's own audio element, so muting here
+  // avoids double audio and lets every browser autoplay the video
+  video.muted = true;
   if (video.srcObject !== stream) video.srcObject = stream;
-  video.play().catch(() => {
-    video.muted = true;
-    video.play().catch(() => {});
-    const unmute = () => {
-      video.muted = false;
-      video.play().catch(() => {});
-    };
-    document.addEventListener("pointerdown", unmute, { once: true });
-  });
+  video.play().catch(() => {});
 }
