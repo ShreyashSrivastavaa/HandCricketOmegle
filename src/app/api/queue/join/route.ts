@@ -34,25 +34,25 @@ export async function POST(req: NextRequest) {
   const effectiveName = guestName?.trim() || session.guestName;
   session.guestName = effectiveName;
 
-  // 1. Churn & Skip spam rate limiting (skip for instant bot play)
-  if (!playVsBot) {
-    const rl = await rateLimitQueue(req, session.guestId);
-    if (!rl.success) {
-      return NextResponse.json(
-        { error: "Too many matchmaking requests. Please wait a moment before searching again." },
-        { status: 429 }
-      );
-    }
-  }
-
-  // 2. Client IP extraction for security checks
+  // 1. Client IP extraction for security checks
   const clientIp =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "127.0.0.1";
 
+  // 2. Churn & Skip spam rate limiting (skip for instant bot play) and ban check run together
+  const [rl, banStatus] = await Promise.all([
+    playVsBot ? Promise.resolve({ success: true }) : rateLimitQueue(req, session.guestId),
+    isGuestBanned(session.guestId, clientIp),
+  ]);
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many matchmaking requests. Please wait a moment before searching again." },
+      { status: 429 }
+    );
+  }
+
   // 3. Ban check (active suspension)
-  const banStatus = await isGuestBanned(session.guestId, clientIp);
   if (banStatus.banned) {
     return NextResponse.json(
       {

@@ -147,18 +147,17 @@ export async function joinMatchmakingQueue(
   const redis = getRedis();
   const queueKey = getQueueKey(mode);
 
-  // 1. Verify guest is not suspended
-  const banStatus = await isGuestBanned(guestId);
-  if (banStatus.banned) {
-    throw new Error("Access suspended: Your account is temporarily suspended due to community reports.");
-  }
-
-  // 2. Drop any old entry of ours (re-search after cancel / bot match) so we never sit in the queue twice
-  await Promise.all([
+  // Ban check and cleanup of any old entry of ours (re-search after cancel / bot match, so we
+  // never sit in the queue twice) are independent, so they share one round of Redis calls
+  const [banStatus] = await Promise.all([
+    isGuestBanned(guestId),
     removeFromQueue(redis, queueKey, guestId),
     redis.del(getClaimedKey(guestId)),
     redis.del(`user_match:${guestId}`),
   ]);
+  if (banStatus.banned) {
+    throw new Error("Access suspended: Your account is temporarily suspended due to community reports.");
+  }
 
   return pairOrEnqueue(guestId, guestName, mode);
 }
@@ -190,6 +189,18 @@ async function pairOrEnqueue(
   let pairedByOther = false;
   let attempts = 0;
 
+  // Fetch every candidate's heartbeat in one batch instead of one round-trip per candidate
+  const heartbeats = new Map<string, number>();
+  const candidateIds = items
+    .map((item) => parseQueueEntry(item)?.guestId)
+    .filter((id): id is string => !!id && id !== guestId)
+    .slice(0, 10);
+  await Promise.all(
+    candidateIds.map(async (id) => {
+      heartbeats.set(id, Number(await redis.get(getHeartbeatKey(id))) || 0);
+    })
+  );
+
   for (const item of items) {
     const candidate = parseQueueEntry(item);
     if (!candidate) continue;
@@ -200,7 +211,8 @@ async function pairOrEnqueue(
     if (attempts >= 5) continue;
 
     const raw = typeof item === "string" ? item : JSON.stringify(item);
-    const heartbeat = Number(await redis.get(getHeartbeatKey(candidate.guestId))) || 0;
+    const heartbeat =
+      heartbeats.get(candidate.guestId) ?? (Number(await redis.get(getHeartbeatKey(candidate.guestId))) || 0);
     if (Date.now() - Math.max(candidate.joinedAt || 0, heartbeat) > QUEUE_STALE_MS) {
       await redis.lrem(queueKey, 0, raw); // left the search screen without leaving the queue
       continue;
@@ -279,54 +291,23 @@ async function pairOrEnqueue(
       updatedAt: Date.now(),
     };
 
-    // Store match with 30 min TTL
-    await redis.set(`match:${matchId}`, JSON.stringify(matchData), {
-      ex: MATCH_TTL_SECONDS,
-    });
+    const p1Found = { matchId, role: "p1", opponentName: p2.name, isBot: false, mode };
+    const p2Found = { matchId, role: "p2", opponentName: p1.name, isBot: false, mode };
 
-    // Store quick match-found lookup for polling fallback
+    // Store the match (30 min TTL) and the quick match-found lookups for the polling fallback
     await Promise.all([
-      redis.set(
-        `user_match:${p1.guestId}`,
-        JSON.stringify({
-          matchId,
-          role: "p1",
-          opponentName: p2.name,
-          isBot: false,
-          mode,
-        }),
-        { ex: 60 }
-      ),
-      redis.set(
-        `user_match:${p2.guestId}`,
-        JSON.stringify({
-          matchId,
-          role: "p2",
-          opponentName: p1.name,
-          isBot: false,
-          mode,
-        }),
-        { ex: 60 }
-      ),
+      redis.set(`match:${matchId}`, JSON.stringify(matchData), {
+        ex: MATCH_TTL_SECONDS,
+      }),
+      redis.set(`user_match:${p1.guestId}`, JSON.stringify(p1Found), { ex: 60 }),
+      redis.set(`user_match:${p2.guestId}`, JSON.stringify(p2Found), { ex: 60 }),
     ]);
 
-    // Notify waiting player on their private channel
-    await publishToAbly(`user:${p1.guestId}`, "match-found", {
-      matchId,
-      role: "p1",
-      opponentName: p2.name,
-      isBot: false,
-      mode,
-    });
-
-    // Notify current player on their private channel
-    await publishToAbly(`user:${p2.guestId}`, "match-found", {
-      matchId,
-      role: "p2",
-      opponentName: p1.name,
-      isBot: false,
-      mode,
-    });
+    // Notify both players on their private channels
+    await Promise.all([
+      publishToAbly(`user:${p1.guestId}`, "match-found", p1Found),
+      publishToAbly(`user:${p2.guestId}`, "match-found", p2Found),
+    ]);
 
     return {
       status: "matched",
@@ -375,21 +356,23 @@ export async function pollMatchmakingQueue(
     return { status: "matched" as const, ...(typeof raw === "string" ? JSON.parse(raw) : raw) };
   };
 
-  const pending = await consumeMatch();
+  // One batch: pending match, heartbeat refresh, claim and queue head
+  const [pending, , claimed, queueHead] = await Promise.all([
+    consumeMatch(),
+    touchQueueHeartbeat(guestId),
+    redis.get(getClaimedKey(guestId)),
+    redis.lrange(queueKey, 0, 1),
+  ]);
   if (pending) return pending;
 
-  await touchQueueHeartbeat(guestId);
-
   // Another player claimed us and is creating the match right now: just wait for it
-  if (await redis.get(getClaimedKey(guestId))) {
+  if (claimed) {
     return (await consumeMatch()) || { status: "queued" };
   }
 
   // Alone in the queue: nothing to pair with, keep idle polls cheap
-  const queueLength = await redis.llen(queueKey);
-  if (queueLength === 1) {
-    const [onlyEntry] = await redis.lrange(queueKey, 0, 0);
-    if (parseQueueEntry(onlyEntry)?.guestId === guestId) return { status: "queued" };
+  if (queueHead.length === 1 && parseQueueEntry(queueHead[0])?.guestId === guestId) {
+    return { status: "queued" };
   }
 
   // Pair with someone, or re-queue if our entry was dropped (e.g. a network stall made us look stale)

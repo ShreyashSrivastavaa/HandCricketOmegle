@@ -270,6 +270,8 @@ export function getRedis(): Redis | MemoryRedis {
     globalThis.__hand_cricket_redis__ = new Redis({
       url: env.UPSTASH_REDIS_REST_URL,
       token: env.UPSTASH_REDIS_REST_TOKEN,
+      // Commands issued in the same tick (Promise.all) go out as one HTTP request
+      enableAutoPipelining: true,
     });
     return globalThis.__hand_cricket_redis__;
   } catch (err) {

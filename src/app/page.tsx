@@ -45,6 +45,7 @@ export default function HomePage() {
     startSecondInnings,
     resetToLanding,
     forfeitCurrentMatch,
+    loadSavedPreferences,
   } = useLiveMatchStore();
 
   // Logo / Home click: drop whatever is on screen (search, toss, result...) and show the landing page
@@ -62,8 +63,9 @@ export default function HomePage() {
   const [isCameraCheckOpen, setIsCameraCheckOpen] = useState<boolean>(false);
 
   useEffect(() => {
+    loadSavedPreferences();
     initGuestSession();
-  }, [initGuestSession]);
+  }, [initGuestSession, loadSavedPreferences]);
 
   return (
     <div

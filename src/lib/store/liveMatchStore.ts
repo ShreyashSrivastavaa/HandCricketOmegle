@@ -45,6 +45,7 @@ interface LiveMatchStore {
   setIsVideoCallActive: (active: boolean) => void;
   isGestureMode: boolean;
   setIsGestureMode: (enabled: boolean) => void;
+  loadSavedPreferences: () => void;
   isPaused: boolean;
   togglePause: () => void;
 
@@ -117,7 +118,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
 
   const clearQueuePoll = () => {
     if (queuePollInterval) {
-      clearInterval(queuePollInterval);
+      clearTimeout(queuePollInterval);
       queuePollInterval = null;
     }
   };
@@ -538,10 +539,9 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     endlessVariant: "standard",
     setEndlessVariant: (endlessVariant) => set({ endlessVariant }),
 
-    personalBest:
-      typeof window !== "undefined"
-        ? Number(localStorage.getItem("hand_cricket_endless_pb") || "0")
-        : 0,
+    // Saved values are applied by loadSavedPreferences after mount, so the first client render
+    // matches the server HTML (reading localStorage here caused a hydration mismatch)
+    personalBest: 0,
     setPersonalBest: (personalBest) => {
       if (typeof window !== "undefined") {
         localStorage.setItem("hand_cricket_endless_pb", String(personalBest));
@@ -552,12 +552,20 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
     isVideoCallActive: true,
     setIsVideoCallActive: (isVideoCallActive) => set({ isVideoCallActive }),
 
-    isGestureMode: typeof window !== "undefined" ? localStorage.getItem("hc_play_mode") !== "tap" : true,
+    isGestureMode: true,
     setIsGestureMode: (isGestureMode) => {
       if (typeof window !== "undefined") {
         localStorage.setItem("hc_play_mode", isGestureMode ? "gesture" : "tap");
       }
       set({ isGestureMode });
+    },
+    loadSavedPreferences: () => {
+      try {
+        set({
+          personalBest: Number(localStorage.getItem("hand_cricket_endless_pb") || "0"),
+          isGestureMode: localStorage.getItem("hc_play_mode") !== "tap",
+        });
+      } catch {}
     },
 
     isPaused: false,
@@ -780,8 +788,10 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
           onMatchJoined(msg.data);
         });
 
-        // Fail-safe queue polling: checks /api/queue/status every 1s
-        queuePollInterval = setInterval(async () => {
+        // Fail-safe queue polling: first check almost right away (catches a partner who queued at
+        // the same moment), then every 750ms. Each poll waits for the previous one, so slow
+        // responses never pile up.
+        const pollQueue = async (handle: NodeJS.Timeout) => {
           if (get().screen !== "searching") {
             clearQueuePoll();
             return;
@@ -798,10 +808,17 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
               const checkData = await checkRes.json();
               if (checkData.status === "matched") {
                 onMatchJoined(checkData);
+                return;
               }
             }
           } catch {}
-        }, 1000);
+          // Stop if this search was cancelled or replaced while the request was in flight
+          if (queuePollInterval !== handle) return;
+          const next: NodeJS.Timeout = setTimeout(() => pollQueue(next), 750);
+          queuePollInterval = next;
+        };
+        const first: NodeJS.Timeout = setTimeout(() => pollQueue(first), 250);
+        queuePollInterval = first;
       } catch (err) {
         console.error("[Matchmaking] Error joining queue:", err);
         clearQueuePoll();
