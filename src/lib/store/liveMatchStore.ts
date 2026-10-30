@@ -278,7 +278,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
         }
 
         if (latestState.phase === "match_ended") {
-          webrtcManager.endMatchMedia();
+          webrtcManager.stopLocalStream();
           handDetector.stop();
           set({ screen: "result", outcomeText: null });
         } else if (latestState.phase === "innings_break") {
@@ -507,7 +507,7 @@ export const useLiveMatchStore = create<LiveMatchStore>((set, get) => {
                   if (data.gameState.phase === "innings_break" && localState?.phase !== "innings_break") {
                     set({ gameState: data.gameState, screen: "innings_break" });
                   } else if (data.gameState.phase === "match_ended" && localState?.phase !== "match_ended") {
-                    webrtcManager.endMatchMedia();
+                    webrtcManager.stopLocalStream();
                     handDetector.stop();
                     set({ gameState: data.gameState, screen: "result" });
                   }

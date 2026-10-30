@@ -68,9 +68,9 @@ export const ResultBanner: React.FC<ResultBannerProps> = ({
   const isWin = resolvedResult === "win";
   const isTie = resolvedResult === "tie";
 
-  // Automatically shut off camera and hand detector when game is over (voice chat stays on)
+  // Automatically shut off camera and hand detector when game is over
   useEffect(() => {
-    webrtcManager.endMatchMedia();
+    webrtcManager.stopLocalStream();
     handDetector.stop();
   }, []);
 

@@ -188,7 +188,7 @@ export const LiveMatchScreen: React.FC = () => {
       }
       if (gameState?.phase === "match_ended") {
         handDetector.stop();
-        webrtcManager.endMatchMedia();
+        webrtcManager.stopLocalStream();
       } else if (!isGestureMode) {
         handDetector.stop();
         goCameraOffKeepMic();
@@ -202,19 +202,17 @@ export const LiveMatchScreen: React.FC = () => {
       handDetector.stop();
       const currentPhase = useLiveMatchStore.getState().gameState?.phase;
       const currentScreen = useLiveMatchStore.getState().screen;
-      if (currentScreen === "landing") {
+      if (currentPhase === "match_ended" || currentScreen === "result" || currentScreen === "landing") {
         webrtcManager.stopLocalStream();
-      } else if (currentPhase === "match_ended" || currentScreen === "result") {
-        webrtcManager.endMatchMedia();
       }
     };
   }, [isGestureMode, isCameraOn, isBotMatch, gameState?.phase]);
 
-  // Automatically shut off camera and hand detector when match ends (the mic stays on)
+  // Automatically shut off camera and hand detector when match ends
   useEffect(() => {
     if (gameState?.phase === "match_ended") {
       handDetector.stop();
-      webrtcManager.endMatchMedia();
+      webrtcManager.stopLocalStream();
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = null;
       }
@@ -544,7 +542,6 @@ export const LiveMatchScreen: React.FC = () => {
                     ref={remoteVideoRef}
                     autoPlay
                     playsInline
-                    muted
                     className={`h-full w-full object-cover transition-all duration-300 ${
                       isOpponentVideoHidden || (isOpponentBlurred && turnStage !== "reveal")
                         ? "blur-2xl brightness-50"

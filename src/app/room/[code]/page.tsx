@@ -850,14 +850,10 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     };
   }, [isVideoMatchLive, roomCode, guestId, amHost]);
 
-  // Rematch: the camera is released at match end (the mic stays), so bring it back into the existing peer link
+  // Rematch: the camera is released at match end, so bring it back into the existing peer link
   useEffect(() => {
     if (!isVideoMatchLive || !gameState || gameState.phase === "match_ended") return;
-    const hasCamera = !!webrtcManager
-      .getLocalStream()
-      ?.getVideoTracks()
-      .some((t) => t.readyState === "live");
-    if (!rtcStartedRef.current || hasCamera || !webrtcManager.isCameraEnabled) return;
+    if (!rtcStartedRef.current || webrtcManager.getLocalStream() || !webrtcManager.isCameraEnabled) return;
     webrtcManager
       .restoreLocalMedia()
       .then((stream) => setLocalStream(stream))
@@ -1007,7 +1003,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
             ? guestId
             : opponent?.guestId;
         socket?.emit("game:match_complete", { winnerGuestId });
-        webrtcManager.endMatchMedia();
+        webrtcManager.stopLocalStream();
         handDetector.stop();
       }
 

@@ -215,7 +215,6 @@ export function VideoTiles({
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          muted
           className={`w-full h-full object-cover transition-filter duration-300 ${
             isBlurred ? "blur-2xl brightness-50" : ""
           } ${!isOpponentCameraOn || connectionState !== "live" ? "hidden" : "block"}`}
