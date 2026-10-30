@@ -160,6 +160,7 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
   // Timer & Emotes & Reporting
   const [timerSeconds, setTimerSeconds] = useState<number>(8);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerSecondsRef = useRef<number>(8);
   const latestDetectedGestureRef = useRef<HandGesture | null>(null);
   const [receivedEmote, setReceivedEmote] = useState<{ emote: string; id: number } | null>(null);
   const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
@@ -866,34 +867,33 @@ export default function RoomPage({ params }: { params: Promise<{ code: string }>
     }
   }
 
-  function handleTurnTimeout() {
-    if (!isUserLocked && userTileState === "empty") {
+  // Lock the pick as the turn clock goes 4 -> 3, just before the opponent's video is revealed:
+  // take the gesture being shown, otherwise a random number. Read through a ref because the
+  // countdown interval would otherwise see the state from when it was started.
+  const lockPickAtThreeRef = useRef<() => void>(() => {});
+  lockPickAtThreeRef.current = () => {
+    if (isUserLocked || userTileState !== "empty") return;
+    const gesture = latestDetectedGestureRef.current;
+    if (gesture && gesture >= 1 && gesture <= 6) {
+      handleConfirmBallPick(gesture);
+    } else {
       const autoPick = Math.floor(Math.random() * 6) + 1;
       handleConfirmBallPick(autoPick);
-      addToast(`Time expired! Auto-picked ${autoPick}.`, "warning");
+      addToast(`Locked at 3! Auto-picked ${autoPick}.`, "warning");
     }
-  }
+  };
 
   function startTurnCountdown() {
     stopTurnCountdown();
     setTurnStage("pick");
     setTimerSeconds(8);
+    timerSecondsRef.current = 8;
     timerIntervalRef.current = setInterval(() => {
-      setTimerSeconds((prev) => {
-        if (prev === 2) {
-          // At 1s remaining: Lock whatever is showing right now ("jb 1 sec bacha ho toh jodikhra ho voh lock kre")
-          const gestureToLock = latestDetectedGestureRef.current;
-          if (gestureToLock && gestureToLock >= 1 && gestureToLock <= 6 && !isUserLocked) {
-            handleConfirmBallPick(gestureToLock);
-          }
-        }
-        if (prev <= 1) {
-          stopTurnCountdown();
-          handleTurnTimeout();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const next = Math.max(timerSecondsRef.current - 1, 0);
+      timerSecondsRef.current = next;
+      setTimerSeconds(next);
+      if (next === 3) lockPickAtThreeRef.current();
+      if (next === 0) stopTurnCountdown();
     }, 1000);
   }
 

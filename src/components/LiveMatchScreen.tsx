@@ -100,6 +100,8 @@ export const LiveMatchScreen: React.FC = () => {
   useEffect(() => {
     if (!isUserLocked && userPick === null) {
       setSelectedNum(null);
+      setDetectedGesture(null);
+      setLastStableGesture(null);
     }
   }, [isUserLocked, userPick, gameState?.innings1?.balls, gameState?.innings2?.balls, gameState?.phase]);
 
@@ -255,14 +257,19 @@ export const LiveMatchScreen: React.FC = () => {
     };
   }, [useTapMode, isCameraOn, isUserLocked, tapToLock, gameState?.innings1?.balls, gameState?.innings2?.balls]);
 
+  // Lock the pick as the turn clock goes 4 -> 3, just before the opponent's video is revealed:
+  // take whatever the player chose (tap or held gesture), otherwise a random number.
+  // Bot matches have no video, so they keep the last-second gesture lock.
+  const lockAtSecond = isBotMatch ? 1 : 3;
   useEffect(() => {
-    if (timerSeconds === 1 && !isUserLocked && !useTapMode) {
-      const pickToLock = detectedGesture ?? lastStableGesture;
-      if (pickToLock && pickToLock >= 1 && pickToLock <= 6) {
-        submitBallPick(pickToLock);
-      }
+    if (timerSeconds !== lockAtSecond || isUserLocked) return;
+    const chosen = selectedNum ?? (useTapMode ? null : detectedGesture ?? lastStableGesture);
+    if (chosen && chosen >= 1 && chosen <= 6) {
+      submitBallPick(chosen);
+    } else if (!isBotMatch) {
+      submitBallPick(Math.floor(Math.random() * 6) + 1, { auto: true });
     }
-  }, [timerSeconds, isUserLocked, useTapMode, detectedGesture, lastStableGesture, submitBallPick]);
+  }, [timerSeconds, lockAtSecond, isUserLocked, isBotMatch, useTapMode, selectedNum, detectedGesture, lastStableGesture, submitBallPick]);
 
   if (!gameState) return null;
 
